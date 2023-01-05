@@ -71,7 +71,7 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
 		case WM_SYSCHAR:
 			break;
 		case WM_SIZE:
-			app->window->resize();
+			app->resize();
 			break;
 		case WM_DESTROY:
 			::PostQuitMessage(0);
