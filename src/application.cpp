@@ -18,7 +18,7 @@ void IApplication::run() {
 	}
 
 	// Make sure the command queue has finished all commands before closing.
-	rendering_system->flush();
+	flush();
 }
 
 LRESULT CALLBACK IApplication::WindowMessagingProcess(
@@ -50,7 +50,7 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
 		switch (message) {
 		case WM_PAINT:
 			app->gameplay_system->update();
-			app->rendering_system->render(app->window);
+			app->render();
 			break;
 		case WM_SYSKEYDOWN:
 		case WM_KEYDOWN:

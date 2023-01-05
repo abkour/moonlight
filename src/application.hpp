@@ -1,6 +1,5 @@
 #pragma once
 #include "gameplay_system.hpp"
-#include "rendering_system.hpp"
 #include "window.hpp"
 
 #include <memory>
@@ -18,9 +17,13 @@ public:
 
 	virtual bool is_application_initialized() = 0;
 
+	virtual void flush() = 0;
+
 	virtual void update() = 0;
 	
 	virtual void render() = 0;
+
+	virtual void resize() = 0;
 
 	void run();
 
@@ -29,7 +32,6 @@ public:
 protected:
 
 	std::unique_ptr<GameplaySystem> gameplay_system;
-	std::unique_ptr<RenderingSystem> rendering_system;
 	std::unique_ptr<Window> window;
 };
 
