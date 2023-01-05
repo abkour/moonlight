@@ -11,7 +11,7 @@ add_executable (moonlight WIN32
 	"rendering_system.cpp"
 	"swap_chain.cpp"
 	"window.cpp" 
-)
+ "dx12_wrapper.cpp" "demos/cube_application.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.13)
   set_property(TARGET moonlight PROPERTY CXX_STANDARD 20)

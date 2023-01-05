@@ -7,34 +7,26 @@
 
 namespace moonlight {
 
-class Application {
+class IApplication {
 
 public:
 
-	Application(HINSTANCE hinstance);
+	IApplication() {}
+	IApplication(HINSTANCE hinstance) {}
 
-	void update() {
-		gameplay_system->update();
-	}
+	virtual ~IApplication() = 0 {}
+
+	virtual bool is_application_initialized() = 0;
+
+	virtual void update() = 0;
 	
-	void render() {
-		rendering_system->render(window);
-	}
+	virtual void render() = 0;
 
 	void run();
 
-	bool rs_is_initialized() {
-		if (rendering_system == nullptr) {
-			return false;
-		}
-		return rendering_system->is_initialized();
-	}
-
-private:
-
 	static LRESULT CALLBACK WindowMessagingProcess(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-private:
+protected:
 
 	std::unique_ptr<GameplaySystem> gameplay_system;
 	std::unique_ptr<RenderingSystem> rendering_system;

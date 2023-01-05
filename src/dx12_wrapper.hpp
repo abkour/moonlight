@@ -1,11 +1,8 @@
 #pragma once
 #include <Windows.h>
-#include <shellapi.h>
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
-#include <d3dcompiler.h>
-#include <DirectXMath.h>
 
 // Direct3D12 extension library
 #include "../ext/d3dx12.h"
@@ -13,7 +10,6 @@
 
 #include <wrl.h>
 
-#include <chrono>
 #include <cstdint>
 
 #include "command_queue.hpp"

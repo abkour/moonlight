@@ -3,13 +3,14 @@
 #include "framework.h"
 
 #include "application.hpp"
+#include "demos/cube_application.hpp"
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow)
 {
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     
     try {
-        moonlight::Application application(hInstance);
+        moonlight::CubeApplication application(hInstance);
         application.run();
     } 
     catch (...) {

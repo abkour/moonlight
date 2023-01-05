@@ -28,12 +28,23 @@ public:
 
 	RenderingSystem(std::unique_ptr<Window>& window, uint8_t number_of_backbuffers);
 	
+	/***************************************************************************/
+	// Methods for receiving underlying DX12 objects
+	Microsoft::WRL::ComPtr<ID3D12Device2> get_device();
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> get_descriptor_heap();
+	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> get_command_allocator(const uint8_t idx);
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> get_command_list();
+
+	/***************************************************************************/
+	// Methods for receiving underlying wrapped DX12 objects
+	std::unique_ptr<CommandQueue>& get_command_queue();
+	std::unique_ptr<SwapChain>& get_swapchain();
+
+	/***************************************************************************/
+	// General API
 	void flush();
-	
 	void render(std::unique_ptr<Window>& window);
-
 	void resize(std::unique_ptr<Window>& window);
-
 	bool is_initialized() { 
 		return system_initialized; 
 	}

@@ -32,6 +32,42 @@ RenderingSystem::RenderingSystem(std::unique_ptr<Window>& window, uint8_t number
 	system_initialized = true;
 }
 
+/***************************************************************************/
+// Methods for receiving underlying DX12 objects
+ComPtr<ID3D12Device2> RenderingSystem::get_device() 
+{
+	return device;
+}
+
+ComPtr<ID3D12DescriptorHeap> RenderingSystem::get_descriptor_heap() 
+{
+	return descriptor_heap;
+}
+
+ComPtr<ID3D12CommandAllocator> RenderingSystem::get_command_allocator(const uint8_t idx) 
+{
+	return command_allocators[idx];
+}
+
+ComPtr<ID3D12GraphicsCommandList> RenderingSystem::get_command_list() 
+{
+	return command_list;
+}
+
+/***************************************************************************/
+// Methods for receiving underlying wrapped DX12 objects
+std::unique_ptr<CommandQueue>& RenderingSystem::get_command_queue()
+{
+	return command_queue;
+}
+
+std::unique_ptr<SwapChain>& RenderingSystem::get_swapchain()
+{
+	return swap_chain;
+}
+
+/***************************************************************************/
+// Methods for initializing DX12 objects
 ComPtr<IDXGIAdapter4> RenderingSystem::get_adapter() 
 {
 	// We are going to choose the adapter with the most VRAM, since VRAM is a reasonable
@@ -142,6 +178,8 @@ void RenderingSystem::flush()
 	command_queue->flush(current_backbuffer_idx);
 }
 
+/***************************************************************************/
+// Public API
 void RenderingSystem::render(std::unique_ptr<Window>& window)
 {
 	uint8_t current_backbuffer_idx = swap_chain->get_backbuffer_index();
