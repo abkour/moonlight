@@ -1,0 +1,23 @@
+This document serves as a quick reference for windows related terminology.
+
+Macros/Enums:
+
+DWL: DialogWindowLong (Used in calls to GetWindowLongPtr when the HND refers to a dialog box)
+    Example: DWL_DLGPROC, DWL_MSGRESULT
+
+GWL: GetWindowLong (Used in calls to GetWindowLongPtr)
+    Example: GWL_STYLE, GWL_WNDPROC
+
+WM: WindowMessage
+    Example: WM_PAINT
+
+WS: WindowStyle
+    Example: WM_BORDER
+
+Types:
+
+ATL: Active Template Library
+COM: Component Object Model
+LP: Long Pointer (LPVOID, LPSTR)
+WP: Wide Pointer (WPSTR)
+WRL: Windows Runtime C++ Template Libarry

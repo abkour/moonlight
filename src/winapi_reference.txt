@@ -1,0 +1,21 @@
+This document serves as an accumulation of noteworthy winapi features:
+
+General:
+
+COM Objects
+
+    COM (Component Object Model) is a binary interface specification that allows interchange between
+    programs that are written in different languages. DirectX objects are (mostly) defined as COM objects.
+     
+
+###########################################################################################################################
+
+Macros:
+
+void IID_PPV_ARGS(ppType)
+
+    This function retrieves an interface pointer, based on the type of the associated IID of the supplied 
+    interface pointer.
+    This works, because the type is known at compile time.
+    Avoids having to call QueryInterface on the ComPtr, which can lead to errors if the wrong interface
+    identifier is supplied.

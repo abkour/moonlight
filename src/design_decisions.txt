@@ -1,0 +1,75 @@
+This document serves as a personal logbook of the design decisions I took
+and why I took them.
+
+Module composition:
+
+Moonlight
+	Application
+		Window management
+		Rendering system
+		Gameplay system
+
+The Application is a module that encapsulates all the necessary modules for rendering to occur.
+These are construction and management of the window class under windows.
+The initialization of the rendering system.
+The initialization of the gameplay system.
+
+Both the rendering and gameplay system have thin interfaces to allow the application manager to
+make opaque calls from the window messaging prodecure (wndproc).
+
+The application receives a config file on construction, parses it and then sends relevant 
+data to the appropriate subsystems for initialization.
+
+This is the extent of the responsibility of the application module.
+
+-------------------------------------------------------------------------------------------------------
+
+Window management:
+
+This module is responsible for initializing and managing a window under windows (the OS). It is 
+responsible for managing the lifetime of that window and is also responsible for some window 
+related functionality, like switching from and to fullscreen mode, enabling/disabling vsync,
+resizing of the window and so on.
+
+However, the window module does not "own" the window messaging procedure. That is the job of the 
+application module. Inside that wndproc function, events such as WM_RESIZE are delegated to the 
+window module.
+
+-------------------------------------------------------------------------------------------------------
+
+Rendering system:
+
+The rendering system makes up the bulk of the engine and is responsible for device enumeration,
+shader compilation, pipeline setup, buffer management and much more.
+
+The application module calls the "render" function from within the rendering module when a
+WM_PAINT event occurs.
+
+-------------------------------------------------------------------------------------------------------
+
+Gameplay system:
+
+The gameplay system is responsible for managing the lifetime of gameplay related objects. 
+This includes physics, if that is chosen to be implemented.
+
+-------------------------------------------------------------------------------------------------------
+
+Moonlight:
+
+The class "Moonlight" receives program parameters and delagates them to the application module.
+
+-------------------------------------------------------------------------------------------------------
+
+Why this organization?
+I decided to organize the code like this, because I wanted to seperate the modules from one another.
+The rendering system obviously doesn't care how and why objects move around the world. So why would 
+it be related to the gameplay system? Those questions came to my mind, when I was designing this.
+
+It is harder to distinguis the window from the rendering module. The window module will have to 
+manage the swapchain, which is a DXGI object. This blurs the line between the responsibilities of
+those modules. I chose to keep it that way, because it allowed for cleaner code, accepting that it 
+might not be a perfect seperation.
+
+The window messaging procedure (a C function) requires knowledge of the rendering/gameplay and window
+module. As such I had to put them under the umbrealla of the application module and make it responsible
+for dealing with the OS messages. 
