@@ -49,7 +49,7 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
 	if (app->is_application_initialized()) {
 		switch (message) {
 		case WM_PAINT:
-			app->gameplay_system->update();
+			app->update();
 			app->render();
 			break;
 		case WM_SYSKEYDOWN:
@@ -63,7 +63,7 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
 				::PostQuitMessage(0);
 				break;
 			case VK_F11:
-				app->window->flip_fullscreen();	// broken
+				app->window->flip_fullscreen();
 				break;
 			}
 		}

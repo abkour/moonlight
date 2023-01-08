@@ -106,12 +106,12 @@ ComPtr<ID3D12CommandAllocator> DX12Wrapper::create_command_allocator(
 	return command_allocator;
 }
 
-ComPtr<ID3D12GraphicsCommandList> DX12Wrapper::create_command_list(
+ComPtr<ID3D12GraphicsCommandList2> DX12Wrapper::create_command_list(
 	ComPtr<ID3D12Device2> device,
 	ComPtr<ID3D12CommandAllocator> command_allocator,
 	D3D12_COMMAND_LIST_TYPE command_list_type)
 {
-	ComPtr<ID3D12GraphicsCommandList> command_list;
+	ComPtr<ID3D12GraphicsCommandList2> command_list;
 
 	ThrowIfFailed(device->CreateCommandList(
 		0,
@@ -133,7 +133,7 @@ std::unique_ptr<SwapChain> DX12Wrapper::create_swap_chain(
 {
 	return std::make_unique<SwapChain>(
 		window,
-		command_queue->get_underlying(),
+		command_queue->get_d3d12_command_queue(),
 		device,
 		descriptor_heap
 	);

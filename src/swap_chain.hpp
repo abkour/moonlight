@@ -28,7 +28,7 @@ public:
 	
 	Microsoft::WRL::ComPtr<ID3D12Resource> get_backbuffer(uint8_t index);
 
-	void present(bool vsync, bool tearing);
+	uint64_t present(bool vsync, bool tearing);
 
 	void release_buffer(uint8_t buffer_idx);
 

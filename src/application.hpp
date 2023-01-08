@@ -31,7 +31,7 @@ public:
 
 protected:
 
-	std::unique_ptr<GameplaySystem> gameplay_system;
+	//std::unique_ptr<GameplaySystem> gameplay_system;
 	std::unique_ptr<Window> window;
 };
 

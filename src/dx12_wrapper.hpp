@@ -39,7 +39,7 @@ public:
 		D3D12_COMMAND_LIST_TYPE command_list_type
 	);
 
-	static Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> create_command_list(
+	static Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> create_command_list(
 		Microsoft::WRL::ComPtr<ID3D12Device2> device,
 		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator,
 		D3D12_COMMAND_LIST_TYPE command_list_type

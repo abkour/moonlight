@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <queue>
 
 namespace moonlight {
 
@@ -26,43 +27,47 @@ public:
 
 	~CommandQueue();
 
-	void execute(ID3D12CommandList* const* command_list, std::size_t n_command_lists);
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> get_command_list();
 
-	// Flushes the GPU:
-	void flush(uint8_t current_backbuffer_idx);
+	uint64_t execute_command_list(
+		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> command_list);
 
-	void reset_frame_fence_value(uint8_t buffer_idx, uint64_t frame_fence_value);
+	uint64_t signal();
 
-	// Signal a fence value from the GPU
-	void signal(uint8_t buffer_index);
+	bool is_fence_complete(uint64_t fence_value);
 
-	// wait for GPU
-	void wait_for_finished(
-		uint8_t buffer_index,
-		std::chrono::milliseconds duration = std::chrono::milliseconds::max());
+	void wait_for_fence_value(uint64_t fence_value);
 
-	uint64_t get_fence_value() const;
+	void flush();
 
-	// Retrieve the underlying dx12 object
-	Microsoft::WRL::ComPtr<ID3D12CommandQueue> get_underlying();
+	Microsoft::WRL::ComPtr<ID3D12CommandQueue> get_d3d12_command_queue() const;
 
-private:
+protected:
 
-	void initialize_dx12_command_queue(
-		Microsoft::WRL::ComPtr<ID3D12Device2> device,
-		D3D12_COMMAND_LIST_TYPE type);
-
-	void initialize_dx12_fence(Microsoft::WRL::ComPtr<ID3D12Device2> device);
-
-	void initialize_event();
+	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> create_command_allocator();
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> create_command_list(
+		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator
+	);
 
 private:
 
-	Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue;
-	Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-	uint64_t fence_value;
-	uint64_t frame_fence_values[3];
-	HANDLE fence_event;
+	struct CommandAllocatorEntry {
+		uint64_t fence_value;
+		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator;
+	};
+
+	using CommandAllocatorQueue = std::queue<CommandAllocatorEntry>;
+	using CommandListQueue = std::queue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>>;
+
+	D3D12_COMMAND_LIST_TYPE						command_list_type;
+	Microsoft::WRL::ComPtr<ID3D12Device2>		d3d12_device;
+	Microsoft::WRL::ComPtr<ID3D12CommandQueue>	d3d12_command_queue;
+	Microsoft::WRL::ComPtr<ID3D12Fence>			d3d12_fence;
+	HANDLE										fence_event;
+	uint64_t									fence_value;
+
+	CommandAllocatorQueue						command_allocator_queue;
+	CommandListQueue							command_list_queue;
 };
 
 }

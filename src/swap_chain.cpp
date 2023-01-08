@@ -14,12 +14,14 @@ SwapChain::SwapChain(
 	initialize_dx12_backbuffers(device, descriptor_heap);
 }
 
-void SwapChain::present(bool vsync, bool tearing) 
+uint64_t SwapChain::present(bool vsync, bool tearing) 
 {
 	UINT sync_interval = vsync ? 1 : 0;
 	UINT present_flags = tearing && !vsync ? DXGI_PRESENT_ALLOW_TEARING : 0;
 	present_flags = 0;
 	ThrowIfFailed(swap_chain->Present(sync_interval, present_flags));
+
+	return swap_chain->GetCurrentBackBufferIndex();
 }
 
 void SwapChain::release_buffer(uint8_t buffer_idx)
