@@ -59,15 +59,15 @@ private:
 	using CommandAllocatorQueue = std::queue<CommandAllocatorEntry>;
 	using CommandListQueue = std::queue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>>;
 
-	D3D12_COMMAND_LIST_TYPE						command_list_type;
-	Microsoft::WRL::ComPtr<ID3D12Device2>		d3d12_device;
-	Microsoft::WRL::ComPtr<ID3D12CommandQueue>	d3d12_command_queue;
-	Microsoft::WRL::ComPtr<ID3D12Fence>			d3d12_fence;
-	HANDLE										fence_event;
-	uint64_t									fence_value;
+	D3D12_COMMAND_LIST_TYPE                     command_list_type;
+	Microsoft::WRL::ComPtr<ID3D12Device2>       d3d12_device;
+	Microsoft::WRL::ComPtr<ID3D12CommandQueue>  d3d12_command_queue;
+	Microsoft::WRL::ComPtr<ID3D12Fence>         d3d12_fence;
+	HANDLE                                      fence_event;
+	uint64_t                                    fence_value;
 
-	CommandAllocatorQueue						command_allocator_queue;
-	CommandListQueue							command_list_queue;
+	CommandAllocatorQueue                       command_allocator_queue;
+	CommandListQueue                            command_list_queue;
 };
 
 }
