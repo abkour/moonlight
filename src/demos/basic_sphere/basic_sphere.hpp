@@ -7,13 +7,13 @@
 
 namespace moonlight {
 
-class CubeApplication : public IApplication {
+class BasicSphereApplication : public IApplication {
 
 public:
 
-	CubeApplication(HINSTANCE hinstance);
+	BasicSphereApplication(HINSTANCE hinstance);
 
-	~CubeApplication() {}
+	~BasicSphereApplication() {}
 
 	void flush() override;
 
@@ -28,15 +28,9 @@ public:
 	}
 
 public:
-	
+
 	void resize_depth_buffer(int width, int height);
 	void resize_window(int width, int height);
-
-	void clear_depth(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> command_list,
-		D3D12_CPU_DESCRIPTOR_HANDLE dsv, 
-		FLOAT depth = 1.f
-	);
 
 	void clear_rtv(
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> command_list,
@@ -58,6 +52,8 @@ private:
 
 	uint64_t fence_values[3];
 
+	DirectX::XMFLOAT2 window_resolution;
+
 private:
 
 	Microsoft::WRL::ComPtr<ID3D12Device2> device;
@@ -76,20 +72,11 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> index_buffer;
 	D3D12_INDEX_BUFFER_VIEW index_buffer_view;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap;	// depth/stencil dheap
-
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
 
 	D3D12_VIEWPORT viewport;
 	D3D12_RECT scissor_rect;
-
-	float fov;
-
-	DirectX::XMMATRIX model_matrix;
-	DirectX::XMMATRIX view_matrix;
-	DirectX::XMMATRIX projection_matrix;
 
 private:
 

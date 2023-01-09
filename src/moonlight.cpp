@@ -4,13 +4,14 @@
 
 #include "application.hpp"
 #include "demos/cube_application/cube_application.hpp"
+#include "demos/basic_sphere/basic_sphere.hpp"
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow)
 {
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     
     try {
-        moonlight::CubeApplication application(hInstance);
+        moonlight::BasicSphereApplication application(hInstance);
         application.run();
     } 
     catch (...) {
