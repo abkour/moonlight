@@ -120,8 +120,6 @@ ComPtr<ID3D12GraphicsCommandList2> DX12Wrapper::create_command_list(
 		nullptr,
 		IID_PPV_ARGS(&command_list)));
 
-	ThrowIfFailed(command_list->Close());
-
 	return command_list;
 }
 

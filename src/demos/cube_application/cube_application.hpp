@@ -1,6 +1,7 @@
 #pragma once
-#include "../application.hpp"
-#include "../dx12_wrapper.hpp"
+#include "../../application.hpp"
+#include "../../dx12_wrapper.hpp"
+#include "../../project_defines.hpp"
 
 #include <DirectXMath.h>
 

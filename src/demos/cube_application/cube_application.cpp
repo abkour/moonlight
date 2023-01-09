@@ -56,6 +56,63 @@ struct PipelineStateStream
 	CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
 } pipeline_state_stream;
 
+CubeApplication::CubeApplication(HINSTANCE hinstance)
+{
+	const wchar_t* window_class_name = L"D3D12 Learning Application";
+	const wchar_t* window_title = L"D3D12CubeDemo";
+	uint32_t width = 1024;
+	uint32_t height = 720;
+
+	std::memset(fence_values, 0, sizeof(fence_values));
+
+	scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+	viewport = CD3DX12_VIEWPORT(0.f, 0.f, static_cast<float>(width), static_cast<float>(height));
+	fov = 45.f;
+
+	content_loaded = false;
+	system_initialized = false;
+
+	window = std::make_unique<Window>(
+		hinstance,
+		window_class_name,
+		window_title,
+		width,
+		height,
+		&CubeApplication::WindowMessagingProcess,
+		this
+		);
+
+	const D3D12_DESCRIPTOR_HEAP_TYPE descriptor_type =
+		D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+
+	const uint8_t n_backbuffers = 3;
+
+	auto most_suitable_adapter = DX12Wrapper::create_adapter();
+	device = DX12Wrapper::create_device(most_suitable_adapter);
+
+	command_queue_compute = DX12Wrapper::create_command_queue(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	command_queue_copy = DX12Wrapper::create_command_queue(device, D3D12_COMMAND_LIST_TYPE_COPY);
+	command_queue_direct = DX12Wrapper::create_command_queue(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+	descriptor_heap = DX12Wrapper::create_descriptor_heap(
+		device,
+		descriptor_type,
+		n_backbuffers
+	);
+
+	swap_chain = DX12Wrapper::create_swap_chain(
+		window,
+		device,
+		descriptor_heap,
+		command_queue_direct
+	);
+
+	load_content();
+
+	content_loaded = true;
+	system_initialized = true;
+}
+
 // Helper functions
 void CubeApplication::load_content()
 {
@@ -99,18 +156,19 @@ void CubeApplication::load_content()
 	
 	ComPtr<ID3DBlob> vertex_shader_blob;
 	ComPtr<ID3DBlob> pixel_shader_blob;
-
 	{
-		const wchar_t* vspath = L"C://Users//flora//dev//moonlight//src//demos//shaders//cube_vs.cso";
-		const wchar_t* pspath = L"C://Users//flora//dev//moonlight//src//demos//shaders//cube_ps.cso";
-		ThrowIfFailed(D3DReadFileToBlob(vspath, &vertex_shader_blob));
-		ThrowIfFailed(D3DReadFileToBlob(pspath, &pixel_shader_blob));
+		std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//cube_application//shaders//cube_vs.cso";
+		std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//cube_application//shaders//cube_ps.cso";
+		ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vertex_shader_blob));
+		ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &pixel_shader_blob));
 	}
 
 	D3D12_INPUT_ELEMENT_DESC input_layout[] =
 	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, 
+			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 
 	// Create a root signature
@@ -226,7 +284,7 @@ void CubeApplication::render()
 	XMMATRIX mvp_matrix = XMMatrixMultiply(model_matrix, view_matrix);
 	mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
 	command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
-
+	// Draw the vertices
 	command_list->DrawIndexedInstanced(_countof(indicies), 1, 0, 0, 0);
 
 	// Present the image to the swapchain
@@ -307,24 +365,27 @@ void CubeApplication::update()
 	static auto t0 = std::chrono::high_resolution_clock::now();
 	static uint64_t frame_count = 0;
 	static float total_time = 0.f;
+	static float reset_total_time = 0.f;
 	frame_count++;
 	auto t1 = std::chrono::high_resolution_clock::now();
-	total_time += (t1 - t0).count() * 1e-9;
+	float elapsed_time = (t1 - t0).count() * 1e-9;
+	total_time += elapsed_time;
+	reset_total_time += elapsed_time;
 	t0 = t1;
-	if (total_time > 1.f) {
-		float fps = frame_count / total_time;
+	if (reset_total_time > 1.f) {
+		float fps = frame_count / reset_total_time;
 
 		char buffer[512];
 		sprintf_s(buffer, "FPS: %f\n", fps);
 		OutputDebugStringA(buffer);
 
 		frame_count = 0;
-		total_time = 0.f;
+		reset_total_time = 0.f;
 	}
 
 	// Update the model matrix
 	float angle = static_cast<float>(total_time * 90.f);
-	XMVECTOR rotation_axis = XMVectorSet(0, 1, 1, 0);
+	XMVECTOR rotation_axis = XMVectorSet(1, 1, 0, 0);
 	model_matrix = XMMatrixRotationAxis(rotation_axis, XMConvertToRadians(angle));
 
 	// Update the view matrix
@@ -383,7 +444,6 @@ void CubeApplication::update_buffer_resource(
 	const void* buffer_data,
 	D3D12_RESOURCE_FLAGS flags)
 {
-	
 	size_t buffer_size = num_elements * element_size;
 
 	ThrowIfFailed(device->CreateCommittedResource(
@@ -420,63 +480,6 @@ void CubeApplication::update_buffer_resource(
 			&sub_resource_data
 		);
 	}
-}
-
-CubeApplication::CubeApplication(HINSTANCE hinstance)
-{
-	const wchar_t* window_class_name = L"D3D12 Learning Application";
-	const wchar_t* window_title = L"D3D12CubeDemo";
-	uint32_t width = 1024;
-	uint32_t height = 720;
-
-	std::memset(fence_values, 0, sizeof(fence_values));
-
-	scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
-	viewport = CD3DX12_VIEWPORT(0.f, 0.f, static_cast<float>(width), static_cast<float>(height));
-	fov = 45.f;
-
-	content_loaded = false;
-	system_initialized = false;
-
-	window = std::make_unique<Window>(
-		hinstance,
-		window_class_name,
-		window_title,
-		width,
-		height,
-		&CubeApplication::WindowMessagingProcess,
-		this
-	);
-
-	const D3D12_DESCRIPTOR_HEAP_TYPE descriptor_type =
-		D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-
-	const uint8_t n_backbuffers = 3;
-
-	auto most_suitable_adapter = DX12Wrapper::create_adapter();
-	device = DX12Wrapper::create_device(most_suitable_adapter);
-
-	command_queue_compute = DX12Wrapper::create_command_queue(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	command_queue_copy = DX12Wrapper::create_command_queue(device, D3D12_COMMAND_LIST_TYPE_COPY);
-	command_queue_direct = DX12Wrapper::create_command_queue(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-
-	descriptor_heap = DX12Wrapper::create_descriptor_heap(
-		device,
-		descriptor_type,
-		n_backbuffers
-	);
-
-	swap_chain = DX12Wrapper::create_swap_chain(
-		window,
-		device,
-		descriptor_heap,
-		command_queue_direct
-	);
-
-	load_content();
-
-	content_loaded = true;
-	system_initialized = true;
 }
 
 void CubeApplication::resize()

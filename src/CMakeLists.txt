@@ -11,7 +11,7 @@ add_executable (moonlight WIN32
 	"swap_chain.cpp"
 	"window.cpp" 
 	"dx12_wrapper.cpp" 
-	"demos/cube_application.cpp"
+	"demos/cube_application/cube_application.cpp"
 	# HLSL files
 )
 
@@ -26,7 +26,7 @@ if (CMAKE_VERSION VERSION_GREATER 3.13)
 	dxguid.lib
   )
 
-  add_compile_definitions(ROOT_DIRECTORY)
+  add_compile_definitions(ROOT_DIRECTORY_ASCII="${CMAKE_SOURCE_DIR}")
 endif()
 
 # TODO: Add tests and install targets if needed.

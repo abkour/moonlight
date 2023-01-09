@@ -154,8 +154,8 @@ void Window::flip_fullscreen()
 		
 	if (fullscreen) {
 		::GetWindowRect(handle, &window_rect);
-		//window_width = window_rect.right - window_rect.left;
-		//window_height = window_rect.bottom - window_rect.top;
+		window_width = window_rect.right - window_rect.left;
+		window_height = window_rect.bottom - window_rect.top;
 
 		UINT window_style = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
 
