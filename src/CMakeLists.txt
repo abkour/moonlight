@@ -13,7 +13,7 @@ add_executable (moonlight WIN32
 	"dx12_wrapper.cpp" 
 	"demos/cube_application/cube_application.cpp"
 	"demos/basic_sphere/basic_sphere.cpp"
-)
+ "demos/mesh_shader/mesh_shader_application.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.13)
   set_property(TARGET moonlight PROPERTY CXX_STANDARD 20)

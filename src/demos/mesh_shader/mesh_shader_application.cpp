@@ -1,4 +1,4 @@
-#include "cube_application.hpp"
+#include "mesh_shader_application.hpp"
 
 #include <d3d12.h>
 #include <d3dcompiler.h>
@@ -45,7 +45,7 @@ static WORD indicies[36] =
 	4, 0, 3, 4, 3, 7
 };
 
-struct PipelineStateStream
+static struct PipelineStateStream
 {
 	CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE pRootSignature;
 	CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT InputLayout;
@@ -56,7 +56,7 @@ struct PipelineStateStream
 	CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
 } pipeline_state_stream;
 
-CubeApplication::CubeApplication(HINSTANCE hinstance)
+MeshShaderApplication::MeshShaderApplication(HINSTANCE hinstance)
 {
 	const wchar_t* window_class_name = L"D3D12 Learning Application";
 	const wchar_t* window_title = L"D3D12CubeDemo";
@@ -78,7 +78,7 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 		window_title,
 		width,
 		height,
-		&CubeApplication::WindowMessagingProcess,
+		&MeshShaderApplication::WindowMessagingProcess,
 		this
 		);
 
@@ -107,6 +107,17 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 		command_queue_direct
 	);
 
+	// Output mesh shader support
+	D3D12_FEATURE_DATA_D3D12_OPTIONS7 feature_data = {};
+	device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &feature_data, sizeof(feature_data));
+	if (feature_data.MeshShaderTier != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED)
+	{
+		if (feature_data.MeshShaderTier == D3D12_MESH_SHADER_TIER_1)
+		{
+			OutputDebugStringA("D3D12_MESH_SHADER_TIER_1 supported!\n");
+		}
+	}
+
 	load_content();
 
 	content_loaded = true;
@@ -114,10 +125,10 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 }
 
 // Helper functions
-void CubeApplication::load_content()
+void MeshShaderApplication::load_content()
 {
 	ComPtr<ID3D12Resource> intermediate_vertex_buffer;
-	
+
 	auto command_list = command_queue_copy->get_command_list();
 
 	update_buffer_resource(
@@ -134,7 +145,7 @@ void CubeApplication::load_content()
 	vertex_buffer_view.StrideInBytes = sizeof(VertexPosColor);
 
 	ComPtr<ID3D12Resource> intermediate_index_buffer;
-	
+
 	update_buffer_resource(
 		command_list,
 		&index_buffer,
@@ -153,7 +164,7 @@ void CubeApplication::load_content()
 	dsv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 	dsv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	ThrowIfFailed(device->CreateDescriptorHeap(&dsv_heap_desc, IID_PPV_ARGS(&dsv_heap)));
-	
+
 	ComPtr<ID3DBlob> vertex_shader_blob;
 	ComPtr<ID3DBlob> pixel_shader_blob;
 	{
@@ -167,7 +178,7 @@ void CubeApplication::load_content()
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
 			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, 
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
 			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 
@@ -178,7 +189,7 @@ void CubeApplication::load_content()
 	{
 		feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 	}
-	
+
 	D3D12_ROOT_SIGNATURE_FLAGS root_signature_flags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
@@ -204,12 +215,12 @@ void CubeApplication::load_content()
 
 	// Create the root signature
 	ThrowIfFailed(device->CreateRootSignature(
-		0, 
+		0,
 		root_signature_blob->GetBufferPointer(),
-		root_signature_blob->GetBufferSize(), 
+		root_signature_blob->GetBufferSize(),
 		IID_PPV_ARGS(&root_signature))
 	);
-	
+
 	D3D12_RT_FORMAT_ARRAY rtv_formats = {};
 	rtv_formats.NumRenderTargets = 1;
 	rtv_formats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -228,7 +239,7 @@ void CubeApplication::load_content()
 	};
 
 	ThrowIfFailed(device->CreatePipelineState(&pipeline_state_stream_desc, IID_PPV_ARGS(&pso)));
-	
+
 	uint64_t fence_value = command_queue_copy->execute_command_list(command_list);
 	command_queue_copy->wait_for_fence_value(fence_value);
 
@@ -237,16 +248,16 @@ void CubeApplication::load_content()
 	resize_depth_buffer(window->width(), window->height());
 }
 
-void CubeApplication::render()
+void MeshShaderApplication::render()
 {
 	UINT current_backbuffer_idx = swap_chain->get_backbuffer_index();
-	
+
 	auto command_list = command_queue_direct->get_command_list();
 	auto backbuffer = swap_chain->get_backbuffer(current_backbuffer_idx);
-	
+
 	auto rtv_desc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(
-		descriptor_heap->GetCPUDescriptorHandleForHeapStart(), 
+		descriptor_heap->GetCPUDescriptorHandleForHeapStart(),
 		current_backbuffer_idx,
 		rtv_desc_size
 	);
@@ -296,35 +307,15 @@ void CubeApplication::render()
 			D3D12_RESOURCE_STATE_PRESENT
 		);
 
-		uint64_t fv_old;
-		uint64_t bbidx_old;
-		uint64_t fv_new;
-		uint64_t bbidx_new;
-
-
 		fence_values[current_backbuffer_idx] = command_queue_direct->execute_command_list(command_list);
-
-		// delete
-		bbidx_old = current_backbuffer_idx;
-		fv_old = fence_values[current_backbuffer_idx];
 
 		current_backbuffer_idx = swap_chain->present(window->is_vsync_on(), false);
 
 		command_queue_direct->wait_for_fence_value(fence_values[current_backbuffer_idx]);
-		
-		// delete
-		bbidx_new = current_backbuffer_idx;
-		fv_new = fence_values[current_backbuffer_idx];
-
-		char buffer[512];
-
-		sprintf_s(buffer, "[OLD| B:%zu\tF:%zu]\n[NEW| B:%zu\tF:%zu]\n\n", bbidx_old, fv_old, bbidx_new, fv_new);
-	
-		OutputDebugStringA(buffer);
 	}
 }
 
-void CubeApplication::resize_depth_buffer(int width, int height)
+void MeshShaderApplication::resize_depth_buffer(int width, int height)
 {
 	if (content_loaded) {
 		flush();
@@ -368,7 +359,7 @@ void CubeApplication::resize_depth_buffer(int width, int height)
 	}
 }
 
-void CubeApplication::resize_window(int width, int height)
+void MeshShaderApplication::resize_window(int width, int height)
 {
 	viewport = CD3DX12_VIEWPORT(
 		0.f,
@@ -380,7 +371,7 @@ void CubeApplication::resize_window(int width, int height)
 	resize_depth_buffer(width, height);
 }
 
-void CubeApplication::update()
+void MeshShaderApplication::update()
 {
 	static auto t0 = std::chrono::high_resolution_clock::now();
 	static uint64_t frame_count = 0;
@@ -417,14 +408,14 @@ void CubeApplication::update()
 	// Update the projection matrix
 	float aspect_ratio = window->width() / static_cast<float>(window->height());
 	projection_matrix = XMMatrixPerspectiveFovLH(
-		XMConvertToRadians(fov), 
-		aspect_ratio, 
-		0.1f, 
+		XMConvertToRadians(fov),
+		aspect_ratio,
+		0.1f,
 		100.f
 	);
 }
 
-void CubeApplication::clear_depth(
+void MeshShaderApplication::clear_depth(
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> command_list,
 	D3D12_CPU_DESCRIPTOR_HANDLE dsv,
 	FLOAT depth)
@@ -432,7 +423,7 @@ void CubeApplication::clear_depth(
 	command_list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, depth, 0, 0, nullptr);
 }
 
-void CubeApplication::clear_rtv(
+void MeshShaderApplication::clear_rtv(
 	ComPtr<ID3D12GraphicsCommandList2> command_list,
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv,
 	FLOAT* clear_color)
@@ -440,7 +431,7 @@ void CubeApplication::clear_rtv(
 	command_list->ClearRenderTargetView(rtv, clear_color, 0, nullptr);
 }
 
-void CubeApplication::transition_resource(
+void MeshShaderApplication::transition_resource(
 	ComPtr<ID3D12GraphicsCommandList2> command_list,
 	ComPtr<ID3D12Resource> resource,
 	D3D12_RESOURCE_STATES before_state,
@@ -455,7 +446,7 @@ void CubeApplication::transition_resource(
 	command_list->ResourceBarrier(1, &barrier);
 }
 
-void CubeApplication::update_buffer_resource(
+void MeshShaderApplication::update_buffer_resource(
 	ComPtr<ID3D12GraphicsCommandList2> command_list,
 	ID3D12Resource** destination_resource,
 	ID3D12Resource** intermediate_resource,
@@ -502,7 +493,7 @@ void CubeApplication::update_buffer_resource(
 	}
 }
 
-void CubeApplication::resize()
+void MeshShaderApplication::resize()
 {
 	if (window->resize()) {
 		flush();
@@ -513,13 +504,13 @@ void CubeApplication::resize()
 		}
 
 		swap_chain->resize_buffers(device, descriptor_heap, window->width(), window->height());
-	
+
 		// Resize the viewport
 		resize_window(window->width(), window->height());
 	}
 }
 
-void CubeApplication::flush()
+void MeshShaderApplication::flush()
 {
 	command_queue_compute->flush();
 	command_queue_copy->flush();

@@ -1,0 +1,31 @@
+Why can arrays not be mapped to 32-bit constants in the root signature?
+
+What exactly is a root signature?
+	The root signature defines the parameters that are used to bind resources to the 
+	shaders. Arguments are passed to the root signature via the command list.
+
+What exactly is a command allocator, and how does it interact with command lists?
+	The principle is simple I think. Command lists require memory to store their commands. 
+	This memory is allocated and freed by the command allocator. Simple as that.
+	However, I don't know where the memory is exactly and how and when it is reallocated.
+	The memory is on the CPU, and presumably managed by the driver.
+
+	There is the Reset() function that allows reuse of the already allocated memory.
+	This indicates that a command allocator never shrinks in size, but instead keeps growing.
+
+	This is my understanding as of now.
+
+	Appendum: It seems that the command list contains the buffer in which the commands are recorded.
+	If that is the case, the command buffer is allocated by the command allocator.
+	A call to CommandAllocator->Reset() would then do either of two things:
+		1. Set the command buffer to nullptr, but maintain the buffer storage
+		2. ...
+
+Detail how CPU/GPU synchronization works!
+
+Is the SV_Position specifier similar in intended use as the gl_Position variable in GLSL?
+
+What exactly is a Pipeline State Object (PSO)?
+
+What are the differences among committed, placed and reserved resources?
+
