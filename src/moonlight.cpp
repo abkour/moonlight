@@ -4,8 +4,6 @@
 
 #include "application.hpp"
 #include "demos/cube_application/cube_application.hpp"
-#include "demos/basic_sphere/basic_sphere.hpp"
-#include "demos/mesh_shader/mesh_shader_application.hpp"
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow)
 {

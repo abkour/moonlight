@@ -8,18 +8,19 @@ struct VertexShaderOutput {
 	float4 Position : SV_Position;
 };
 
-struct Transformation {
+struct VertexTransformation
+{
 	matrix MVP;
 };
 
-ConstantBuffer<Transformation> TransformationCB : register(b0);
+ConstantBuffer<VertexTransformation> TransformationCB : register(b0);
 
 VertexShaderOutput main(VertexPosColor IN) 
 {
 	VertexShaderOutput OUT;
 	
-	OUT.Position = mul(TransformationCB.MVP, float4(IN.Position, 1.f));
 	OUT.Color = float4(IN.Color, 1.f);
+	OUT.Position = mul(TransformationCB.MVP, float4(IN.Position, 1.f));
 
 	return OUT;
 }

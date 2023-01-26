@@ -15,6 +15,8 @@ public:
 
 	~CubeApplication() {}
 
+	bool is_application_initialized() override;
+
 	void flush() override;
 
 	void update() override;
@@ -23,52 +25,80 @@ public:
 
 	void resize() override;
 
-	bool is_application_initialized() override {
-		return system_initialized && content_loaded;
-	}
-
-public:
-	
-	void resize_depth_buffer(int width, int height);
-	void resize_window(int width, int height);
-
-	void clear_depth(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> command_list,
-		D3D12_CPU_DESCRIPTOR_HANDLE dsv, 
-		FLOAT depth = 1.f
-	);
-
-	void clear_rtv(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> command_list,
-		D3D12_CPU_DESCRIPTOR_HANDLE rtv,
-		FLOAT* clear_color
-	);
-
-	void transition_resource(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> command_list,
-		Microsoft::WRL::ComPtr<ID3D12Resource> resource,
-		D3D12_RESOURCE_STATES before_state,
-		D3D12_RESOURCE_STATES after_state
-	);
-
 private:
 
-	bool content_loaded;
-	bool system_initialized;
-
-	uint64_t fence_values[3];
+	static constexpr uint16_t window_width = 1024;
+	static constexpr uint16_t window_height = 720;
 
 private:
 
 	Microsoft::WRL::ComPtr<ID3D12Device2> device;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptor_heap;
 
-	std::unique_ptr<CommandQueue> command_queue_compute;
-	std::unique_ptr<CommandQueue> command_queue_copy;
-	std::unique_ptr<CommandQueue> command_queue_direct;
-	std::unique_ptr<SwapChain> swap_chain;
+	Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue;
+	void _pimpl_create_command_queue(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device
+	);
 
-private:
+	Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain;
+	void _pimpl_create_swap_chain(
+		Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue
+	);
+
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_descriptor_heap;
+	void _pimpl_create_rtv_descriptor_heap(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device
+	);
+
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap;
+	void _pimpl_create_dsv_descriptor_heap(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device
+	);
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
+	void _pimpl_create_dsv(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap
+	);
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> backbuffers[3];
+	void _pimpl_create_backbuffers(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain,
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptor_heap
+	);
+	
+	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator;
+	void _pimpl_create_command_allocator(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		D3D12_COMMAND_LIST_TYPE type
+	);
+
+	Microsoft::WRL::ComPtr<ID3D12CommandList> command_list_copy;
+	void _pimpl_create_command_list_copy(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator,
+		D3D12_COMMAND_LIST_TYPE type
+	);
+
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_direct;
+	void _pimpl_create_command_list(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator,
+		D3D12_COMMAND_LIST_TYPE type
+	);
+
+	Microsoft::WRL::ComPtr<ID3D12Fence> fence;
+	void _pimpl_create_fence(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device
+	);
+
+	HANDLE fence_event;
+	void _pimpl_create_fence_event();
+
+	//
+	// Triangle
+	//
+	void load_assets();
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertex_buffer;
 	D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
@@ -76,35 +106,34 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> index_buffer;
 	D3D12_INDEX_BUFFER_VIEW index_buffer_view;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap;	// depth/stencil dheap
-
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
+
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
 
 	D3D12_VIEWPORT viewport;
 	D3D12_RECT scissor_rect;
 
-	float fov;
-
-	DirectX::XMMATRIX model_matrix;
-	DirectX::XMMATRIX view_matrix;
-	DirectX::XMMATRIX projection_matrix;
+	DirectX::XMMATRIX mvp_matrix;
 
 private:
 
-	// Helper functions
-	void load_content();
+	void command_queue_signal(uint64_t fence_value);
 
-	void update_buffer_resource(
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> command_list,
-		ID3D12Resource** destination_resource,
-		ID3D12Resource** intermediate_resource,
-		size_t num_elements,
-		size_t element_size,
-		const void* buffer_data,
-		D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
+	void flush_command_queue();
+
+	void wait_for_fence(uint64_t fence_value);
+
+	void transition_resource(
+		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list,
+		Microsoft::WRL::ComPtr<ID3D12Resource> resource,
+		D3D12_RESOURCE_STATES before_state,
+		D3D12_RESOURCE_STATES after_state
 	);
+
+private:
+
+	uint64_t fence_value = 0;
+	bool app_initialized = false;
 };
 
 }

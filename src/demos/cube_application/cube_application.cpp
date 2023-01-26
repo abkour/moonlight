@@ -1,23 +1,20 @@
 #include "cube_application.hpp"
 
-#include <d3d12.h>
 #include <d3dcompiler.h>
 
-#include <algorithm>
+#include <chrono>
 
-using namespace DirectX;
 using namespace Microsoft::WRL;
+using namespace DirectX;
 
-// This gets around the problem of taking the address of a rvalue
-// This works on architectures where the functions return their value on the stack. (x86)
-// Doesn't work on ARM.
-template<typename T>
-T* get_temporary_address(T&& x)
+namespace moonlight
 {
-	return &x;
-}
 
-namespace moonlight {
+template<typename T>
+T* temp_address(T&& v)
+{
+	return &v;
+}
 
 struct VertexPosColor {
 	XMFLOAT3 Position;
@@ -45,140 +42,258 @@ static WORD indicies[36] =
 	4, 0, 3, 4, 3, 7
 };
 
-struct PipelineStateStream
-{
-	CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE pRootSignature;
-	CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT InputLayout;
-	CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY PrimitiveTopologyType;
-	CD3DX12_PIPELINE_STATE_STREAM_VS VS;
-	CD3DX12_PIPELINE_STATE_STREAM_PS PS;
-	CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT DSVFormat;
-	CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
-} pipeline_state_stream;
-
+//
+// Public implementation
+//
 CubeApplication::CubeApplication(HINSTANCE hinstance)
 {
-	const wchar_t* window_class_name = L"D3D12 Learning Application";
-	const wchar_t* window_title = L"D3D12CubeDemo";
-	uint32_t width = 1024;
-	uint32_t height = 720;
-
-	std::memset(fence_values, 0, sizeof(fence_values));
-
-	scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
-	viewport = CD3DX12_VIEWPORT(0.f, 0.f, static_cast<float>(width), static_cast<float>(height));
-	fov = 45.f;
-
-	content_loaded = false;
-	system_initialized = false;
-
 	window = std::make_unique<Window>(
 		hinstance,
-		window_class_name,
-		window_title,
-		width,
-		height,
+		L"DX12MoonlightApplication",
+		L"DX12 Demo",
+		window_width,
+		window_height,
 		&CubeApplication::WindowMessagingProcess,
 		this
-		);
-
-	const D3D12_DESCRIPTOR_HEAP_TYPE descriptor_type =
-		D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-
-	const uint8_t n_backbuffers = 3;
-
-	auto most_suitable_adapter = DX12Wrapper::create_adapter();
-	device = DX12Wrapper::create_device(most_suitable_adapter);
-
-	command_queue_compute = DX12Wrapper::create_command_queue(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	command_queue_copy = DX12Wrapper::create_command_queue(device, D3D12_COMMAND_LIST_TYPE_COPY);
-	command_queue_direct = DX12Wrapper::create_command_queue(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-
-	descriptor_heap = DX12Wrapper::create_descriptor_heap(
-		device,
-		descriptor_type,
-		n_backbuffers
 	);
 
-	swap_chain = DX12Wrapper::create_swap_chain(
-		window,
-		device,
-		descriptor_heap,
-		command_queue_direct
-	);
+	ComPtr<IDXGIAdapter4> most_sutiable_adapter = DX12Wrapper::create_adapter();
+	device = DX12Wrapper::create_device(most_sutiable_adapter);
+	_pimpl_create_command_queue(device);
+	_pimpl_create_swap_chain(command_queue);
+	_pimpl_create_rtv_descriptor_heap(device);
+	_pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap);
+	_pimpl_create_dsv_descriptor_heap(device);
+	_pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	_pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	_pimpl_create_fence(device);
+	_pimpl_create_fence_event();
 
-	load_content();
+	scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+	viewport = CD3DX12_VIEWPORT(0.f, 0.f, static_cast<float>(window_width), static_cast<float>(window_height));
 
-	content_loaded = true;
-	system_initialized = true;
+	// Load assets used for rendering
+	load_assets();
+
+	_pimpl_create_dsv(device, dsv_descriptor_heap);
+
+	command_list_direct->Close();
+	
+	app_initialized = true;
 }
 
-// Helper functions
-void CubeApplication::load_content()
+bool CubeApplication::is_application_initialized()
 {
-	ComPtr<ID3D12Resource> intermediate_vertex_buffer;
-	
-	auto command_list = command_queue_copy->get_command_list();
+	return app_initialized;
+}
 
-	update_buffer_resource(
-		command_list,
-		&vertex_buffer,
-		&intermediate_vertex_buffer,
-		_countof(vertices),
-		sizeof(VertexPosColor),
-		vertices
+void CubeApplication::update()
+{
+	static auto t0 = std::chrono::high_resolution_clock::now();
+	static float total_time = 0.f;
+	auto t1 = std::chrono::high_resolution_clock::now();
+	float elapsed_time = (t1 - t0).count() * 1e-9;
+	total_time += elapsed_time;
+	t0 = t1;
+
+	float angle = static_cast<float>(total_time * 90.f);
+	XMVECTOR rotation_axis = XMVectorSet(1, 1, 0, 0);
+
+	XMMATRIX model_matrix = XMMatrixRotationAxis(rotation_axis, XMConvertToRadians(angle));
+
+	XMVECTOR eye_position = XMVectorSet(0, 0, -10, 1);
+	XMVECTOR eye_target = XMVectorSet(0, 0, 0, 1);
+	XMVECTOR world_up = XMVectorSet(0, 1, 0, 0);
+	XMMATRIX view_matrix = XMMatrixLookAtLH(eye_position, eye_target, world_up);
+
+	float aspect_ratio = static_cast<float>(window_width) / static_cast<float>(window_height);
+	XMMATRIX projection_matrix = XMMatrixPerspectiveFovLH(
+		XMConvertToRadians(45.f),
+		aspect_ratio,
+		0.1,
+		100.f
 	);
 
-	vertex_buffer_view.BufferLocation = vertex_buffer->GetGPUVirtualAddress();
-	vertex_buffer_view.SizeInBytes = sizeof(vertices);
-	vertex_buffer_view.StrideInBytes = sizeof(VertexPosColor);
+	mvp_matrix = XMMatrixMultiply(model_matrix, view_matrix);
+	mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
+}
 
-	ComPtr<ID3D12Resource> intermediate_index_buffer;
+void CubeApplication::render()
+{
+	ThrowIfFailed(command_allocator->Reset());
+	ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
 	
-	update_buffer_resource(
-		command_list,
-		&index_buffer,
-		&intermediate_index_buffer,
-		_countof(indicies),
-		sizeof(WORD),
-		indicies
-	);
+	uint8_t backbuffer_idx = swap_chain->GetCurrentBackBufferIndex();
+	auto backbuffer = backbuffers[backbuffer_idx];
 
-	index_buffer_view.BufferLocation = index_buffer->GetGPUVirtualAddress();
-	index_buffer_view.Format = DXGI_FORMAT_R16_UINT;
-	index_buffer_view.SizeInBytes = sizeof(indicies);
-
-	D3D12_DESCRIPTOR_HEAP_DESC dsv_heap_desc = {};
-	dsv_heap_desc.NumDescriptors = 1;
-	dsv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-	dsv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	ThrowIfFailed(device->CreateDescriptorHeap(&dsv_heap_desc, IID_PPV_ARGS(&dsv_heap)));
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
+	UINT rtv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	
-	ComPtr<ID3DBlob> vertex_shader_blob;
-	ComPtr<ID3DBlob> pixel_shader_blob;
+	auto dsv_handle = dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart();
+
+	// Clear
 	{
-		std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//cube_application//shaders//cube_vs.cso";
-		std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//cube_application//shaders//cube_ps.cso";
-		ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vertex_shader_blob));
-		ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &pixel_shader_blob));
+		transition_resource(
+			command_list_direct,
+			backbuffer,
+			D3D12_RESOURCE_STATE_PRESENT,
+			D3D12_RESOURCE_STATE_RENDER_TARGET
+		);
+
+		const FLOAT clear_color[] = {0.1f, 0.1f, 0.1f, 1.f};
+		command_list_direct->ClearRenderTargetView(
+			rtv_handle.Offset(rtv_inc_size * backbuffer_idx), 
+			clear_color, 
+			0, 
+			NULL
+		);
+
+		command_list_direct->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, NULL);
+	}
+
+	// Record
+	command_list_direct->SetPipelineState(pso.Get());
+	command_list_direct->SetGraphicsRootSignature(root_signature.Get());
+	command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	command_list_direct->IASetVertexBuffers(0, 1, &vertex_buffer_view);
+	command_list_direct->IASetIndexBuffer(&index_buffer_view);
+	command_list_direct->RSSetViewports(1, &viewport);
+	command_list_direct->RSSetScissorRects(1, &scissor_rect);
+	command_list_direct->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
+	command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
+	command_list_direct->DrawIndexedInstanced(_countof(indicies), 1, 0, 0, 0);
+
+	// Present
+	{
+		transition_resource(
+			command_list_direct, 
+			backbuffer,
+			D3D12_RESOURCE_STATE_RENDER_TARGET,
+			D3D12_RESOURCE_STATE_PRESENT
+		);
+
+		command_list_direct->Close();
+		ID3D12CommandList* const command_lists[] =
+		{
+			command_list_direct.Get()
+		};
+
+		command_queue->ExecuteCommandLists(1, command_lists);
+
+		command_queue_signal(++fence_value);
+
+		swap_chain->Present(1, 0);
+
+		wait_for_fence(fence_value);
+	}
+}
+
+void CubeApplication::resize()
+{
+}
+
+void CubeApplication::flush()
+{
+	flush_command_queue();
+}
+
+//
+// Private implemenatation (Triangle)
+//
+static struct PipelineStateStream
+{
+	CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
+	CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT input_layout;
+	CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitive_topology;
+	CD3DX12_PIPELINE_STATE_STREAM_VS vs;
+	CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rs;
+	CD3DX12_PIPELINE_STATE_STREAM_PS ps;
+	CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsv_format;
+	CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtv_formats;
+} pipeline_state_stream;
+
+void CubeApplication::load_assets()
+{
+	// Vertex buffer uploading
+	{
+		ThrowIfFailed(device->CreateCommittedResource(
+			temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+			D3D12_HEAP_FLAG_NONE,
+			temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices))),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&vertex_buffer)
+		));
+
+		UINT32* vertex_data_begin = nullptr;
+		CD3DX12_RANGE read_range(0, 0);
+		ThrowIfFailed(vertex_buffer->Map(
+			0,
+			&read_range,
+			reinterpret_cast<void**>(&vertex_data_begin)
+		));
+		memcpy(vertex_data_begin, vertices, sizeof(vertices));
+		vertex_buffer->Unmap(0, nullptr);
+
+		vertex_buffer_view.BufferLocation = vertex_buffer->GetGPUVirtualAddress();
+		vertex_buffer_view.SizeInBytes = sizeof(vertices);
+		vertex_buffer_view.StrideInBytes = sizeof(VertexPosColor);
+	}
+
+	// Index buffer loading
+	{
+		ThrowIfFailed(device->CreateCommittedResource(
+			temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+			D3D12_HEAP_FLAG_NONE,
+			temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(indicies))),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&index_buffer)
+		));
+
+		UINT32* index_data_begin = nullptr;
+		CD3DX12_RANGE read_range(0, 0);
+		ThrowIfFailed(index_buffer->Map(
+			0,
+			&read_range,
+			reinterpret_cast<void**>(&index_data_begin)
+		));
+		memcpy(index_data_begin, indicies, sizeof(indicies));
+		index_buffer->Unmap(0, nullptr);
+
+		index_buffer_view.BufferLocation = index_buffer->GetGPUVirtualAddress();
+		index_buffer_view.Format = DXGI_FORMAT_R16_UINT;
+		index_buffer_view.SizeInBytes = sizeof(indicies);
+	}
+
+	ComPtr<ID3DBlob> vs_blob;
+	ComPtr<ID3DBlob> ps_blob;
+	{
+		std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//cube_application//shaders//triangle_vs.cso";
+		std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//cube_application//shaders//triangle_ps.cso";
+		ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
+		ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
 	}
 
 	D3D12_INPUT_ELEMENT_DESC input_layout[] =
 	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
-			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, 
-			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ 
+			"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, 
+			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 
+		},
+		{
+			"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
+		}
 	};
 
-	// Create a root signature
 	D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
 	feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
 	if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
 	{
 		feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 	}
-	
+
 	D3D12_ROOT_SIGNATURE_FLAGS root_signature_flags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
@@ -190,259 +305,280 @@ void CubeApplication::load_content()
 	root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-	root_signature_desc.Init_1_1(_countof(root_parameters), root_parameters, 0, nullptr, root_signature_flags);
+	// TODO: Is this call correct, if the highest supported version is 1_0?
+	root_signature_desc.Init_1_1(1, root_parameters, 0, nullptr, root_signature_flags);
 
-	// Serialize the root signature
 	ComPtr<ID3DBlob> root_signature_blob;
+	// TODO: What is the error blob=
 	ComPtr<ID3DBlob> error_blob;
 	ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
 		&root_signature_desc,
 		feature_data.HighestVersion,
 		&root_signature_blob,
-		&error_blob)
-	);
+		&error_blob
+	));
 
-	// Create the root signature
 	ThrowIfFailed(device->CreateRootSignature(
-		0, 
+		0,
 		root_signature_blob->GetBufferPointer(),
-		root_signature_blob->GetBufferSize(), 
-		IID_PPV_ARGS(&root_signature))
-	);
-	
+		root_signature_blob->GetBufferSize(),
+		IID_PPV_ARGS(&root_signature)
+	));
+
 	D3D12_RT_FORMAT_ARRAY rtv_formats = {};
 	rtv_formats.NumRenderTargets = 1;
 	rtv_formats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-	pipeline_state_stream.pRootSignature = root_signature.Get();
-	pipeline_state_stream.InputLayout = { input_layout, _countof(input_layout) };
-	pipeline_state_stream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	pipeline_state_stream.VS = CD3DX12_SHADER_BYTECODE(vertex_shader_blob.Get());
-	pipeline_state_stream.PS = CD3DX12_SHADER_BYTECODE(pixel_shader_blob.Get());
-	pipeline_state_stream.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-	pipeline_state_stream.RTVFormats = rtv_formats;
+	CD3DX12_RASTERIZER_DESC rasterizer_desc = {};
+	rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
+	rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
+	rasterizer_desc.DepthClipEnable = TRUE;
+	rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
-	D3D12_PIPELINE_STATE_STREAM_DESC pipeline_state_stream_desc = {
+	pipeline_state_stream.dsv_format = DXGI_FORMAT_D32_FLOAT;
+	pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
+	pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
+	pipeline_state_stream.root_signature = root_signature.Get();
+	pipeline_state_stream.rs = rasterizer_desc;
+	pipeline_state_stream.rtv_formats = rtv_formats;
+	pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
+
+	D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {
 		sizeof(PipelineStateStream),
 		&pipeline_state_stream
 	};
 
-	ThrowIfFailed(device->CreatePipelineState(&pipeline_state_stream_desc, IID_PPV_ARGS(&pso)));
-	
-	uint64_t fence_value = command_queue_copy->execute_command_list(command_list);
-	command_queue_copy->wait_for_fence_value(fence_value);
-
-	content_loaded = true;
-
-	resize_depth_buffer(window->width(), window->height());
+	ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&pso)));
 }
 
-void CubeApplication::render()
+//
+// Private Implementation (Constructors)
+//
+void CubeApplication::_pimpl_create_command_queue(
+	Microsoft::WRL::ComPtr<ID3D12Device2> device)
 {
-	UINT current_backbuffer_idx = swap_chain->get_backbuffer_index();
-	
-	auto command_list = command_queue_direct->get_command_list();
-	auto backbuffer = swap_chain->get_backbuffer(current_backbuffer_idx);
-	
-	auto rtv_desc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(
-		descriptor_heap->GetCPUDescriptorHandleForHeapStart(), 
-		current_backbuffer_idx,
-		rtv_desc_size
+	D3D12_COMMAND_QUEUE_DESC queue_desc = {};
+	queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	queue_desc.NodeMask = 0;
+	queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+	queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+
+	ThrowIfFailed(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&command_queue)));
+}
+
+void CubeApplication::_pimpl_create_swap_chain(
+	Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue)
+{
+	ComPtr<IDXGIFactory4> factory4;
+	UINT factory_flags = 0;
+#ifdef _DEBUG
+	factory_flags = DXGI_CREATE_FACTORY_DEBUG;
+#endif
+
+	ThrowIfFailed(CreateDXGIFactory2(factory_flags, IID_PPV_ARGS(&factory4)));
+
+	DXGI_SWAP_CHAIN_DESC1 swap_chain_desc = {};
+	swap_chain_desc.Width = window_width;
+	swap_chain_desc.Height = window_height;
+	swap_chain_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	swap_chain_desc.Stereo = FALSE;
+	swap_chain_desc.SampleDesc = { 1, 0 };
+	swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	swap_chain_desc.BufferCount = 3;
+	swap_chain_desc.Scaling = DXGI_SCALING_STRETCH;
+	swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	swap_chain_desc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+	swap_chain_desc.Flags = 0;
+
+	ComPtr<IDXGISwapChain1> swap_chain1;
+	factory4->CreateSwapChainForHwnd(
+		command_queue.Get(),
+		window->handle,
+		&swap_chain_desc,
+		NULL,
+		NULL,
+		&swap_chain1
 	);
 
-	auto dsv = dsv_heap->GetCPUDescriptorHandleForHeapStart();
+	ThrowIfFailed(factory4->MakeWindowAssociation(window->handle, DXGI_MWA_NO_ALT_ENTER));
 
-	// Clear the render target
+	swap_chain1.As(&swap_chain);
+}
+
+void CubeApplication::_pimpl_create_rtv_descriptor_heap(
+	Microsoft::WRL::ComPtr<ID3D12Device2> device)
+{
+	D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc = {};
+	rtv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	rtv_heap_desc.NodeMask = 0;
+	rtv_heap_desc.NumDescriptors = 3;
+	rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+
+	ThrowIfFailed(device->CreateDescriptorHeap(
+		&rtv_heap_desc, 
+		IID_PPV_ARGS(&rtv_descriptor_heap
+	)));
+}
+
+void CubeApplication::_pimpl_create_dsv_descriptor_heap(
+	Microsoft::WRL::ComPtr<ID3D12Device2> device)
+{
+	D3D12_DESCRIPTOR_HEAP_DESC dsv_heap_desc = {};
+	dsv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	dsv_heap_desc.NumDescriptors = 1;
+	dsv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+
+	ThrowIfFailed(device->CreateDescriptorHeap(
+		&dsv_heap_desc,
+		IID_PPV_ARGS(&dsv_descriptor_heap)
+	));
+}
+
+void CubeApplication::_pimpl_create_dsv(
+	Microsoft::WRL::ComPtr<ID3D12Device2> device,
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap)
+{
+	D3D12_CLEAR_VALUE optimized_clear_value = {};
+	optimized_clear_value.Format = DXGI_FORMAT_D32_FLOAT;
+	optimized_clear_value.DepthStencil = { 1.f, 0 };
+
+	ThrowIfFailed(device->CreateCommittedResource(
+		temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+		D3D12_HEAP_FLAG_NONE,
+		temp_address(CD3DX12_RESOURCE_DESC::Tex2D(
+			DXGI_FORMAT_D32_FLOAT,
+			window_width,
+			window_height,
+			1, 0, 1, 0,
+			D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)),
+		D3D12_RESOURCE_STATE_DEPTH_WRITE,
+		&optimized_clear_value,
+		IID_PPV_ARGS(&depth_buffer)
+	));
+
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc = {};
+	dsv_desc.Flags = D3D12_DSV_FLAG_NONE;
+	dsv_desc.Format = DXGI_FORMAT_D32_FLOAT;
+	dsv_desc.Texture2D.MipSlice = 0;
+	dsv_desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+
+	device->CreateDepthStencilView(
+		depth_buffer.Get(),
+		&dsv_desc,
+		dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+	);
+}
+
+void CubeApplication::_pimpl_create_backbuffers(
+	Microsoft::WRL::ComPtr<ID3D12Device2> device,
+	Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain,
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptor_heap)
+{
+	UINT rtv_desc_size = device->GetDescriptorHandleIncrementSize(
+		D3D12_DESCRIPTOR_HEAP_TYPE_RTV
+	);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(
+		descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+	);
+
+	for (uint8_t i = 0; i < 3; ++i)
 	{
-		transition_resource(
-			command_list,
-			backbuffer,
-			D3D12_RESOURCE_STATE_PRESENT,
-			D3D12_RESOURCE_STATE_RENDER_TARGET
+		ComPtr<ID3D12Resource> backbuffer;
+		swap_chain->GetBuffer(i, IID_PPV_ARGS(&backbuffer));
+
+		device->CreateRenderTargetView(
+			backbuffer.Get(),
+			nullptr,
+			rtv_handle
 		);
 
-		FLOAT clear_color[] = { 0.9f, 0.6f, 0.4f, 1.f };
+		backbuffers[i] = backbuffer;
 
-		clear_rtv(command_list, rtv, clear_color);
-		clear_depth(command_list, dsv);
+		rtv_handle.Offset(rtv_desc_size);
 	}
+}
 
-	command_list->SetPipelineState(pso.Get());
-	command_list->SetGraphicsRootSignature(root_signature.Get());
+void CubeApplication::_pimpl_create_command_allocator(
+	Microsoft::WRL::ComPtr<ID3D12Device2> device,
+	D3D12_COMMAND_LIST_TYPE type)
+{
+	ThrowIfFailed(device->CreateCommandAllocator(
+		type,
+		IID_PPV_ARGS(&command_allocator)
+	));
+}
 
-	command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	command_list->IASetVertexBuffers(0, 1, &vertex_buffer_view);
-	command_list->IASetIndexBuffer(&index_buffer_view);
+void CubeApplication::_pimpl_create_command_list_copy(
+	Microsoft::WRL::ComPtr<ID3D12Device2> device,
+	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator,
+	D3D12_COMMAND_LIST_TYPE type)
+{
+	ThrowIfFailed(device->CreateCommandList(
+		0,
+		type,
+		command_allocator.Get(),
+		NULL,
+		IID_PPV_ARGS(&command_list_copy)
+	));
+}
 
-	command_list->RSSetViewports(1, &viewport);
-	command_list->RSSetScissorRects(1, &scissor_rect);
+void CubeApplication::_pimpl_create_command_list(
+	Microsoft::WRL::ComPtr<ID3D12Device2> device,
+	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator,
+	D3D12_COMMAND_LIST_TYPE type)
+{
+	ThrowIfFailed(device->CreateCommandList(
+		0,
+		type,
+		command_allocator.Get(),
+		NULL,
+		IID_PPV_ARGS(&command_list_direct)
+	));
+}
 
-	command_list->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+void CubeApplication::_pimpl_create_fence(
+	Microsoft::WRL::ComPtr<ID3D12Device2> device)
+{
+	ThrowIfFailed(device->CreateFence(
+		0, 
+		D3D12_FENCE_FLAG_NONE, 
+		IID_PPV_ARGS(&fence)
+	));
+}
 
-	// Update the MVP matrix
-	XMMATRIX mvp_matrix = XMMatrixMultiply(model_matrix, view_matrix);
-	mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
-	command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
-	// Draw the vertices
-	command_list->DrawIndexedInstanced(_countof(indicies), 1, 0, 0, 0);
+void CubeApplication::_pimpl_create_fence_event()
+{
+	fence_event = ::CreateEvent(NULL, FALSE, FALSE, NULL);
+}
 
-	// Present the image to the swapchain
+//
+// Private implementation (Modifiers)
+//
+void CubeApplication::command_queue_signal(uint64_t fence_value)
+{
+	ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
+}
+
+void CubeApplication::flush_command_queue()
+{
+	++fence_value;
+	command_queue_signal(fence_value);
+	wait_for_fence(fence_value);
+}
+
+void CubeApplication::wait_for_fence(uint64_t fence_value)
+{
+	if (fence->GetCompletedValue() < fence_value)
 	{
-		transition_resource(
-			command_list,
-			backbuffer,
-			D3D12_RESOURCE_STATE_RENDER_TARGET,
-			D3D12_RESOURCE_STATE_PRESENT
-		);
-
-		uint64_t fv_old;
-		uint64_t bbidx_old;
-		uint64_t fv_new;
-		uint64_t bbidx_new;
-
-
-		fence_values[current_backbuffer_idx] = command_queue_direct->execute_command_list(command_list);
-
-		// delete
-		bbidx_old = current_backbuffer_idx;
-		fv_old = fence_values[current_backbuffer_idx];
-
-		current_backbuffer_idx = swap_chain->present(window->is_vsync_on(), false);
-
-		command_queue_direct->wait_for_fence_value(fence_values[current_backbuffer_idx]);
-		
-		// delete
-		bbidx_new = current_backbuffer_idx;
-		fv_new = fence_values[current_backbuffer_idx];
-
-		char buffer[512];
-
-		sprintf_s(buffer, "[OLD| B:%zu\tF:%zu]\n[NEW| B:%zu\tF:%zu]\n\n", bbidx_old, fv_old, bbidx_new, fv_new);
-	
-		OutputDebugStringA(buffer);
+		ThrowIfFailed(fence->SetEventOnCompletion(fence_value, fence_event));
+		WaitForSingleObject(fence_event, INFINITE);
 	}
-}
-
-void CubeApplication::resize_depth_buffer(int width, int height)
-{
-	if (content_loaded) {
-		flush();
-
-		width = std::max(1, width);
-		height = std::max(1, height);
-
-		D3D12_CLEAR_VALUE optimized_clear_value = {};
-		optimized_clear_value.Format = DXGI_FORMAT_D32_FLOAT;
-		optimized_clear_value.DepthStencil = { 1.f, 0 };
-
-		ThrowIfFailed(device->CreateCommittedResource(
-			get_temporary_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-			D3D12_HEAP_FLAG_NONE,
-			get_temporary_address(CD3DX12_RESOURCE_DESC::Tex2D(
-				DXGI_FORMAT_D32_FLOAT,
-				width,
-				height,
-				1,
-				0,
-				1,
-				0,
-				D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)
-			),
-			D3D12_RESOURCE_STATE_DEPTH_WRITE,
-			&optimized_clear_value,
-			IID_PPV_ARGS(&depth_buffer)
-		));
-
-		D3D12_DEPTH_STENCIL_VIEW_DESC dsv = {};
-		dsv.Format = DXGI_FORMAT_D32_FLOAT;
-		dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-		dsv.Texture2D.MipSlice = 0;
-		dsv.Flags = D3D12_DSV_FLAG_NONE;
-
-		device->CreateDepthStencilView(
-			depth_buffer.Get(),
-			&dsv,
-			dsv_heap->GetCPUDescriptorHandleForHeapStart()
-		);
-	}
-}
-
-void CubeApplication::resize_window(int width, int height)
-{
-	viewport = CD3DX12_VIEWPORT(
-		0.f,
-		0.f,
-		static_cast<float>(width),
-		static_cast<float>(height)
-	);
-
-	resize_depth_buffer(width, height);
-}
-
-void CubeApplication::update()
-{
-	static auto t0 = std::chrono::high_resolution_clock::now();
-	static uint64_t frame_count = 0;
-	static float total_time = 0.f;
-	static float reset_total_time = 0.f;
-	frame_count++;
-	auto t1 = std::chrono::high_resolution_clock::now();
-	float elapsed_time = (t1 - t0).count() * 1e-9;
-	total_time += elapsed_time;
-	reset_total_time += elapsed_time;
-	t0 = t1;
-	if (reset_total_time > 1.f) {
-		float fps = frame_count / reset_total_time;
-
-		char buffer[512];
-		sprintf_s(buffer, "FPS: %f\n", fps);
-		OutputDebugStringA(buffer);
-
-		frame_count = 0;
-		reset_total_time = 0.f;
-	}
-
-	// Update the model matrix
-	float angle = static_cast<float>(total_time * 90.f);
-	XMVECTOR rotation_axis = XMVectorSet(1, 1, 0, 0);
-	model_matrix = XMMatrixRotationAxis(rotation_axis, XMConvertToRadians(angle));
-
-	// Update the view matrix
-	XMVECTOR eye_position = XMVectorSet(0, 0, -10, 1);
-	XMVECTOR focus_point = XMVectorSet(0, 0, 0, 1);
-	XMVECTOR up_direction = XMVectorSet(0, 1, 0, 0);
-	view_matrix = XMMatrixLookAtLH(eye_position, focus_point, up_direction);
-
-	// Update the projection matrix
-	float aspect_ratio = window->width() / static_cast<float>(window->height());
-	projection_matrix = XMMatrixPerspectiveFovLH(
-		XMConvertToRadians(fov), 
-		aspect_ratio, 
-		0.1f, 
-		100.f
-	);
-}
-
-void CubeApplication::clear_depth(
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> command_list,
-	D3D12_CPU_DESCRIPTOR_HANDLE dsv,
-	FLOAT depth)
-{
-	command_list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, depth, 0, 0, nullptr);
-}
-
-void CubeApplication::clear_rtv(
-	ComPtr<ID3D12GraphicsCommandList2> command_list,
-	D3D12_CPU_DESCRIPTOR_HANDLE rtv,
-	FLOAT* clear_color)
-{
-	command_list->ClearRenderTargetView(rtv, clear_color, 0, nullptr);
 }
 
 void CubeApplication::transition_resource(
-	ComPtr<ID3D12GraphicsCommandList2> command_list,
-	ComPtr<ID3D12Resource> resource,
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list,
+	Microsoft::WRL::ComPtr<ID3D12Resource> resource,
 	D3D12_RESOURCE_STATES before_state,
 	D3D12_RESOURCE_STATES after_state)
 {
@@ -453,77 +589,6 @@ void CubeApplication::transition_resource(
 	);
 
 	command_list->ResourceBarrier(1, &barrier);
-}
-
-void CubeApplication::update_buffer_resource(
-	ComPtr<ID3D12GraphicsCommandList2> command_list,
-	ID3D12Resource** destination_resource,
-	ID3D12Resource** intermediate_resource,
-	size_t num_elements,
-	size_t element_size,
-	const void* buffer_data,
-	D3D12_RESOURCE_FLAGS flags)
-{
-	size_t buffer_size = num_elements * element_size;
-
-	ThrowIfFailed(device->CreateCommittedResource(
-		get_temporary_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-		D3D12_HEAP_FLAG_NONE,
-		get_temporary_address(CD3DX12_RESOURCE_DESC::Buffer(buffer_size, flags)),
-		D3D12_RESOURCE_STATE_COPY_DEST,
-		nullptr,
-		IID_PPV_ARGS(destination_resource)
-	));
-
-	if (buffer_data) {
-		ThrowIfFailed(device->CreateCommittedResource(
-			get_temporary_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
-			D3D12_HEAP_FLAG_NONE,
-			get_temporary_address(CD3DX12_RESOURCE_DESC::Buffer(buffer_size)),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(intermediate_resource)
-		));
-
-		D3D12_SUBRESOURCE_DATA sub_resource_data = {};
-		sub_resource_data.pData = buffer_data;
-		sub_resource_data.RowPitch = buffer_size;
-		sub_resource_data.SlicePitch = sub_resource_data.RowPitch;
-
-		UpdateSubresources(
-			command_list.Get(),
-			*destination_resource,
-			*intermediate_resource,
-			0,
-			0,
-			1,
-			&sub_resource_data
-		);
-	}
-}
-
-void CubeApplication::resize()
-{
-	if (window->resize()) {
-		flush();
-
-		for (uint8_t i = 0; i < 3; ++i) {
-			swap_chain->release_buffer(i);
-			fence_values[i] = fence_values[swap_chain->get_backbuffer_index()];
-		}
-
-		swap_chain->resize_buffers(device, descriptor_heap, window->width(), window->height());
-	
-		// Resize the viewport
-		resize_window(window->width(), window->height());
-	}
-}
-
-void CubeApplication::flush()
-{
-	command_queue_compute->flush();
-	command_queue_copy->flush();
-	command_queue_direct->flush();
 }
 
 }

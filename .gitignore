@@ -8,6 +8,7 @@ moonlight/
 x64/
 
 *.sln
+.cso
 
 # User-specific files
 *.rsuser
