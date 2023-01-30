@@ -82,16 +82,16 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 
 	ComPtr<IDXGIAdapter4> most_sutiable_adapter = DX12Wrapper::create_adapter();
 	device = DX12Wrapper::create_device(most_sutiable_adapter);
-	_pimpl_create_command_queue(device);
-	_pimpl_create_swap_chain(command_queue);
-	_pimpl_create_rtv_descriptor_heap(device);
-	_pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap);
-	_pimpl_create_dsv_descriptor_heap(device);
-	_pimpl_create_srv_descriptor_heap(device);
-	_pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	_pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	_pimpl_create_fence(device);
-	_pimpl_create_fence_event();
+	command_queue = _pimpl_create_command_queue(device);
+	swap_chain = _pimpl_create_swap_chain(command_queue, window_width, window_height);
+	rtv_descriptor_heap = _pimpl_create_rtv_descriptor_heap(device);
+	_pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap, backbuffers, 3);
+	dsv_descriptor_heap = _pimpl_create_dsv_descriptor_heap(device);
+	srv_descriptor_heap = _pimpl_create_srv_descriptor_heap(device);
+	command_allocator = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	command_list_direct = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	fence = _pimpl_create_fence(device);
+	fence_event = _pimpl_create_fence_event();
 
 	scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
 	viewport = CD3DX12_VIEWPORT(0.f, 0.f, static_cast<float>(window_width), static_cast<float>(window_height));
@@ -101,7 +101,7 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 	load_texture_from_file(device, filename.c_str());
 	load_assets();
 
-	_pimpl_create_dsv(device, dsv_descriptor_heap);
+	depth_buffer = _pimpl_create_dsv(device, dsv_descriptor_heap, window_width, window_height);
 
 	command_list_direct->Close();
 	
@@ -487,220 +487,6 @@ void CubeApplication::load_texture_from_file(
 
 	command_allocator->Reset();
 	command_list_direct->Reset(command_allocator.Get(), NULL);
-}
-
-//
-// Private Implementation (Constructors)
-//
-void CubeApplication::_pimpl_create_command_queue(
-	Microsoft::WRL::ComPtr<ID3D12Device2> device)
-{
-	D3D12_COMMAND_QUEUE_DESC queue_desc = {};
-	queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	queue_desc.NodeMask = 0;
-	queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-	queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-
-	ThrowIfFailed(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&command_queue)));
-}
-
-void CubeApplication::_pimpl_create_swap_chain(
-	Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue)
-{
-	ComPtr<IDXGIFactory4> factory4;
-	UINT factory_flags = 0;
-#ifdef _DEBUG
-	factory_flags = DXGI_CREATE_FACTORY_DEBUG;
-#endif
-
-	ThrowIfFailed(CreateDXGIFactory2(factory_flags, IID_PPV_ARGS(&factory4)));
-
-	DXGI_SWAP_CHAIN_DESC1 swap_chain_desc = {};
-	swap_chain_desc.Width = window_width;
-	swap_chain_desc.Height = window_height;
-	swap_chain_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	swap_chain_desc.Stereo = FALSE;
-	swap_chain_desc.SampleDesc = { 1, 0 };
-	swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swap_chain_desc.BufferCount = 3;
-	swap_chain_desc.Scaling = DXGI_SCALING_STRETCH;
-	swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	swap_chain_desc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-	swap_chain_desc.Flags = 0;
-
-	ComPtr<IDXGISwapChain1> swap_chain1;
-	factory4->CreateSwapChainForHwnd(
-		command_queue.Get(),
-		window->handle,
-		&swap_chain_desc,
-		NULL,
-		NULL,
-		&swap_chain1
-	);
-
-	ThrowIfFailed(factory4->MakeWindowAssociation(window->handle, DXGI_MWA_NO_ALT_ENTER));
-
-	swap_chain1.As(&swap_chain);
-}
-
-void CubeApplication::_pimpl_create_rtv_descriptor_heap(
-	Microsoft::WRL::ComPtr<ID3D12Device2> device)
-{
-	D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc = {};
-	rtv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	rtv_heap_desc.NodeMask = 0;
-	rtv_heap_desc.NumDescriptors = 3;
-	rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-
-	ThrowIfFailed(device->CreateDescriptorHeap(
-		&rtv_heap_desc, 
-		IID_PPV_ARGS(&rtv_descriptor_heap
-	)));
-}
-
-void CubeApplication::_pimpl_create_dsv_descriptor_heap(
-	Microsoft::WRL::ComPtr<ID3D12Device2> device)
-{
-	D3D12_DESCRIPTOR_HEAP_DESC dsv_heap_desc = {};
-	dsv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	dsv_heap_desc.NumDescriptors = 1;
-	dsv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-
-	ThrowIfFailed(device->CreateDescriptorHeap(
-		&dsv_heap_desc,
-		IID_PPV_ARGS(&dsv_descriptor_heap)
-	));
-}
-
-void CubeApplication::_pimpl_create_srv_descriptor_heap(
-	Microsoft::WRL::ComPtr<ID3D12Device2> device)
-{
-	D3D12_DESCRIPTOR_HEAP_DESC dsv_heap_desc = {};
-	dsv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	dsv_heap_desc.NumDescriptors = 1;
-	dsv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-
-	ThrowIfFailed(device->CreateDescriptorHeap(
-		&dsv_heap_desc,
-		IID_PPV_ARGS(&srv_descriptor_heap)
-	));
-}
-
-void CubeApplication::_pimpl_create_dsv(
-	Microsoft::WRL::ComPtr<ID3D12Device2> device,
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap)
-{
-	D3D12_CLEAR_VALUE optimized_clear_value = {};
-	optimized_clear_value.Format = DXGI_FORMAT_D32_FLOAT;
-	optimized_clear_value.DepthStencil = { 1.f, 0 };
-
-	ThrowIfFailed(device->CreateCommittedResource(
-		temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-		D3D12_HEAP_FLAG_NONE,
-		temp_address(CD3DX12_RESOURCE_DESC::Tex2D(
-			DXGI_FORMAT_D32_FLOAT,
-			window_width,
-			window_height,
-			1, 0, 1, 0,
-			D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)),
-		D3D12_RESOURCE_STATE_DEPTH_WRITE,
-		&optimized_clear_value,
-		IID_PPV_ARGS(&depth_buffer)
-	));
-
-	D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc = {};
-	dsv_desc.Flags = D3D12_DSV_FLAG_NONE;
-	dsv_desc.Format = DXGI_FORMAT_D32_FLOAT;
-	dsv_desc.Texture2D.MipSlice = 0;
-	dsv_desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-
-	device->CreateDepthStencilView(
-		depth_buffer.Get(),
-		&dsv_desc,
-		dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
-	);
-}
-
-void CubeApplication::_pimpl_create_backbuffers(
-	Microsoft::WRL::ComPtr<ID3D12Device2> device,
-	Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain,
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptor_heap)
-{
-	UINT rtv_desc_size = device->GetDescriptorHandleIncrementSize(
-		D3D12_DESCRIPTOR_HEAP_TYPE_RTV
-	);
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(
-		descriptor_heap->GetCPUDescriptorHandleForHeapStart()
-	);
-
-	for (uint8_t i = 0; i < 3; ++i)
-	{
-		ComPtr<ID3D12Resource> backbuffer;
-		swap_chain->GetBuffer(i, IID_PPV_ARGS(&backbuffer));
-
-		device->CreateRenderTargetView(
-			backbuffer.Get(),
-			nullptr,
-			rtv_handle
-		);
-
-		backbuffers[i] = backbuffer;
-
-		rtv_handle.Offset(rtv_desc_size);
-	}
-}
-
-void CubeApplication::_pimpl_create_command_allocator(
-	Microsoft::WRL::ComPtr<ID3D12Device2> device,
-	D3D12_COMMAND_LIST_TYPE type)
-{
-	ThrowIfFailed(device->CreateCommandAllocator(
-		type,
-		IID_PPV_ARGS(&command_allocator)
-	));
-}
-
-void CubeApplication::_pimpl_create_command_list_copy(
-	Microsoft::WRL::ComPtr<ID3D12Device2> device,
-	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator,
-	D3D12_COMMAND_LIST_TYPE type)
-{
-	ThrowIfFailed(device->CreateCommandList(
-		0,
-		type,
-		command_allocator.Get(),
-		NULL,
-		IID_PPV_ARGS(&command_list_copy)
-	));
-}
-
-void CubeApplication::_pimpl_create_command_list(
-	Microsoft::WRL::ComPtr<ID3D12Device2> device,
-	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator,
-	D3D12_COMMAND_LIST_TYPE type)
-{
-	ThrowIfFailed(device->CreateCommandList(
-		0,
-		type,
-		command_allocator.Get(),
-		NULL,
-		IID_PPV_ARGS(&command_list_direct)
-	));
-}
-
-void CubeApplication::_pimpl_create_fence(
-	Microsoft::WRL::ComPtr<ID3D12Device2> device)
-{
-	ThrowIfFailed(device->CreateFence(
-		0, 
-		D3D12_FENCE_FLAG_NONE, 
-		IID_PPV_ARGS(&fence)
-	));
-}
-
-void CubeApplication::_pimpl_create_fence_event()
-{
-	fence_event = ::CreateEvent(NULL, FALSE, FALSE, NULL);
 }
 
 //

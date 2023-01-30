@@ -1,4 +1,6 @@
 #pragma once
+#include "../ext/d3dx12.h"
+
 #include "gameplay_system.hpp"
 #include "window.hpp"
 
@@ -28,6 +30,68 @@ public:
 	void run();
 
 	static LRESULT CALLBACK WindowMessagingProcess(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+protected:
+
+	virtual Microsoft::WRL::ComPtr<ID3D12CommandQueue> _pimpl_create_command_queue(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device
+	);
+
+	virtual Microsoft::WRL::ComPtr<IDXGISwapChain4> _pimpl_create_swap_chain(
+		Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue,
+		const uint16_t window_width,
+		const uint16_t window_height
+	);
+
+	virtual Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> _pimpl_create_rtv_descriptor_heap(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device
+	);
+
+	virtual Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> _pimpl_create_dsv_descriptor_heap(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device
+	);
+
+	virtual Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> _pimpl_create_srv_descriptor_heap(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device
+	);
+
+	virtual Microsoft::WRL::ComPtr<ID3D12Resource> _pimpl_create_dsv(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap,
+		const uint16_t window_width,
+		const uint16_t window_height
+	);
+
+	virtual void _pimpl_create_backbuffers(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain,
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptor_heap,
+		Microsoft::WRL::ComPtr<ID3D12Resource>* backbuffers,
+		uint8_t n_backbuffers
+	);
+
+	virtual Microsoft::WRL::ComPtr<ID3D12CommandAllocator> _pimpl_create_command_allocator(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		D3D12_COMMAND_LIST_TYPE type
+	);
+
+	virtual Microsoft::WRL::ComPtr<ID3D12CommandList> _pimpl_create_command_list_copy(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator,
+		D3D12_COMMAND_LIST_TYPE type
+	);
+
+	virtual Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> _pimpl_create_command_list(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator,
+		D3D12_COMMAND_LIST_TYPE type
+	);
+
+	virtual Microsoft::WRL::ComPtr<ID3D12Fence> _pimpl_create_fence(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device
+	);
+
+	HANDLE _pimpl_create_fence_event();
 
 protected:
 
