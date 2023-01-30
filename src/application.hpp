@@ -11,7 +11,7 @@ class IApplication {
 public:
 
 	IApplication() {}
-	IApplication(HINSTANCE hinstance) {}
+	IApplication(HINSTANCE hinstance);
 
 	virtual ~IApplication() = 0 {}
 

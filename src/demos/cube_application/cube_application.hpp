@@ -54,6 +54,11 @@ private:
 		Microsoft::WRL::ComPtr<ID3D12Device2> device
 	);
 
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_descriptor_heap;
+	void _pimpl_create_srv_descriptor_heap(
+		Microsoft::WRL::ComPtr<ID3D12Device2> device
+	);
+
 	Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
 	void _pimpl_create_dsv(
 		Microsoft::WRL::ComPtr<ID3D12Device2> device,
@@ -103,8 +108,11 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertex_buffer;
 	D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> index_buffer;
-	D3D12_INDEX_BUFFER_VIEW index_buffer_view;
+	Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+	void load_texture_from_file(
+		Microsoft::WRL::ComPtr<ID3D12Device2> deviec,
+		const wchar_t* filename
+	);
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
 

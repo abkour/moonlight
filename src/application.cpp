@@ -4,6 +4,11 @@ using namespace Microsoft::WRL;
 
 namespace moonlight {
 
+IApplication::IApplication(HINSTANCE hinstance)
+{
+	ThrowIfFailed(CoInitializeEx(NULL, COINIT_MULTITHREADED));
+}
+
 void IApplication::run() {
 	::ShowWindow(window->handle, SW_SHOW);
 

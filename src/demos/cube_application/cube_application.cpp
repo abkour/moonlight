@@ -1,5 +1,6 @@
 #include "cube_application.hpp"
 
+#include "../../../ext/DirectXTex/DirectXTex/DirectXTex.h"
 #include <d3dcompiler.h>
 
 #include <chrono>
@@ -18,34 +19,56 @@ T* temp_address(T&& v)
 
 struct VertexPosColor {
 	XMFLOAT3 Position;
-	XMFLOAT3 Color;
+	XMFLOAT2 TexCoord;
 };
 
-static VertexPosColor vertices[8] = {
-	{ XMFLOAT3(-1.0f, -1.0f, -1.0f),	XMFLOAT3(0.0f, 0.0f, 0.0f) }, // 0
-	{ XMFLOAT3(-1.0f, 1.0f, -1.0f),		XMFLOAT3(0.0f, 1.0f, 0.0f) }, // 1
-	{ XMFLOAT3(1.0f, 1.0f, -1.0f),		XMFLOAT3(1.0f, 1.0f, 0.0f) }, // 2
-	{ XMFLOAT3(1.0f, -1.0f, -1.0f),		XMFLOAT3(1.0f, 0.0f, 0.0f) }, // 3
-	{ XMFLOAT3(-1.0f, -1.0f,1.0f),		XMFLOAT3(0.0f, 0.0f, 1.0f) }, // 4
-	{ XMFLOAT3(-1.0f, 1.0f, 1.0f),		XMFLOAT3(0.0f, 1.0f, 1.0f) }, // 5
-	{ XMFLOAT3(1.0f, 1.0f, 1.0f),		XMFLOAT3(1.0f, 1.0f, 1.0f) }, // 6
-	{ XMFLOAT3(1.0f, -1.0f, 1.0f),		XMFLOAT3(1.0f, 0.0f, 1.0f) }  // 7
+float vertices[] = {
+	-0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+	 0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
+	 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+	 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+	-0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+	-0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+
+	-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+	 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+	-0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
+	-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+
+	-0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+	-0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+	-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+	-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+	-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+	-0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+	 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+	 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+	 0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+	 0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+	 0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+	-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+	 0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
+	 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+	 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+	-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+	-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+
+	-0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+	 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+	-0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
+	-0.5f,  0.5f, -0.5f,  0.0f, 1.0f
 };
 
-static WORD indicies[36] =
-{
-	0, 1, 2, 0, 2, 3,
-	4, 6, 5, 4, 7, 6,
-	4, 5, 1, 4, 1, 0,
-	3, 2, 6, 3, 6, 7,
-	1, 5, 6, 1, 6, 2,
-	4, 0, 3, 4, 3, 7
-};
-
-//
 // Public implementation
-//
 CubeApplication::CubeApplication(HINSTANCE hinstance)
+	: IApplication(hinstance)
 {
 	window = std::make_unique<Window>(
 		hinstance,
@@ -64,6 +87,7 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 	_pimpl_create_rtv_descriptor_heap(device);
 	_pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap);
 	_pimpl_create_dsv_descriptor_heap(device);
+	_pimpl_create_srv_descriptor_heap(device);
 	_pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	_pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	_pimpl_create_fence(device);
@@ -73,6 +97,8 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 	viewport = CD3DX12_VIEWPORT(0.f, 0.f, static_cast<float>(window_width), static_cast<float>(window_height));
 
 	// Load assets used for rendering
+	std::wstring filename = ROOT_DIRECTORY_WIDE + std::wstring(L"//src//demos//cube_application//rsc//horse.png");
+	load_texture_from_file(device, filename.c_str());
 	load_assets();
 
 	_pimpl_create_dsv(device, dsv_descriptor_heap);
@@ -99,7 +125,10 @@ void CubeApplication::update()
 	float angle = static_cast<float>(total_time * 90.f);
 	XMVECTOR rotation_axis = XMVectorSet(1, 1, 0, 0);
 
-	XMMATRIX model_matrix = XMMatrixRotationAxis(rotation_axis, XMConvertToRadians(angle));
+	const float scale_factor = 5.f;
+	XMMATRIX scale_matrix = XMMatrixScaling(scale_factor, scale_factor, scale_factor);
+	XMMATRIX rotation_matrix = XMMatrixRotationAxis(rotation_axis, XMConvertToRadians(angle));
+	XMMATRIX model_matrix = XMMatrixMultiply(scale_matrix, rotation_matrix);
 
 	XMVECTOR eye_position = XMVectorSet(0, 0, -10, 1);
 	XMVECTOR eye_target = XMVectorSet(0, 0, 0, 1);
@@ -154,14 +183,23 @@ void CubeApplication::render()
 	// Record
 	command_list_direct->SetPipelineState(pso.Get());
 	command_list_direct->SetGraphicsRootSignature(root_signature.Get());
+
+	ID3D12DescriptorHeap* heaps[] = { srv_descriptor_heap.Get() };
+	command_list_direct->SetDescriptorHeaps(1, heaps);
+
+	// Set slot 0 to point to srv
+	command_list_direct->SetGraphicsRootDescriptorTable(
+		1, 
+		srv_descriptor_heap->GetGPUDescriptorHandleForHeapStart()
+	);
+
 	command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	command_list_direct->IASetVertexBuffers(0, 1, &vertex_buffer_view);
-	command_list_direct->IASetIndexBuffer(&index_buffer_view);
 	command_list_direct->RSSetViewports(1, &viewport);
 	command_list_direct->RSSetScissorRects(1, &scissor_rect);
 	command_list_direct->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
 	command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
-	command_list_direct->DrawIndexedInstanced(_countof(indicies), 1, 0, 0, 0);
+	command_list_direct->DrawInstanced(sizeof(vertices) / sizeof(VertexPosColor), 1, 0, 0);
 
 	// Present
 	{
@@ -197,9 +235,7 @@ void CubeApplication::flush()
 	flush_command_queue();
 }
 
-//
 // Private implemenatation (Triangle)
-//
 static struct PipelineStateStream
 {
 	CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
@@ -210,6 +246,7 @@ static struct PipelineStateStream
 	CD3DX12_PIPELINE_STATE_STREAM_PS ps;
 	CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsv_format;
 	CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtv_formats;
+	CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC blend_desc;
 } pipeline_state_stream;
 
 void CubeApplication::load_assets()
@@ -240,32 +277,6 @@ void CubeApplication::load_assets()
 		vertex_buffer_view.StrideInBytes = sizeof(VertexPosColor);
 	}
 
-	// Index buffer loading
-	{
-		ThrowIfFailed(device->CreateCommittedResource(
-			temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
-			D3D12_HEAP_FLAG_NONE,
-			temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(indicies))),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(&index_buffer)
-		));
-
-		UINT32* index_data_begin = nullptr;
-		CD3DX12_RANGE read_range(0, 0);
-		ThrowIfFailed(index_buffer->Map(
-			0,
-			&read_range,
-			reinterpret_cast<void**>(&index_data_begin)
-		));
-		memcpy(index_data_begin, indicies, sizeof(indicies));
-		index_buffer->Unmap(0, nullptr);
-
-		index_buffer_view.BufferLocation = index_buffer->GetGPUVirtualAddress();
-		index_buffer_view.Format = DXGI_FORMAT_R16_UINT;
-		index_buffer_view.SizeInBytes = sizeof(indicies);
-	}
-
 	ComPtr<ID3DBlob> vs_blob;
 	ComPtr<ID3DBlob> ps_blob;
 	{
@@ -277,12 +288,12 @@ void CubeApplication::load_assets()
 
 	D3D12_INPUT_ELEMENT_DESC input_layout[] =
 	{
-		{ 
-			"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, 
-			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 
+		{
+			"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
 		},
 		{
-			"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+			"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
 			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
 		}
 	};
@@ -298,15 +309,21 @@ void CubeApplication::load_assets()
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-	CD3DX12_ROOT_PARAMETER1 root_parameters[1];
+	CD3DX12_ROOT_PARAMETER1 root_parameters[2];
+
+	CD3DX12_DESCRIPTOR_RANGE1 srv_range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0};
+	
 	root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	root_parameters[1].InitAsDescriptorTable(1, &srv_range, D3D12_SHADER_VISIBILITY_PIXEL);
+
+	CD3DX12_STATIC_SAMPLER_DESC samplers[1];
+	samplers[0].Init(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT);
 
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
 	// TODO: Is this call correct, if the highest supported version is 1_0?
-	root_signature_desc.Init_1_1(1, root_parameters, 0, nullptr, root_signature_flags);
+	root_signature_desc.Init_1_1(2, root_parameters, 1, samplers, root_signature_flags);
 
 	ComPtr<ID3DBlob> root_signature_blob;
 	// TODO: What is the error blob=
@@ -335,6 +352,17 @@ void CubeApplication::load_assets()
 	rasterizer_desc.DepthClipEnable = TRUE;
 	rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
+	CD3DX12_BLEND_DESC blend_desc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	blend_desc.RenderTarget[0].BlendEnable = true;
+	blend_desc.RenderTarget[0].BlendEnable = true;
+	blend_desc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	blend_desc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	blend_desc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	blend_desc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	blend_desc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	blend_desc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
 	pipeline_state_stream.dsv_format = DXGI_FORMAT_D32_FLOAT;
 	pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
 	pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -343,6 +371,7 @@ void CubeApplication::load_assets()
 	pipeline_state_stream.rs = rasterizer_desc;
 	pipeline_state_stream.rtv_formats = rtv_formats;
 	pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
+	pipeline_state_stream.blend_desc = blend_desc;
 
 	D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {
 		sizeof(PipelineStateStream),
@@ -350,6 +379,114 @@ void CubeApplication::load_assets()
 	};
 
 	ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&pso)));
+}
+
+void CubeApplication::load_texture_from_file(
+	Microsoft::WRL::ComPtr<ID3D12Device2> deviec,
+	const wchar_t* filename)
+{
+	DirectX::TexMetadata metadata = {};
+	DirectX::ScratchImage scratch_image;
+
+	ThrowIfFailed(LoadFromWICFile(
+		filename,
+		WIC_FLAGS_FORCE_RGB,
+		&metadata,
+		scratch_image
+	));
+
+	auto alpha_mode = metadata.GetAlphaMode();
+
+	D3D12_RESOURCE_DESC tex_desc = {};
+	switch (metadata.dimension)
+	{
+	case TEX_DIMENSION_TEXTURE2D:
+		tex_desc = CD3DX12_RESOURCE_DESC::Tex2D(
+			metadata.format,
+			static_cast<UINT64>(metadata.width),
+			static_cast<UINT>(metadata.height),
+			static_cast<UINT16>(metadata.arraySize)
+		);
+		break;
+	default:
+		throw std::invalid_argument("Bad texture sent!");
+		break;
+	}
+
+	ThrowIfFailed(device->CreateCommittedResource(
+		temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+		D3D12_HEAP_FLAG_NONE,
+		temp_address(CD3DX12_RESOURCE_DESC::Tex2D(
+			DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 
+			metadata.width, 
+			metadata.height, 
+			1, 
+			1)),
+		D3D12_RESOURCE_STATE_COPY_DEST,
+		nullptr,
+		IID_PPV_ARGS(&texture)
+	));
+
+	ComPtr<ID3D12Resource> upload_buffer;
+
+	ThrowIfFailed(device->CreateCommittedResource(
+		temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+		D3D12_HEAP_FLAG_NONE,
+		temp_address(CD3DX12_RESOURCE_DESC::Buffer(scratch_image.GetPixelsSize())),
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&upload_buffer)
+	));
+
+	if (scratch_image.GetImageCount() < 1)
+	{
+		throw std::runtime_error("Invalid file\n");
+	}
+
+	auto image_array = scratch_image.GetImages();
+
+	D3D12_SUBRESOURCE_DATA src_data;
+	src_data.pData = image_array[0].pixels;
+	src_data.RowPitch = image_array[0].rowPitch;
+	src_data.SlicePitch = image_array[0].slicePitch;
+
+	UpdateSubresources(command_list_direct.Get(), texture.Get(), upload_buffer.Get(), 0, 0, 1, &src_data);
+	const auto transition = CD3DX12_RESOURCE_BARRIER::Transition(
+		texture.Get(),
+		D3D12_RESOURCE_STATE_COPY_DEST,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+	);
+	command_list_direct->ResourceBarrier(1, &transition);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+	srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; 
+	srv_desc.Texture2D.MipLevels = 1;
+	srv_desc.Texture2D.MostDetailedMip = 0;
+	srv_desc.Texture2D.ResourceMinLODClamp = 0.f;
+
+	device->CreateShaderResourceView(
+		texture.Get(),
+		&srv_desc,
+		srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+	);
+
+	// Force transition of the texture from COPY_DEST to PIXEL_SHADER_RESOURCE before 
+	// a call to the rendering function, which will reset the command list.
+	command_list_direct->Close();
+	ID3D12CommandList* const command_lists[] =
+	{
+		command_list_direct.Get()
+	};
+	
+	command_queue->ExecuteCommandLists(1, command_lists);
+
+	command_queue_signal(++fence_value);
+	wait_for_fence(fence_value);
+
+	command_allocator->Reset();
+	command_list_direct->Reset(command_allocator.Get(), NULL);
 }
 
 //
@@ -432,6 +569,20 @@ void CubeApplication::_pimpl_create_dsv_descriptor_heap(
 	ThrowIfFailed(device->CreateDescriptorHeap(
 		&dsv_heap_desc,
 		IID_PPV_ARGS(&dsv_descriptor_heap)
+	));
+}
+
+void CubeApplication::_pimpl_create_srv_descriptor_heap(
+	Microsoft::WRL::ComPtr<ID3D12Device2> device)
+{
+	D3D12_DESCRIPTOR_HEAP_DESC dsv_heap_desc = {};
+	dsv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	dsv_heap_desc.NumDescriptors = 1;
+	dsv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+
+	ThrowIfFailed(device->CreateDescriptorHeap(
+		&dsv_heap_desc,
+		IID_PPV_ARGS(&srv_descriptor_heap)
 	));
 }
 

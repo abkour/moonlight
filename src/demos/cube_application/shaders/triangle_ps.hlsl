@@ -1,9 +1,13 @@
-struct PixelShaderInput
+struct VertexShaderOutput
 {
-	float4 Color : COLOR;
-};;
+	float2 TexCoord : TEXCOORD;
+};
 
-float4 main(PixelShaderInput IN) : SV_Target
+Texture2D image_texture : register(t0);
+
+SamplerState texture_sampler : register(s0);
+
+float4 main(VertexShaderOutput IN) : SV_Target
 {
-	return IN.Color;
+	return image_texture.Sample(texture_sampler, IN.TexCoord);
 }
