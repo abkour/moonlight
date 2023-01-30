@@ -80,8 +80,8 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 		this
 	);
 
-	ComPtr<IDXGIAdapter4> most_sutiable_adapter = DX12Wrapper::create_adapter();
-	device = DX12Wrapper::create_device(most_sutiable_adapter);
+	ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
+	device = _pimpl_create_device(most_sutiable_adapter);
 	command_queue = _pimpl_create_command_queue(device);
 	swap_chain = _pimpl_create_swap_chain(command_queue, window_width, window_height);
 	rtv_descriptor_heap = _pimpl_create_rtv_descriptor_heap(device);
@@ -97,7 +97,7 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 	viewport = CD3DX12_VIEWPORT(0.f, 0.f, static_cast<float>(window_width), static_cast<float>(window_height));
 
 	// Load assets used for rendering
-	std::wstring filename = ROOT_DIRECTORY_WIDE + std::wstring(L"//src//demos//cube_application//rsc//horse.png");
+	std::wstring filename = ROOT_DIRECTORY_WIDE + std::wstring(L"//src//demos//00_cube_application//rsc//horse.png");
 	load_texture_from_file(device, filename.c_str());
 	load_assets();
 
@@ -280,8 +280,8 @@ void CubeApplication::load_assets()
 	ComPtr<ID3DBlob> vs_blob;
 	ComPtr<ID3DBlob> ps_blob;
 	{
-		std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//cube_application//shaders//triangle_vs.cso";
-		std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//cube_application//shaders//triangle_ps.cso";
+		std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//00_cube_application//shaders//triangle_vs.cso";
+		std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//00_cube_application//shaders//triangle_ps.cso";
 		ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
 		ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
 	}
@@ -289,11 +289,11 @@ void CubeApplication::load_assets()
 	D3D12_INPUT_ELEMENT_DESC input_layout[] =
 	{
 		{
-			"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+			"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
 			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
 		},
 		{
-			"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+			"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
 			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
 		}
 	};

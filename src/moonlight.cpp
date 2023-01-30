@@ -3,7 +3,7 @@
 #include "framework.h"
 
 #include "application.hpp"
-#include "demos/cube_application/cube_application.hpp"
+#include "demos/00_cube_application/cube_application.hpp"
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow)
 {

@@ -33,6 +33,12 @@ public:
 
 protected:
 
+	virtual Microsoft::WRL::ComPtr<IDXGIAdapter4> _pimpl_create_adapter();
+
+	virtual Microsoft::WRL::ComPtr<ID3D12Device2> _pimpl_create_device(
+		Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter
+	);
+
 	virtual Microsoft::WRL::ComPtr<ID3D12CommandQueue> _pimpl_create_command_queue(
 		Microsoft::WRL::ComPtr<ID3D12Device2> device
 	);

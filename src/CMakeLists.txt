@@ -8,8 +8,8 @@ add_executable (moonlight WIN32
 	"gameplay_system.cpp"
 	"moonlight.cpp" 
 	"window.cpp" 
-	"dx12_wrapper.cpp" 
-	"demos/cube_application/cube_application.cpp"
+	 
+	"demos/00_cube_application/cube_application.cpp"
 )
 
 if (CMAKE_VERSION VERSION_GREATER 3.13)
