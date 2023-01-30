@@ -1,10 +1,14 @@
 #pragma once
 #include "../ext/d3dx12.h"
-
-#include "gameplay_system.hpp"
+#include "project_defines.hpp"
 #include "window.hpp"
 
-#include <memory>
+#include <Windows.h>
+
+#include <d3d12.h>
+#include <dxgi1_6.h>
+#include <wrl.h>
+#include <DirectXMath.h>
 
 namespace moonlight {
 

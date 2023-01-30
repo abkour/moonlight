@@ -1,13 +1,5 @@
 #pragma once
 #include "../../application.hpp"
-#include "../../project_defines.hpp"
-
-#include <Windows.h>
-
-#include <d3d12.h>
-#include <dxgi1_6.h>
-#include <wrl.h>
-#include <DirectXMath.h>
 
 namespace moonlight {
 

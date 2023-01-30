@@ -5,7 +5,7 @@
 # Add source to this project's executable.
 add_executable (moonlight WIN32
 	"application.cpp"
-	"gameplay_system.cpp"
+	
 	"moonlight.cpp" 
 	"window.cpp" 
 	 
