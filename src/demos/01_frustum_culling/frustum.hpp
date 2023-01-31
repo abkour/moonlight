@@ -48,11 +48,11 @@ Frustum construct_frustum(
 	*	The normals for the near/far plane are given by the eye_direction
 	* 
 		c00----m10----ooo
-		|			    |
-		|				|
-		m00		c	  m11
-		|				|
-		|				|
+		|               |
+		|               |
+		m00     c     m11
+		|               |
+		|               |
 		ooo----m01----c11
 	*/
 	Vector3 c = eye_position + eye_direction * near_distance;
