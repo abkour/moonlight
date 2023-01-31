@@ -64,23 +64,21 @@ Frustum construct_frustum(
 	Vector3 c11 = m01 + right * hw;
 
 	frustum.far.normal = eye_direction;
-	frustum.near.normal = XMVectorNegate(eye_direction);
+	frustum.near.normal = invert(eye_direction);
 	frustum.left.normal = normalize(cross(
-		c00 - eye_position,
-		m00 - eye_position
+		c00 - eye_position, m00 - eye_position
 	));
 	frustum.right.normal = normalize(cross(
-		m11 - eye_position,
-		c11 - eye_position
+		m11 - eye_position, c11 - eye_position
 	);
 	frustum.up.normal = normalize(cross(
-		m10 - eye_position,
-		c00 - eye_position
+		m10 - eye_position, c00 - eye_position
 	);
 	frustum.bottom.normal = normalize(cross(
-		m01 - eye_position,
-		c11 - eye_position
+		m01 - eye_position, c11 - eye_position
 	);
+
+	return frustum;
 }
 
 // I wouldn't use this in actual code. This is only for proof-of-concept
