@@ -15,6 +15,8 @@ public:
 
 	void flush() override;
 
+	void on_key_down(WPARAM wparam) override;
+
 	void update() override;
 
 	void render() override;
@@ -23,8 +25,8 @@ public:
 
 private:
 
-	static constexpr uint16_t window_width = 1024;
-	static constexpr uint16_t window_height = 720;
+	uint16_t window_width = 1024;
+	uint16_t window_height = 720;
 
 private:
 
@@ -48,7 +50,6 @@ private:
 	D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
 	Microsoft::WRL::ComPtr<ID3D12Resource> texture;
 	void load_texture_from_file(
-		Microsoft::WRL::ComPtr<ID3D12Device2> deviec,
 		const wchar_t* filename
 	);
 

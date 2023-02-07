@@ -15,7 +15,8 @@ IApplication::IApplication(HINSTANCE hinstance)
 	ThrowIfFailed(CoInitializeEx(NULL, COINIT_MULTITHREADED));
 }
 
-void IApplication::run() {
+void IApplication::run() 
+{
 	::ShowWindow(window->handle, SW_SHOW);
 
 	MSG msg = {};
@@ -76,10 +77,16 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
 			case VK_F11:
 				app->window->flip_fullscreen();
 				break;
+			default:
+				app->on_key_down(wParam);
+				break;
 			}
 		}
 		break;
 		case WM_SYSCHAR:
+			break;
+		case WM_MOUSEMOVE:
+			app->on_mouse_move(lParam);
 			break;
 		case WM_SIZE:
 			app->resize();
@@ -232,12 +239,13 @@ ComPtr<IDXGISwapChain4> IApplication::_pimpl_create_swap_chain(
 }
 
 ComPtr<ID3D12DescriptorHeap> IApplication::_pimpl_create_rtv_descriptor_heap(
-	ComPtr<ID3D12Device2> device)
+	ComPtr<ID3D12Device2> device,
+	UINT n_descriptors)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc = {};
 	rtv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	rtv_heap_desc.NodeMask = 0;
-	rtv_heap_desc.NumDescriptors = 3;
+	rtv_heap_desc.NumDescriptors = n_descriptors;
 	rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 
 	ComPtr<ID3D12DescriptorHeap> rtv_descriptor_heap;
@@ -250,11 +258,12 @@ ComPtr<ID3D12DescriptorHeap> IApplication::_pimpl_create_rtv_descriptor_heap(
 }
 
 ComPtr<ID3D12DescriptorHeap> IApplication::_pimpl_create_dsv_descriptor_heap(
-	ComPtr<ID3D12Device2> device)
+	ComPtr<ID3D12Device2> device,
+	UINT n_descriptors)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC dsv_heap_desc = {};
 	dsv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	dsv_heap_desc.NumDescriptors = 1;
+	dsv_heap_desc.NumDescriptors = n_descriptors;
 	dsv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 
 	ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap;
@@ -267,16 +276,17 @@ ComPtr<ID3D12DescriptorHeap> IApplication::_pimpl_create_dsv_descriptor_heap(
 }
 
 ComPtr<ID3D12DescriptorHeap> IApplication::_pimpl_create_srv_descriptor_heap(
-	ComPtr<ID3D12Device2> device)
+	ComPtr<ID3D12Device2> device,
+	UINT n_descriptors)
 {
-	D3D12_DESCRIPTOR_HEAP_DESC dsv_heap_desc = {};
-	dsv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	dsv_heap_desc.NumDescriptors = 1;
-	dsv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	D3D12_DESCRIPTOR_HEAP_DESC srv_heap_desc = {};
+	srv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	srv_heap_desc.NumDescriptors = n_descriptors;
+	srv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 
 	ComPtr<ID3D12DescriptorHeap> srv_descriptor_heap;
 	ThrowIfFailed(device->CreateDescriptorHeap(
-		&dsv_heap_desc,
+		&srv_heap_desc,
 		IID_PPV_ARGS(&srv_descriptor_heap)
 	));
 
@@ -285,7 +295,7 @@ ComPtr<ID3D12DescriptorHeap> IApplication::_pimpl_create_srv_descriptor_heap(
 
 ComPtr<ID3D12Resource> IApplication::_pimpl_create_dsv(
 	ComPtr<ID3D12Device2> device,
-	ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap,
+	D3D12_CPU_DESCRIPTOR_HANDLE dsv_descriptor,
 	const uint16_t window_width,
 	const uint16_t window_height)
 {
@@ -317,7 +327,7 @@ ComPtr<ID3D12Resource> IApplication::_pimpl_create_dsv(
 	device->CreateDepthStencilView(
 		depth_buffer.Get(),
 		&dsv_desc,
-		dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+		dsv_descriptor
 	);
 
 	return depth_buffer;

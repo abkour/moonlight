@@ -7,6 +7,7 @@
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
+#include <d3dcompiler.h>
 #include <wrl.h>
 #include <DirectXMath.h>
 
@@ -19,11 +20,17 @@ public:
 	IApplication() {}
 	IApplication(HINSTANCE hinstance);
 
-	virtual ~IApplication() = 0 {}
+	virtual ~IApplication() 
+	{
+		CoUninitialize();
+	}
 
 	virtual bool is_application_initialized() = 0;
 
 	virtual void flush() = 0;
+
+	virtual void on_key_down(WPARAM wparam) = 0;
+	virtual void on_mouse_move(LPARAM lparam) = 0;
 
 	virtual void update() = 0;
 	
@@ -54,20 +61,23 @@ protected:
 	);
 
 	virtual Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> _pimpl_create_rtv_descriptor_heap(
-		Microsoft::WRL::ComPtr<ID3D12Device2> device
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		UINT n_descriptors
 	);
 
 	virtual Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> _pimpl_create_dsv_descriptor_heap(
-		Microsoft::WRL::ComPtr<ID3D12Device2> device
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		UINT n_descriptors
 	);
 
 	virtual Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> _pimpl_create_srv_descriptor_heap(
-		Microsoft::WRL::ComPtr<ID3D12Device2> device
+		Microsoft::WRL::ComPtr<ID3D12Device2> device,
+		UINT n_descriptors
 	);
 
 	virtual Microsoft::WRL::ComPtr<ID3D12Resource> _pimpl_create_dsv(
 		Microsoft::WRL::ComPtr<ID3D12Device2> device,
-		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap,
+		D3D12_CPU_DESCRIPTOR_HANDLE dsv_descriptor,
 		const uint16_t window_width,
 		const uint16_t window_height
 	);
@@ -105,7 +115,6 @@ protected:
 
 protected:
 
-	//std::unique_ptr<GameplaySystem> gameplay_system;
 	std::unique_ptr<Window> window;
 };
 

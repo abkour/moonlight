@@ -84,10 +84,10 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 	device = _pimpl_create_device(most_sutiable_adapter);
 	command_queue = _pimpl_create_command_queue(device);
 	swap_chain = _pimpl_create_swap_chain(command_queue, window_width, window_height);
-	rtv_descriptor_heap = _pimpl_create_rtv_descriptor_heap(device);
+	rtv_descriptor_heap = _pimpl_create_rtv_descriptor_heap(device, 3);
 	_pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap, backbuffers, 3);
-	dsv_descriptor_heap = _pimpl_create_dsv_descriptor_heap(device);
-	srv_descriptor_heap = _pimpl_create_srv_descriptor_heap(device);
+	dsv_descriptor_heap = _pimpl_create_dsv_descriptor_heap(device, 1);
+	srv_descriptor_heap = _pimpl_create_srv_descriptor_heap(device, 1);
 	command_allocator = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	command_list_direct = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	fence = _pimpl_create_fence(device);
@@ -96,15 +96,20 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 	scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
 	viewport = CD3DX12_VIEWPORT(0.f, 0.f, static_cast<float>(window_width), static_cast<float>(window_height));
 
-	// Load assets used for rendering
+	//Load assets used for rendering
 	std::wstring filename = ROOT_DIRECTORY_WIDE + std::wstring(L"//src//demos//00_cube_application//rsc//horse.png");
-	load_texture_from_file(device, filename.c_str());
+	load_texture_from_file(filename.c_str());
 	load_assets();
 
-	depth_buffer = _pimpl_create_dsv(device, dsv_descriptor_heap, window_width, window_height);
+	depth_buffer = _pimpl_create_dsv(
+		device, 
+		dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart(), 
+		window_width, 
+		window_height
+	);
 
 	command_list_direct->Close();
-	
+
 	app_initialized = true;
 }
 
@@ -112,6 +117,9 @@ bool CubeApplication::is_application_initialized()
 {
 	return app_initialized;
 }
+
+void CubeApplication::on_key_down(WPARAM wparam)
+{}
 
 void CubeApplication::update()
 {
@@ -151,13 +159,13 @@ void CubeApplication::render()
 {
 	ThrowIfFailed(command_allocator->Reset());
 	ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
-	
+
 	uint8_t backbuffer_idx = swap_chain->GetCurrentBackBufferIndex();
 	auto backbuffer = backbuffers[backbuffer_idx];
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
 	UINT rtv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	
+
 	auto dsv_handle = dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart();
 
 	// Clear
@@ -169,11 +177,11 @@ void CubeApplication::render()
 			D3D12_RESOURCE_STATE_RENDER_TARGET
 		);
 
-		const FLOAT clear_color[] = {0.1f, 0.1f, 0.1f, 1.f};
+		const FLOAT clear_color[] = { 0.1f, 0.1f, 0.1f, 1.f };
 		command_list_direct->ClearRenderTargetView(
-			rtv_handle.Offset(rtv_inc_size * backbuffer_idx), 
-			clear_color, 
-			0, 
+			rtv_handle.Offset(rtv_inc_size * backbuffer_idx),
+			clear_color,
+			0,
 			NULL
 		);
 
@@ -189,7 +197,7 @@ void CubeApplication::render()
 
 	// Set slot 0 to point to srv
 	command_list_direct->SetGraphicsRootDescriptorTable(
-		1, 
+		1,
 		srv_descriptor_heap->GetGPUDescriptorHandleForHeapStart()
 	);
 
@@ -204,7 +212,7 @@ void CubeApplication::render()
 	// Present
 	{
 		transition_resource(
-			command_list_direct, 
+			command_list_direct,
 			backbuffer,
 			D3D12_RESOURCE_STATE_RENDER_TARGET,
 			D3D12_RESOURCE_STATE_PRESENT
@@ -289,11 +297,11 @@ void CubeApplication::load_assets()
 	D3D12_INPUT_ELEMENT_DESC input_layout[] =
 	{
 		{
-			"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+			"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
 			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
 		},
 		{
-			"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
+			"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
 			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
 		}
 	};
@@ -313,8 +321,8 @@ void CubeApplication::load_assets()
 
 	CD3DX12_ROOT_PARAMETER1 root_parameters[2];
 
-	CD3DX12_DESCRIPTOR_RANGE1 srv_range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0};
-	
+	CD3DX12_DESCRIPTOR_RANGE1 srv_range{ D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0 };
+
 	root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 	root_parameters[1].InitAsDescriptorTable(1, &srv_range, D3D12_SHADER_VISIBILITY_PIXEL);
 
@@ -382,7 +390,6 @@ void CubeApplication::load_assets()
 }
 
 void CubeApplication::load_texture_from_file(
-	Microsoft::WRL::ComPtr<ID3D12Device2> deviec,
 	const wchar_t* filename)
 {
 	DirectX::TexMetadata metadata = {};
@@ -417,10 +424,10 @@ void CubeApplication::load_texture_from_file(
 		temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
 		D3D12_HEAP_FLAG_NONE,
 		temp_address(CD3DX12_RESOURCE_DESC::Tex2D(
-			DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 
-			metadata.width, 
-			metadata.height, 
-			1, 
+			DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+			metadata.width,
+			metadata.height,
+			1,
 			1)),
 		D3D12_RESOURCE_STATE_COPY_DEST,
 		nullptr,
@@ -461,7 +468,7 @@ void CubeApplication::load_texture_from_file(
 	D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
 	srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; 
+	srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	srv_desc.Texture2D.MipLevels = 1;
 	srv_desc.Texture2D.MostDetailedMip = 0;
 	srv_desc.Texture2D.ResourceMinLODClamp = 0.f;
@@ -479,7 +486,7 @@ void CubeApplication::load_texture_from_file(
 	{
 		command_list_direct.Get()
 	};
-	
+
 	command_queue->ExecuteCommandLists(1, command_lists);
 
 	command_queue_signal(++fence_value);
@@ -488,10 +495,10 @@ void CubeApplication::load_texture_from_file(
 	command_allocator->Reset();
 	command_list_direct->Reset(command_allocator.Get(), NULL);
 }
-
 //
 // Private implementation (Modifiers)
 //
+
 void CubeApplication::command_queue_signal(uint64_t fence_value)
 {
 	ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));

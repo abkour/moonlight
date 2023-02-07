@@ -19,7 +19,6 @@ Window::Window(	HINSTANCE hinstance,
 #ifdef _DEBUG
 	enable_debug_layer();
 #endif
-	BOOL tearing_support = check_tearing_support();
 	register_window_class(hinstance, window_class_name, wndproc);
 	create_window(hinstance, window_class_name, window_title, width, height, parent_pointer);
 
@@ -74,6 +73,8 @@ void Window::register_window_class(HINSTANCE hinstance, const wchar_t* class_nam
 	// Why is the first parameter NULL?
 	window_class.hCursor = LoadCursor(NULL, IDC_ARROW);
 	// Why is the first parameter HINSTANCE?
+	//window_class.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+	//window_class.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
 	window_class.hIcon = LoadIcon(hinstance, IDI_APPLICATION);
 	window_class.hIconSm = LoadIcon(hinstance, IDI_APPLICATION);
 	window_class.lpfnWndProc = wndproc;
@@ -82,7 +83,9 @@ void Window::register_window_class(HINSTANCE hinstance, const wchar_t* class_nam
 
 	// Note to reader: The ATOM type has nothing to do with atomic operations
 	// Read: https://learn.microsoft.com/en-us/windows/win32/dataxchg/about-atom-tables
+	//ATOM copy_atom = ::RegisterClassExW(&window_class);
 	static ATOM atom = ::RegisterClassExW(&window_class);
+
 	assert(atom > 0);
 }
 

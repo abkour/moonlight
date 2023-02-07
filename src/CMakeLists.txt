@@ -5,12 +5,11 @@
 # Add source to this project's executable.
 add_executable (moonlight WIN32
 	"application.cpp"
-	
 	"moonlight.cpp" 
 	"window.cpp" 
-	 
 	"demos/00_cube_application/cube_application.cpp"
-)
+	"demos/01_frustum_culling/frustum_culling.cpp"
+ "camera.cpp" "render_texture.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.13)
   set_property(TARGET moonlight PROPERTY CXX_STANDARD 20)

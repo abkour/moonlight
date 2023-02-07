@@ -14,6 +14,7 @@
 */
 #pragma once
 #include <cmath>
+#include <numbers>
 
 namespace moonlight
 {
@@ -151,33 +152,58 @@ struct Vector3
 	};
 };
 
-float dot(const Vector3& v0, const Vector3& v1)
+inline float dot(const Vector3& v0, const Vector3& v1)
 {
 	return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
 }
 
-float length(const Vector3& v0)
+inline float length(const Vector3& v0)
 {
 	return std::sqrt(v0.x * v0.x + v0.y * v0.y + v0.z * v0.z);
 }
 
-Vector3 invert(const Vector3& v0)
+inline Vector3 invert(const Vector3& v0)
 {
 	return { -v0.x, -v0.y, -v0.z };
 }
 
-Vector3 normalize(const Vector3& v0)
+inline Vector3 normalize(const Vector3& v0)
 {
 	return v0 / length(v0);
 }
 
-Vector3 cross(const Vector3& v0, const Vector3& v1)
+inline Vector3 cross(const Vector3& v0, const Vector3& v1)
 {
 	return {
 		v0.y * v1.z - v0.z * v1.y,
 		v0.z * v1.x - v0.x * v1.z,
 		v0.x * v1.y - v0.y * v1.x
 	};
+}
+
+inline bool cwise_greater(const Vector3& v0, const Vector3& v1)
+{
+	return v0.x > v1.x && v0.y > v1.y && v0.z > v1.z;
+}
+
+inline bool cwise_greater_or_equal(const Vector3& v0, const Vector3& v1)
+{
+	return v0.x >= v1.x && v0.y >= v1.y && v0.z >= v1.z;
+}
+
+inline bool cwise_less(const Vector3& v0, const Vector3& v1)
+{
+	return v0.x < v1.x && v0.y < v1.y && v0.z < v1.z;
+}
+
+inline bool cwise_less_or_equal(const Vector3& v0, const Vector3& v1)
+{
+	return v0.x <= v1.x&& v0.y <= v1.y&& v0.z <= v1.z;
+}
+
+inline float radians(float x_in_degrees)
+{
+	return (x_in_degrees * std::numbers::pi_v<float>) / 180.f;
 }
 
 }
