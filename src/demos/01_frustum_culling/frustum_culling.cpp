@@ -105,11 +105,12 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
 	, app_initialized(false)
 	, fence_value(0)
 	, camera(XMFLOAT3(0.f, 0.f, -10.f), XMFLOAT3(0.f, 0.f, 1.f))
+	, top_down_camera(XMFLOAT3(0.f, -60.f, -10.f), XMFLOAT3(0.01f, 0.99f, 0.01f))
 	, window_width(1600)
 	, window_height(800)
 {
-	xcoord_old = window_width / 2;
-	ycoord_old = window_height / 2;
+	xcoord_old = static_cast<uint32_t>(window_width) / 2;
+	ycoord_old = static_cast<uint32_t>(window_height) / 2;
 
 	window = std::make_unique<Window>(
 		hinstance,
@@ -202,7 +203,16 @@ void FrustumCulling::flush()
 
 void FrustumCulling::on_key_down(WPARAM wparam)
 {
+	auto pre_pos = camera.get_position();
 	camera.translate(wparam, elapsed_time);
+	auto post_pos = camera.get_position();
+	XMFLOAT3 delta_pos(
+		post_pos.x - pre_pos.x,
+		0.f,
+		post_pos.z - pre_pos.z
+	);
+	XMVECTOR delta_pos_xmv = XMLoadFloat3(&delta_pos);
+	top_down_camera.translate(delta_pos_xmv);
 }
 
 void FrustumCulling::on_mouse_move(LPARAM lparam)
@@ -219,10 +229,6 @@ void FrustumCulling::on_mouse_move(LPARAM lparam)
 	int32_t ydelta = HIWORD(lparam) - ycoord_old;
 	xcoord_old = LOWORD(lparam);
 	ycoord_old = HIWORD(lparam);
-
-	char buffer[512];
-	sprintf_s(buffer, "%d\t%d\n", xdelta, ydelta);
-	OutputDebugStringA(buffer);
 
 	camera.rotate(xdelta, ydelta);
 }
@@ -288,7 +294,7 @@ void FrustumCulling::render()
 	ortho_scene_texture->transition_to_write_state(command_list_direct.Get());
 	auto ortho_rt_descriptor = ortho_scene_texture->get_rtv_descriptor();
 	ortho_scene_texture->clear(command_list_direct.Get());
-	command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &ortho_mvp_matrix, 0);
+	command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix_v2, 0);
 	dsv_handle.Offset(dsv_inc_size);
 	command_list_direct->OMSetRenderTargets(1, &ortho_rt_descriptor, FALSE, &dsv_handle);
 	command_list_direct->DrawInstanced((sizeof(vertices) / sizeof(VertexFormat)), 1, 0, 0);
@@ -376,8 +382,8 @@ void FrustumCulling::update()
 	mvp_matrix = XMMatrixMultiply(model_matrix, camera.view);
 	mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
 
-	ortho_mvp_matrix = XMMatrixMultiply(model_matrix, camera.view);
-	ortho_mvp_matrix = XMMatrixMultiply(ortho_mvp_matrix, projection_matrix);
+	mvp_matrix_v2 = XMMatrixMultiply(model_matrix, top_down_camera.view);
+	mvp_matrix_v2 = XMMatrixMultiply(mvp_matrix_v2, projection_matrix);
 }
 
 void FrustumCulling::load_assets()

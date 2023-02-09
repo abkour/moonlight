@@ -56,7 +56,7 @@ private:
 	D3D12_VERTEX_BUFFER_VIEW quad_vertex_buffer_view;
 
 	DirectX::XMMATRIX mvp_matrix;
-	DirectX::XMMATRIX ortho_mvp_matrix;
+	DirectX::XMMATRIX mvp_matrix_v2;
 	bool app_initialized;
 
 	void load_assets();
@@ -82,6 +82,7 @@ private:
 	// Mouse/Keyboard controls
 	uint16_t window_width, window_height;
 	Camera camera;
+	Camera top_down_camera;
 
 	uint32_t xcoord_old;
 	uint32_t ycoord_old;

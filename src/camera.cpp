@@ -8,7 +8,7 @@ namespace moonlight
 Camera::Camera(DirectX::XMFLOAT3 eye_position, DirectX::XMFLOAT3 eye_direction)
 {
 	pitch = 0.f;
-	yaw = -89.f;
+	yaw = 0.f;
 	this->eye_direction = eye_direction;
 	this->eye_position = eye_position;
 
