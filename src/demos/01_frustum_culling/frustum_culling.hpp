@@ -2,6 +2,7 @@
 #include "../../application.hpp"
 #include "../../camera.hpp"
 #include "../../simple_math.hpp"
+#include "../../dx12_resource.hpp"
 #include "../../render_texture.hpp"
 
 namespace moonlight
@@ -45,6 +46,13 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> quad_pso;
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertex_buffer;
 	Microsoft::WRL::ComPtr<ID3D12Resource> quad_vertex_buffer;
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> instance_id_buffer;
+	D3D12_VERTEX_BUFFER_VIEW instance_id_buffer_view;
+
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> instance_descriptor_heap;
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc;
+	std::unique_ptr<DX12Resource> instance_buffer;
 
 	uint64_t fence_value;
 	HANDLE fence_event;

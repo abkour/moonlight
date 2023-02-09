@@ -98,6 +98,20 @@ static float quad_vertices[] =
 	-1.f, 1.f, 0.f,		0.f, 1.f
 };
 
+// The buffer has to be 256-byte aligned to satisfy D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.
+static float instance_vertex_offsets[64] =
+{
+	-10.f, 0.f, 0.f, 0.f,
+	-0.f, 0.f, 20.f, 0.f,
+	5.f, 0.f, 0.f, 0.f,
+	10.f, 0.f, 0.f, 0.f
+};
+
+static UINT instance_ids[] =
+{
+	0, 1, 2, 3
+};
+
 }
 
 FrustumCulling::FrustumCulling(HINSTANCE hinstance)
@@ -105,7 +119,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
 	, app_initialized(false)
 	, fence_value(0)
 	, camera(XMFLOAT3(0.f, 0.f, -10.f), XMFLOAT3(0.f, 0.f, 1.f))
-	, top_down_camera(XMFLOAT3(0.f, -60.f, -10.f), XMFLOAT3(0.01f, 0.99f, 0.01f))
+	, top_down_camera(XMFLOAT3(0.f, -125.f, -10.f), XMFLOAT3(0.01f, 0.99f, 0.01f))
 	, window_width(1600)
 	, window_height(800)
 {
@@ -115,7 +129,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
 	window = std::make_unique<Window>(
 		hinstance,
 		L"DX12MoonlightApplication",
-		L"DX12_Demo_01_Particle_Collision",
+		L"DX12_Demo_01_Frustum_Culling",
 		window_width,
 		window_height,
 		&FrustumCulling::WindowMessagingProcess,
@@ -130,6 +144,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
 	quad_rtv_descriptor_heap	= _pimpl_create_rtv_descriptor_heap(device, 2);
 	srv_descriptor_heap			= _pimpl_create_srv_descriptor_heap(device, 2);
 	dsv_descriptor_heap			= _pimpl_create_dsv_descriptor_heap(device, 2);
+	instance_descriptor_heap	= _pimpl_create_srv_descriptor_heap(device, 1);
 	_pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap, backbuffers, 3);
 	command_allocator			= _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	command_list_direct			= _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -179,6 +194,8 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
 	ortho_scene_texture->set_clear_color(DirectX::XMFLOAT4(0.6f, 0.f, 0.f, 0.f));
 	ortho_scene_texture->init(window_width, window_height);
 
+	instance_buffer = std::make_unique<DX12Resource>();
+
 	load_assets();
 	UINT dsv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 	CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
@@ -187,6 +204,15 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
 	depth_buffer2 = _pimpl_create_dsv(device, dsv_handle, window_width, window_height);
 
 	command_list_direct->Close();
+
+	// Execute eall command now
+	ID3D12CommandList* const command_lists[] =
+	{
+		command_list_direct.Get()
+	};
+	command_queue->ExecuteCommandLists(1, command_lists);
+	command_queue_signal(++fence_value);
+	wait_for_fence(fence_value);
 
 	app_initialized = true;
 }
@@ -279,13 +305,24 @@ void FrustumCulling::render()
 	// Record Scene
 	command_list_direct->SetPipelineState(scene_pso.Get());
 	command_list_direct->SetGraphicsRootSignature(scene_root_signature.Get());
+	
+	ID3D12Resource* instance_resource = instance_buffer->get_underlying();
+	command_list_direct->SetGraphicsRootConstantBufferView(1, instance_resource->GetGPUVirtualAddress());
+
+	// Set up the instance data
 	command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	command_list_direct->IASetVertexBuffers(0, 1, &vertex_buffer_view);
+
+	D3D12_VERTEX_BUFFER_VIEW vb_views[] =
+	{
+		vertex_buffer_view,
+		instance_id_buffer_view
+	};
+	command_list_direct->IASetVertexBuffers(0, 2, vb_views);
 	command_list_direct->RSSetViewports(1, &viewport0);
 	command_list_direct->RSSetScissorRects(1, &scissor_rect);
 	command_list_direct->OMSetRenderTargets(1, &rt_descriptor, FALSE, &dsv_handle);
 	command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
-	command_list_direct->DrawInstanced(sizeof(vertices) / sizeof(VertexFormat), 1, 0, 0);
+	command_list_direct->DrawInstanced(sizeof(vertices) / sizeof(VertexFormat), 4, 0, 0);
 	// Transition RTV to SRV
 	scene_texture->transition_to_read_state(command_list_direct.Get());
 
@@ -297,7 +334,7 @@ void FrustumCulling::render()
 	command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix_v2, 0);
 	dsv_handle.Offset(dsv_inc_size);
 	command_list_direct->OMSetRenderTargets(1, &ortho_rt_descriptor, FALSE, &dsv_handle);
-	command_list_direct->DrawInstanced((sizeof(vertices) / sizeof(VertexFormat)), 1, 0, 0);
+	command_list_direct->DrawInstanced((sizeof(vertices) / sizeof(VertexFormat)), 4, 0, 0);
 	// Transition RTV to SRV
 	ortho_scene_texture->transition_to_read_state(command_list_direct.Get());
 
@@ -382,8 +419,15 @@ void FrustumCulling::update()
 	mvp_matrix = XMMatrixMultiply(model_matrix, camera.view);
 	mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
 
+	XMMATRIX projection_matrix_2 = XMMatrixPerspectiveFovLH(
+		XMConvertToRadians(45.f),
+		aspect_ratio,
+		0.1,
+		200.f
+	);
+
 	mvp_matrix_v2 = XMMatrixMultiply(model_matrix, top_down_camera.view);
-	mvp_matrix_v2 = XMMatrixMultiply(mvp_matrix_v2, projection_matrix);
+	mvp_matrix_v2 = XMMatrixMultiply(mvp_matrix_v2, projection_matrix_2);
 }
 
 void FrustumCulling::load_assets()
@@ -420,6 +464,46 @@ void FrustumCulling::load_scene_shader_assets()
 		vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
 	}
 
+	// Instancing data
+	{
+		instance_buffer->upload(
+			device.Get(), 
+			command_list_direct.Get(), 
+			(void*)instance_vertex_offsets, 
+			sizeof(instance_vertex_offsets)
+		);
+
+		// Create the CBV view
+		ID3D12Resource* resource = instance_buffer->get_underlying();
+		cbv_desc.BufferLocation = resource->GetGPUVirtualAddress();
+		cbv_desc.SizeInBytes = sizeof(instance_vertex_offsets);
+		device->CreateConstantBufferView(&cbv_desc, instance_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
+
+		// Instance vertex buffer
+		ThrowIfFailed(device->CreateCommittedResource(
+			temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+			D3D12_HEAP_FLAG_NONE,
+			temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(instance_ids))),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&instance_id_buffer)
+		));
+
+		UINT32* vertex_data_begin = nullptr;
+		CD3DX12_RANGE read_range(0, 0);
+		ThrowIfFailed(instance_id_buffer->Map(
+			0,
+			&read_range,
+			reinterpret_cast<void**>(&vertex_data_begin)
+		));
+		memcpy(vertex_data_begin, instance_ids, sizeof(instance_ids));
+		instance_id_buffer->Unmap(0, nullptr);
+
+		instance_id_buffer_view.BufferLocation = instance_id_buffer->GetGPUVirtualAddress();
+		instance_id_buffer_view.SizeInBytes = sizeof(instance_ids);
+		instance_id_buffer_view.StrideInBytes = sizeof(UINT);
+	}
+
 	ComPtr<ID3DBlob> vs_blob;
 	ComPtr<ID3DBlob> ps_blob;
 	{
@@ -438,6 +522,10 @@ void FrustumCulling::load_scene_shader_assets()
 		{
 			"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
 			D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
+		},
+		{
+			"SV_InstanceID", 0, DXGI_FORMAT_R32_UINT, 1, 0,
+			D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1
 		}
 	};
 
@@ -454,12 +542,13 @@ void FrustumCulling::load_scene_shader_assets()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-	CD3DX12_ROOT_PARAMETER1 root_parameters[1];
+	CD3DX12_ROOT_PARAMETER1 root_parameters[2];
 	root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	root_parameters[1].InitAsConstantBufferView(1);
 
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
 	// TODO: Is this call correct, if the highest supported version is 1_0?
-	root_signature_desc.Init_1_1(1, root_parameters, 0, nullptr, root_signature_flags);
+	root_signature_desc.Init_1_1(2, root_parameters, 0, nullptr, root_signature_flags);
 
 	ComPtr<ID3DBlob> root_signature_blob;
 	// TODO: What is the error blob=
@@ -499,7 +588,7 @@ void FrustumCulling::load_scene_shader_assets()
 
 	D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {
 		sizeof(ScenePipelineStateStream),
-		& scene_pipeline_state_stream
+		&scene_pipeline_state_stream
 	};
 
 	ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&scene_pso)));
