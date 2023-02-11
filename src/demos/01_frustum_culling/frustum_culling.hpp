@@ -4,6 +4,8 @@
 #include "../../simple_math.hpp"
 #include "../../dx12_resource.hpp"
 #include "../../render_texture.hpp"
+#include "../../math/aabb.hpp"
+#include "../../math/primitive_tests.hpp"
 
 namespace moonlight
 {
@@ -71,6 +73,7 @@ private:
     void load_assets();
     void load_scene_shader_assets();
     void load_quad_shader_assets();
+    void construct_aabbs();
 
     void transition_resource(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list,
@@ -87,6 +90,8 @@ private:
     std::unique_ptr<RenderTexture> ortho_scene_texture;
 
     bool APressed, DPressed, SPressed, WPressed;
+
+    std::vector<AABB> aabbs;
 
 private:
 

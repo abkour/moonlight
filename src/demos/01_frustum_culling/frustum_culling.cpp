@@ -99,12 +99,12 @@ static float quad_vertices[] =
 };
 
 // The buffer has to be 256-byte aligned to satisfy D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.
-static float instance_vertex_offsets[64] =
+float instance_vertex_offsets[64] =
 {
-    -10.f, 0.f, 0.f, 0.f,
-    -0.f, 0.f, 20.f, 0.f,
-    5.f, 0.f, 0.f, 0.f,
-    10.f, 0.f, 0.f, 0.f
+    -10.f, 0.f, 0.f, 0.f,   0.f, 1.f, 0.f, 1.f,
+    -0.f, 0.f, 20.f, 0.f,   0.f, 1.f, 0.f, 1.f,
+    5.f, 0.f, 0.f, 0.f,     0.f, 1.f, 0.f, 1.f,
+    10.f, 0.f, 0.f, 0.f,    0.f, 1.f, 0.f, 1.f
 };
 
 static UINT instance_ids[] =
@@ -138,36 +138,39 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     );
 
     ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
-    device                        = _pimpl_create_device(most_sutiable_adapter);
-    command_queue                = _pimpl_create_command_queue(device);
-    swap_chain                    = _pimpl_create_swap_chain(command_queue, window_width, window_height);
-    rtv_descriptor_heap            = _pimpl_create_rtv_descriptor_heap(device, 3);
+    device                      = _pimpl_create_device(most_sutiable_adapter);
+    command_queue               = _pimpl_create_command_queue(device);
+    swap_chain                  = _pimpl_create_swap_chain(command_queue, window_width, window_height);
+    rtv_descriptor_heap         = _pimpl_create_rtv_descriptor_heap(device, 3);
     quad_rtv_descriptor_heap    = _pimpl_create_rtv_descriptor_heap(device, 2);
-    srv_descriptor_heap            = _pimpl_create_srv_descriptor_heap(device, 2);
-    dsv_descriptor_heap            = _pimpl_create_dsv_descriptor_heap(device, 2);
+    srv_descriptor_heap         = _pimpl_create_srv_descriptor_heap(device, 2);
+    dsv_descriptor_heap         = _pimpl_create_dsv_descriptor_heap(device, 2);
     instance_descriptor_heap    = _pimpl_create_srv_descriptor_heap(device, 1);
     _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap, backbuffers, 3);
-    command_allocator            = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    command_list_direct            = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    fence                        = _pimpl_create_fence(device);
-    fence_event                    = _pimpl_create_fence_event();
+    command_allocator           = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    command_list_direct         = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    fence                       = _pimpl_create_fence(device);
+    fence_event                 = _pimpl_create_fence_event();
 
     scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
     viewport0 = CD3DX12_VIEWPORT(
         0.f,
         0.f,
         static_cast<float>(window_width),
-        static_cast<float>(window_height));
+        static_cast<float>(window_height)
+    );
     viewport1 = CD3DX12_VIEWPORT(
-        0.f, 
-        0.f, 
-        static_cast<float>(window_width) / 2.f, 
-        static_cast<float>(window_height));
+        0.f,
+        0.f,
+        static_cast<float>(window_width) / 2.f,
+        static_cast<float>(window_height)
+    );
     viewport2 = CD3DX12_VIEWPORT(
         window_width / 2, 
         0.f, 
         static_cast<float>(window_width) / 2.f, 
-        static_cast<float>(window_height));
+        static_cast<float>(window_height)
+    );
 
     scene_texture = std::make_unique<RenderTexture>(DXGI_FORMAT_R8G8B8A8_UNORM);
     scene_texture->set_device(
@@ -175,7 +178,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
         quad_rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart(), 
         srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
     );
-    scene_texture->set_clear_color(DirectX::XMFLOAT4(0.f, 0.f, 0.6f, 0.f));
+    scene_texture->set_clear_color(DirectX::XMFLOAT4(0.05f, 0.05f, 0.05f, 0.f));
     scene_texture->init(window_width, window_height);
 
     // For orthographic view texture
@@ -192,7 +195,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
         ortho_rtv_handle,
         ortho_srv_handle
     );
-    ortho_scene_texture->set_clear_color(DirectX::XMFLOAT4(0.6f, 0.f, 0.f, 0.f));
+    ortho_scene_texture->set_clear_color(DirectX::XMFLOAT4(0.f, 0.f, 0.f, 0.f));
     ortho_scene_texture->init(window_width, window_height);
 
     instance_buffer = std::make_unique<DX12Resource>();
@@ -337,10 +340,7 @@ void FrustumCulling::render()
     
     ID3D12Resource* instance_resource = instance_buffer->get_underlying();
     command_list_direct->SetGraphicsRootConstantBufferView(1, instance_resource->GetGPUVirtualAddress());
-
-    // Set up the instance data
     command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
     D3D12_VERTEX_BUFFER_VIEW vb_views[] =
     {
         vertex_buffer_view,
@@ -356,7 +356,7 @@ void FrustumCulling::render()
     scene_texture->transition_to_read_state(command_list_direct.Get());
 
     //
-    // Record scene again, but with orthographic projection
+    // Record scene again, but with top-down projection
     ortho_scene_texture->transition_to_write_state(command_list_direct.Get());
     auto ortho_rt_descriptor = ortho_scene_texture->get_rtv_descriptor();
     ortho_scene_texture->clear(command_list_direct.Get());
@@ -389,6 +389,7 @@ void FrustumCulling::render()
 
     //
     // Render the ortho texture to the 2nd viewport
+    
     UINT srv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     CD3DX12_GPU_DESCRIPTOR_HANDLE srv_gpu_handle(srv_descriptor_heap->GetGPUDescriptorHandleForHeapStart());
     srv_gpu_handle.Offset(srv_inc_size);
@@ -398,7 +399,7 @@ void FrustumCulling::render()
     );
     command_list_direct->RSSetViewports(1, &viewport2);
     command_list_direct->DrawInstanced(sizeof(quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
-
+    
     // Present
     {
         transition_resource(
@@ -436,7 +437,7 @@ void FrustumCulling::update()
     t0 = t1;
 
     float aspect_ratio = static_cast<float>(window_width) / static_cast<float>(window_height);
-    const float scale_factor = 2.f;
+    const float scale_factor = 1.f;
     XMMATRIX model_matrix = XMMatrixScaling(scale_factor, scale_factor, scale_factor);
     XMMATRIX projection_matrix = XMMatrixPerspectiveFovLH(
         XMConvertToRadians(45.f),
@@ -454,9 +455,7 @@ void FrustumCulling::update()
     camera.translate(keycode, elapsed_time);
     auto post_pos = camera.get_position();
     XMFLOAT3 delta_pos(
-        post_pos.x - pre_pos.x,
-        0.f,
-        post_pos.z - pre_pos.z
+        post_pos.x - pre_pos.x, 0.f, post_pos.z - pre_pos.z
     );
     XMVECTOR delta_pos_xmv = XMLoadFloat3(&delta_pos);
     top_down_camera.translate(delta_pos_xmv);
@@ -471,14 +470,64 @@ void FrustumCulling::update()
         200.f
     );
 
+    const float scale_factor_2 = 1.5f;
+    model_matrix = XMMatrixScaling(scale_factor_2, scale_factor_2, scale_factor_2);
     mvp_matrix_v2 = XMMatrixMultiply(model_matrix, top_down_camera.view);
     mvp_matrix_v2 = XMMatrixMultiply(mvp_matrix_v2, projection_matrix_2);
+
+    // Ensure that the GPU has finished work, before we render the next frame.
+    ThrowIfFailed(command_allocator->Reset());
+    ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
+
+    // Construct the viewing frustum
+    XMFLOAT3 camera_position = camera.get_position();
+    XMFLOAT3 camera_direction = camera.get_direction();
+    
+    Frustum frustum = construct_frustum(
+        *reinterpret_cast<Vector3*>(&camera_position),
+        *reinterpret_cast<Vector3*>(&camera_direction),
+        XMConvertToRadians(45.f),
+        aspect_ratio,
+        0.1,
+        100.f
+    );
+    // Change the color of the box to yellow, if it doesn't intersect the frustum
+    for (int i = 0; i < _countof(instance_ids); ++i)
+    {
+        constexpr int stride = 8;
+        if (frustum_contains_aabb(frustum, aabbs[i]))
+        {
+            instance_vertex_offsets[i * stride + 4] = 0.f;
+        }
+        else
+        {
+            instance_vertex_offsets[i * stride + 4] = 1.f;
+        }
+    }
+    instance_buffer->update(
+        device.Get(), 
+        command_list_direct.Get(), 
+        instance_vertex_offsets, 
+        sizeof(instance_vertex_offsets)
+    );
+
+    command_list_direct->Close();
+
+    // Execute eall command now
+    ID3D12CommandList* const command_lists[] =
+    {
+        command_list_direct.Get()
+    };
+    command_queue->ExecuteCommandLists(1, command_lists);
+    command_queue_signal(++fence_value);
+    wait_for_fence(fence_value);
 }
 
 void FrustumCulling::load_assets()
 {
     load_scene_shader_assets();
     load_quad_shader_assets();
+    construct_aabbs();
 }
 
 void FrustumCulling::load_scene_shader_assets()
@@ -751,6 +800,48 @@ void FrustumCulling::load_quad_shader_assets()
     };
 
     ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&quad_pso)));
+}
+
+void FrustumCulling::construct_aabbs()
+{
+    const uint32_t n_instances = _countof(instance_ids);
+    const uint32_t n_vertices = sizeof(vertices) / sizeof(VertexFormat);
+    
+    // Prepare the data first, magical/phantastical numbers! (do you write that word with ph or f, not sure, probably f)
+    float intermediate_buffer[n_vertices * 3];
+    for (int i = 0; i < n_vertices; ++i)
+    {
+        intermediate_buffer[i * 3] = vertices[i * 5];
+        intermediate_buffer[i * 3 + 1] = vertices[i * 5 + 1];
+        intermediate_buffer[i * 3 + 2] = vertices[i * 5 + 2];
+    }
+    
+    AABB os_aabb = construct_aabb_from_points(
+        reinterpret_cast<Vector3*>(intermediate_buffer),
+        n_vertices
+    );
+
+    for (int j = 0; j < n_instances; ++j)
+    {
+        AABB new_aabb;
+        new_aabb.bmin = os_aabb.bmin;
+        new_aabb.bmax = os_aabb.bmax;
+        new_aabb.bmin += *(Vector3*)&instance_vertex_offsets[j * 8];
+        new_aabb.bmax += *(Vector3*)&instance_vertex_offsets[j * 8];
+        aabbs.emplace_back(new_aabb);
+#ifdef _DEBUG
+        char buffer[512];
+        sprintf_s(buffer, "bmin: (%f, %f, %f)\t\tbmax: (%f, %f, %f)\n",
+            aabbs.back().bmin.x,
+            aabbs.back().bmin.y,
+            aabbs.back().bmin.z,
+            aabbs.back().bmax.x,
+            aabbs.back().bmax.y,
+            aabbs.back().bmax.z
+        );
+        OutputDebugStringA(buffer);
+#endif
+    }
 }
 
 void FrustumCulling::transition_resource(

@@ -26,6 +26,13 @@ struct DX12Resource
         return resource.Get();
     }
 
+    void update(
+        ID3D12Device* device,
+        ID3D12GraphicsCommandList* command_list,
+        void* data,
+        size_t size_in_bytes
+    );
+
     void upload(
         ID3D12Device2* device,
         ID3D12GraphicsCommandList* command_list,

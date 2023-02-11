@@ -45,7 +45,6 @@ static Frustum construct_frustum(
     up = normalize(up);
 
     Frustum frustum;
-    frustum.near.point = eye_position;
     frustum.left.point = eye_position;
     frustum.top.point = eye_position;
     frustum.bottom.point = eye_position;
@@ -56,13 +55,13 @@ static Frustum construct_frustum(
     *    We compute the points mxx and cxx to construct the plane normals.
     *    The normals for the near/far plane are given by the eye_direction
     * 
-        c00----m10----ooo
-        |               |
-        |               |
-        m00     c     m11
-        |               |
-        |               |
-        ooo----m01----c11
+            c00----m10----ooo
+            |               |
+            |               |
+            m00     c     m11
+            |               |
+            |               |
+            ooo----m01----c11
     */
     Vector3 c = eye_position + eye_direction * near_distance;
     Vector3 m00 = c + invert(right) * near_hw;
@@ -88,13 +87,14 @@ static Frustum construct_frustum(
     ));
 
     // Compute the center of the far plane 
+    frustum.near.point = eye_position + (normalize(c - eye_position) * near_distance);
     frustum.far.point = eye_position + (normalize(c - eye_position) * far_distance);
 
     return frustum;
 }
 
 // I wouldn't use this in actual code. This is only for proof-of-concept
-bool frustum_contains_point(const Frustum& frustum, const Vector3& point)
+inline bool frustum_contains_point(const Frustum& frustum, const Vector3& point)
 {
     if (point_plane_intersection(frustum.near, point) == 1)
     {

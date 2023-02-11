@@ -1,5 +1,5 @@
 #pragma once
-#include "simple_math.hpp"
+#include "../simple_math.hpp"
 
 namespace moonlight
 {

@@ -1,4 +1,9 @@
-float4 main() : SV_Target
+struct VertexShaderOutput
 {
-    return float4(1.f, 0.6f, 0.3f, 1.f);
+    float4 Color : COLOR;
+};
+
+float4 main(VertexShaderOutput IN) : SV_Target
+{
+    return IN.Color;
 }
