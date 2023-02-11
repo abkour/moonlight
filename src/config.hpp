@@ -6,11 +6,11 @@ class Config {
 
 public:
 
-	Config() = default;
+    Config() = default;
 
 private:
 
-	/* Some data */
+    /* Some data */
 };
 
 }

@@ -6,10 +6,10 @@ namespace moonlight {
 
 class MoonLight {
 public:
-	MoonLight() = delete;
-	MoonLight(Config config);
+    MoonLight() = delete;
+    MoonLight(Config config);
 private:
-	std::unique_ptr<Application> application;
+    std::unique_ptr<Application> application;
 };
 
 }

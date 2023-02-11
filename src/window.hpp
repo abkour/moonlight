@@ -14,51 +14,51 @@ namespace moonlight {
 
 struct Window {
 
-	Window(	HINSTANCE hinstance,
-			const wchar_t* window_class_name,
-			const wchar_t* window_title,
-			uint32_t width, 
-			uint32_t height,
-			WNDPROC wndproc,
-			void* parent_pointer);
+    Window(    HINSTANCE hinstance,
+            const wchar_t* window_class_name,
+            const wchar_t* window_title,
+            uint32_t width, 
+            uint32_t height,
+            WNDPROC wndproc,
+            void* parent_pointer);
 
-	bool is_fullscreen_on() const { return fullscreen; }
-	void flip_fullscreen();
+    bool is_fullscreen_on() const { return fullscreen; }
+    void flip_fullscreen();
 
-	bool is_vsync_on() const { return vsync; }
-	void flip_vsync();
+    bool is_vsync_on() const { return vsync; }
+    void flip_vsync();
 
-	bool resize();
+    bool resize();
 
-	HWND handle;
+    HWND handle;
 
-	bool tearing_supported();
+    bool tearing_supported();
 
-	uint32_t height();
-	uint32_t width();
-
-private:
-
-	// Implementation details
-	
-	void enable_debug_layer();
-	BOOL check_tearing_support();
-	void register_window_class(HINSTANCE hinstance, const wchar_t* class_name, WNDPROC wndproc);
-	void create_window(	HINSTANCE hinstance,
-						const wchar_t* window_class_name,
-						const wchar_t* window_title,
-						uint32_t width,
-						uint32_t height,
-						void* parent_pointer);
+    uint32_t height();
+    uint32_t width();
 
 private:
 
-	uint32_t window_width;
-	uint32_t window_height;
-	RECT window_rect;
+    // Implementation details
+    
+    void enable_debug_layer();
+    BOOL check_tearing_support();
+    void register_window_class(HINSTANCE hinstance, const wchar_t* class_name, WNDPROC wndproc);
+    void create_window(    HINSTANCE hinstance,
+                        const wchar_t* window_class_name,
+                        const wchar_t* window_title,
+                        uint32_t width,
+                        uint32_t height,
+                        void* parent_pointer);
 
-	bool fullscreen;
-	bool vsync;
+private:
+
+    uint32_t window_width;
+    uint32_t window_height;
+    RECT window_rect;
+
+    bool fullscreen;
+    bool vsync;
 };
 
 }
