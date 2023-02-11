@@ -30,6 +30,7 @@ public:
     virtual void flush() = 0;
 
     virtual void on_key_down(WPARAM wparam) = 0;
+    virtual void on_key_up(WPARAM wparam) = 0;
     virtual void on_mouse_move(LPARAM lparam) = 0;
 
     virtual void update() = 0;

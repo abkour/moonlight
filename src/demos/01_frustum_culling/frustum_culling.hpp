@@ -19,6 +19,7 @@ public:
 
     void flush() override;
     void on_key_down(WPARAM wparam) override;
+    void on_key_up(WPARAM wparam) override;
     void on_mouse_move(LPARAM lparam) override;
     void render() override;
     void resize() override;
@@ -84,6 +85,8 @@ private:
 
     std::unique_ptr<RenderTexture> scene_texture;
     std::unique_ptr<RenderTexture> ortho_scene_texture;
+
+    bool APressed, DPressed, SPressed, WPressed;
 
 private:
 

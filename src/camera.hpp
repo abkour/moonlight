@@ -11,7 +11,9 @@ struct Camera
     Camera(DirectX::XMFLOAT3 eye_position, DirectX::XMFLOAT3 eye_direction);
 
     void rotate(float dx, float dy);
-    void translate(WPARAM key, float delta_time);
+    // The keycode is a 32-bit unsigned integer that contains a bitmask of the 
+    // 4 supported keystrokes (A, D, S, W) with the respective bits (0, 1, 2, 3)
+    void translate(uint32_t keycode, float delta_time);
     void translate(DirectX::XMVECTOR pos_offset);
 
     DirectX::XMFLOAT3 get_direction() const

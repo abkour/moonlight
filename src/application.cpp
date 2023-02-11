@@ -83,6 +83,9 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
             }
         }
         break;
+        case WM_KEYUP:
+            app->on_key_up(wParam);
+            break;
         case WM_SYSCHAR:
             break;
         case WM_MOUSEMOVE:

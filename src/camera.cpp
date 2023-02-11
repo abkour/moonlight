@@ -48,7 +48,7 @@ void Camera::rotate(float dx, float dy)
     XMStoreFloat3(&eye_direction, eye_direction_xmv);
 }
 
-void Camera::translate(WPARAM key, float delta_time)
+void Camera::translate(uint32_t keycode, float delta_time)
 {
     XMVECTOR world_up = XMVectorSet(0, 1, 0, 0);
     XMVECTOR eye_position_xmv = XMLoadFloat3(&eye_position);
@@ -57,27 +57,18 @@ void Camera::translate(WPARAM key, float delta_time)
     XMVECTOR right = XMVector3Normalize(XMVector3Cross(eye_direction_xmv, world_up));
     XMVECTOR up = XMVector3Normalize(XMVector3Cross(eye_direction_xmv, right));
 
-    const float ms_v = 2.f;
+    const float ms_v = 50.f * delta_time;
     XMVECTOR ms = XMVectorSet(ms_v, ms_v, ms_v, ms_v);
     
-    switch (key)
-    {
-    case 'W':
+    if(keycode & 0x08)  // 'W'
         eye_position_xmv = XMVectorAdd(eye_position_xmv, XMVectorMultiply(eye_direction_xmv, ms));
-        break;
-    case 'S':
+    if(keycode & 0x04)  // 'S'
         eye_position_xmv = XMVectorSubtract(eye_position_xmv, XMVectorMultiply(eye_direction_xmv, ms));
-        break;
-    case 'A':
+    if(keycode & 0x01)  // 'A'
         eye_position_xmv = XMVectorAdd(eye_position_xmv, XMVectorMultiply(right, ms));
-        break;
-    case 'D':
+    if(keycode & 0x02)  // 'D'
         eye_position_xmv = XMVectorSubtract(eye_position_xmv, XMVectorMultiply(right, ms));
-        break;
-    default:
-        break;
-    }
-
+    
     view = XMMatrixLookAtLH(eye_position_xmv, eye_position_xmv + eye_direction_xmv, world_up);
 
     XMStoreFloat3(&eye_position, eye_position_xmv);

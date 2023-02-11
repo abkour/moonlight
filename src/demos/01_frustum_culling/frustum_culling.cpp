@@ -123,6 +123,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     , window_width(1600)
     , window_height(800)
 {
+    APressed = DPressed = SPressed = WPressed = false;
     xcoord_old = static_cast<uint32_t>(window_width) / 2;
     ycoord_old = static_cast<uint32_t>(window_height) / 2;
 
@@ -229,16 +230,44 @@ void FrustumCulling::flush()
 
 void FrustumCulling::on_key_down(WPARAM wparam)
 {
-    auto pre_pos = camera.get_position();
-    camera.translate(wparam, elapsed_time);
-    auto post_pos = camera.get_position();
-    XMFLOAT3 delta_pos(
-        post_pos.x - pre_pos.x,
-        0.f,
-        post_pos.z - pre_pos.z
-    );
-    XMVECTOR delta_pos_xmv = XMLoadFloat3(&delta_pos);
-    top_down_camera.translate(delta_pos_xmv);
+    switch (wparam)
+    {
+    case 'A':
+        APressed = true;
+        break;
+    case 'D':
+        DPressed = true;
+        break;
+    case 'S':
+        SPressed = true;
+        break;
+    case 'W':
+        WPressed = true;
+        break;
+    default:
+        break;
+    }
+}
+
+void FrustumCulling::on_key_up(WPARAM wparam)
+{
+    switch (wparam)
+    {
+    case 'A':
+        APressed = false;
+        break;
+    case 'D':
+        DPressed = false;
+        break;
+    case 'S':
+        SPressed = false;
+        break;
+    case 'W':
+        WPressed = false;
+        break;
+    default:
+        break;
+    }
 }
 
 void FrustumCulling::on_mouse_move(LPARAM lparam)
@@ -415,6 +444,22 @@ void FrustumCulling::update()
         0.1,
         100.f
     );
+
+    uint32_t keycode = 0;
+    keycode += (uint32_t)WPressed << 3;
+    keycode += (uint32_t)SPressed << 2;
+    keycode += (uint32_t)DPressed << 1;
+    keycode += (uint32_t)APressed;
+    auto pre_pos = camera.get_position();
+    camera.translate(keycode, elapsed_time);
+    auto post_pos = camera.get_position();
+    XMFLOAT3 delta_pos(
+        post_pos.x - pre_pos.x,
+        0.f,
+        post_pos.z - pre_pos.z
+    );
+    XMVECTOR delta_pos_xmv = XMLoadFloat3(&delta_pos);
+    top_down_camera.translate(delta_pos_xmv);
 
     mvp_matrix = XMMatrixMultiply(model_matrix, camera.view);
     mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
