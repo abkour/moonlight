@@ -1,9 +1,11 @@
 Frustum culling demo.
 
-![frustum-culling](https://github.com/abkour/moonlight/blob/main/src/demos/01_frustum_culling/frustum_culling.gif)
-
 Frustum culling is an extremely important tool for interactive rendering. It allows the GPU to only process 
 primitives that have the chance of being captured by the view camera. To accomplish this we do the following:
+
+![frustum-culling](https://github.com/abkour/moonlight/blob/main/src/demos/01_frustum_culling/frustum_culling.gif)
+
+<h3>Mathematical foundation</h3>
 
 First, we require procedures for testing whether a rendering object is within the viewing frustum or not.
 Models typically consist of primitives, usually triangles. Doing this on all triangles within a model
@@ -21,3 +23,5 @@ The frustum's planes all point inwards by construction, therefore to test that a
 all points in the AABB have to be within the positive halfspace of all planes. This can be done with the 
 seperating-axis test. I won't go into details on this, since it requires too much description, but you can find 
 the implemention in the src/math/primitive_tests.hpp file.
+
+<h3>DX12</h3>
