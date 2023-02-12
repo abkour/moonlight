@@ -6,6 +6,8 @@
 #include "../../render_texture.hpp"
 #include "../../math/aabb.hpp"
 #include "../../math/primitive_tests.hpp"
+#include "../../../ext/DirectXTK12/Inc/SpriteBatch.h"
+#include "../../../ext/DirectXTK12/Inc/SpriteFont.h"
 
 namespace moonlight
 {
@@ -105,6 +107,11 @@ private:
     bool first_cursor_entry = true;
 
     float elapsed_time = 0.f;
+
+private:
+
+    // Font related
+    DirectX::SpriteBatch sprite_batch;
 };
 
 }

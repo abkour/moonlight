@@ -24,4 +24,5 @@ all points in the AABB have to be within the positive halfspace of all planes. T
 seperating-axis test. I won't go into details on this, since it requires too much description, but you can find 
 the implemention in the src/math/primitive_tests.hpp file.
 
-<h3>DX12</h3>
+<h3>DX12 related</h3>
+

@@ -25,5 +25,8 @@ if (CMAKE_VERSION VERSION_GREATER 3.13)
   target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/ext/DirectXTex/build/bin/CMake/Debug/DirectXTex.lib")
   target_link_libraries(moonlight optimized "${CMAKE_SOURCE_DIR}/ext/DirectXTex/build/bin/CMake/Release/DirectXTex.lib")
 
+  target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/ext/DirectXTK12/build/bin/CMake/Debug/DirectXTK12.lib")
+  target_link_libraries(moonlight optimized "${CMAKE_SOURCE_DIR}/ext/DirectXTK12/build/bin/CMake/Release/DirectXTK12.lib")
+
   add_compile_definitions(ROOT_DIRECTORY_ASCII="${CMAKE_SOURCE_DIR}")
 endif()
