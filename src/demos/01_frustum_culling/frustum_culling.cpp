@@ -6,8 +6,6 @@ using namespace DirectX;
 using namespace Microsoft::WRL;
 
 namespace moonlight {
-namespace 
-{
 
 template<typename T>
 T* temp_address(T&& rval)
@@ -98,21 +96,15 @@ static float quad_vertices[] =
     -1.f, 1.f, 0.f,        0.f, 1.f
 };
 
+struct InstanceDataFormat
+{
+    XMFLOAT4 displacement;
+    XMFLOAT4 color;
+};
+
 // The buffer has to be 256-byte aligned to satisfy D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.
-float instance_vertex_offsets[64] =
-{
-    -10.f, 0.f, 0.f, 0.f,   0.f, 1.f, 0.f, 1.f,
-    -0.f, 0.f, 20.f, 0.f,   0.f, 1.f, 0.f, 1.f,
-    5.f, 0.f, 0.f, 0.f,     0.f, 1.f, 0.f, 1.f,
-    10.f, 0.f, 0.f, 0.f,    0.f, 1.f, 0.f, 1.f
-};
-
-static UINT instance_ids[] =
-{
-    0, 1, 2, 3
-};
-
-}
+static InstanceDataFormat instance_vertex_offsets[32];
+static UINT instance_ids[_countof(instance_vertex_offsets)];
 
 FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     : IApplication(hinstance)
@@ -351,7 +343,7 @@ void FrustumCulling::render()
     command_list_direct->RSSetScissorRects(1, &scissor_rect);
     command_list_direct->OMSetRenderTargets(1, &rt_descriptor, FALSE, &dsv_handle);
     command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
-    command_list_direct->DrawInstanced(sizeof(vertices) / sizeof(VertexFormat), 4, 0, 0);
+    command_list_direct->DrawInstanced(sizeof(vertices) / sizeof(VertexFormat), _countof(instance_ids), 0, 0);
     // Transition RTV to SRV
     scene_texture->transition_to_read_state(command_list_direct.Get());
 
@@ -363,7 +355,7 @@ void FrustumCulling::render()
     command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix_v2, 0);
     dsv_handle.Offset(dsv_inc_size);
     command_list_direct->OMSetRenderTargets(1, &ortho_rt_descriptor, FALSE, &dsv_handle);
-    command_list_direct->DrawInstanced((sizeof(vertices) / sizeof(VertexFormat)), 4, 0, 0);
+    command_list_direct->DrawInstanced((sizeof(vertices) / sizeof(VertexFormat)), _countof(instance_ids), 0, 0);
     // Transition RTV to SRV
     ortho_scene_texture->transition_to_read_state(command_list_direct.Get());
 
@@ -497,11 +489,11 @@ void FrustumCulling::update()
         constexpr int stride = 8;
         if (frustum_contains_aabb(frustum, aabbs[i]))
         {
-            instance_vertex_offsets[i * stride + 4] = 0.f;
+            instance_vertex_offsets[i].color.x = 0.f;
         }
         else
         {
-            instance_vertex_offsets[i * stride + 4] = 1.f;
+            instance_vertex_offsets[i].color.x = 1.f;
         }
     }
     instance_buffer->update(
@@ -525,6 +517,25 @@ void FrustumCulling::update()
 
 void FrustumCulling::load_assets()
 {
+    // Create a circle of boxes around the origin
+    for (int i = 0; i < _countof(instance_vertex_offsets); ++i)
+    {
+        instance_ids[i] = i;
+
+        static float angle = 0.f;
+        static float radial_distance = 30.f;
+        static float angle_increment = 360.f / _countof(instance_vertex_offsets);
+        instance_vertex_offsets[i].displacement = XMFLOAT4(
+            cos(angle) * radial_distance, 
+            0.f, 
+            sin(angle) * radial_distance, 
+            0.f
+        );
+        angle += angle_increment;
+
+        instance_vertex_offsets[i].color = XMFLOAT4(0.f, 1.f, 0.f, 1.f);
+    }
+
     load_scene_shader_assets();
     load_quad_shader_assets();
     construct_aabbs();
@@ -826,8 +837,8 @@ void FrustumCulling::construct_aabbs()
         AABB new_aabb;
         new_aabb.bmin = os_aabb.bmin;
         new_aabb.bmax = os_aabb.bmax;
-        new_aabb.bmin += *(Vector3*)&instance_vertex_offsets[j * 8];
-        new_aabb.bmax += *(Vector3*)&instance_vertex_offsets[j * 8];
+        new_aabb.bmin += *(Vector3*)&instance_vertex_offsets[j].displacement;
+        new_aabb.bmax += *(Vector3*)&instance_vertex_offsets[j].displacement;
         aabbs.emplace_back(new_aabb);
 #ifdef _DEBUG
         char buffer[512];
