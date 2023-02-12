@@ -111,7 +111,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     , app_initialized(false)
     , fence_value(0)
     , camera(XMFLOAT3(0.f, 0.f, -10.f), XMFLOAT3(0.f, 0.f, 1.f))
-    , top_down_camera(XMFLOAT3(0.f, -125.f, -10.f), XMFLOAT3(0.01f, 0.99f, 0.01f))
+    , top_down_camera(XMFLOAT3(0.f, -175.f, -10.f), XMFLOAT3(0.01f, 0.99f, 0.01f))
     , window_width(1600)
     , window_height(800)
 {
