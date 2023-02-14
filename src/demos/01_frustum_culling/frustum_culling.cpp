@@ -89,11 +89,11 @@ static float vertices[] = {
 static float quad_vertices[] =
 {
     -1.f, -1.f, 0.f,    0.f, 0.f,
-    1.f, -1.f, 0.f,        1.f, 0.f,
-    1.f, 1.f, 0.f,        1.f, 1.f,
+    1.f, -1.f, 0.f,     1.f, 0.f,
+    1.f, 1.f, 0.f,      1.f, 1.f,
     -1.f, -1.f, 0.f,    0.f, 0.f,
-    1.f, 1.f, 0.f,        1.f, 1.f,
-    -1.f, 1.f, 0.f,        0.f, 1.f
+    1.f, 1.f, 0.f,      1.f, 1.f,
+    -1.f, 1.f, 0.f,     0.f, 1.f
 };
 
 struct InstanceDataFormat
@@ -115,9 +115,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     , window_width(1600)
     , window_height(800)
 {
-    APressed = DPressed = SPressed = WPressed = false;
-    xcoord_old = static_cast<uint32_t>(window_width) / 2;
-    ycoord_old = static_cast<uint32_t>(window_height) / 2;
+    text_output.resize(256);
 
     window = std::make_unique<Window>(
         hinstance,
@@ -128,6 +126,10 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
         &FrustumCulling::WindowMessagingProcess,
         this
     );
+
+    APressed = DPressed = SPressed = WPressed = false;
+    SetCursor(NULL);
+    initialize_raw_input_devices();
 
     ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
     device                      = _pimpl_create_device(most_sutiable_adapter);
@@ -213,6 +215,14 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     app_initialized = true;
 }
 
+FrustumCulling::~FrustumCulling()
+{
+    m_graphicsMemory.reset();
+    sprite_batch.reset();
+    sprite_font.reset();
+    font_descriptor_heap.reset();
+}
+
 bool FrustumCulling::is_application_initialized()
 {
     return app_initialized;
@@ -222,6 +232,18 @@ void FrustumCulling::flush()
 {
     flush_command_queue();
 }
+
+void FrustumCulling::initialize_raw_input_devices()
+{
+    RAWINPUTDEVICE rids[1];
+    rids[0].usUsagePage = 0x01;
+    rids[0].usUsage = 0x02;
+    rids[0].dwFlags = RIDEV_NOLEGACY;
+    rids[0].hwndTarget = 0;
+
+    ThrowIfFailed(RegisterRawInputDevices(rids, 1, sizeof(rids[0])));
+}
+
 
 void FrustumCulling::on_key_down(WPARAM wparam)
 {
@@ -267,20 +289,23 @@ void FrustumCulling::on_key_up(WPARAM wparam)
 
 void FrustumCulling::on_mouse_move(LPARAM lparam)
 {
-    if (first_cursor_entry)
+    UINT size;
+    
+    GetRawInputData((HRAWINPUT)lparam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
+    LPBYTE lpb = new BYTE[size];
+    if (lpb == NULL) return;
+
+    if (GetRawInputData((HRAWINPUT)lparam, RID_INPUT, lpb, &size, sizeof(RAWINPUTHEADER)) != size)
     {
-        xcoord_old = LOWORD(lparam);
-        ycoord_old = HIWORD(lparam);
-        first_cursor_entry = false;
-        return;
+        OutputDebugStringA("GetRawInputData does not report correct size");
+    }
+    RAWINPUT* raw = (RAWINPUT*)lpb;
+    if (raw->header.dwType == RIM_TYPEMOUSE)
+    {
+        camera.rotate(-raw->data.mouse.lLastX, raw->data.mouse.lLastY);
     }
 
-    int32_t xdelta = xcoord_old - LOWORD(lparam);
-    int32_t ydelta = HIWORD(lparam) - ycoord_old;
-    xcoord_old = LOWORD(lparam);
-    ycoord_old = HIWORD(lparam);
-
-    camera.rotate(xdelta, ydelta);
+    delete[] lpb;
 }
 
 void FrustumCulling::render()
@@ -348,18 +373,6 @@ void FrustumCulling::render()
     scene_texture->transition_to_read_state(command_list_direct.Get());
 
     //
-    // Record scene again, but with top-down projection
-    ortho_scene_texture->transition_to_write_state(command_list_direct.Get());
-    auto ortho_rt_descriptor = ortho_scene_texture->get_rtv_descriptor();
-    ortho_scene_texture->clear(command_list_direct.Get());
-    command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix_v2, 0);
-    dsv_handle.Offset(dsv_inc_size);
-    command_list_direct->OMSetRenderTargets(1, &ortho_rt_descriptor, FALSE, &dsv_handle);
-    command_list_direct->DrawInstanced((sizeof(vertices) / sizeof(VertexFormat)), _countof(instance_ids), 0, 0);
-    // Transition RTV to SRV
-    ortho_scene_texture->transition_to_read_state(command_list_direct.Get());
-
-    //
     // Render the scene texture to the first viewport
     command_list_direct->SetPipelineState(quad_pso.Get());
     command_list_direct->SetGraphicsRootSignature(quad_root_signature.Get());
@@ -374,24 +387,25 @@ void FrustumCulling::render()
 
     command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list_direct->IASetVertexBuffers(0, 1, &quad_vertex_buffer_view);
-    command_list_direct->RSSetViewports(1, &viewport1);
     command_list_direct->RSSetScissorRects(1, &scissor_rect);
     command_list_direct->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, NULL);
     command_list_direct->DrawInstanced(sizeof(quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
 
     //
-    // Render the ortho texture to the 2nd viewport
+    // Render the glyphs
+    command_list_direct->RSSetViewports(1, &viewport0);
+    ID3D12DescriptorHeap* font_heaps[] = { font_descriptor_heap->Heap() };
+    command_list_direct->SetDescriptorHeaps(1, font_heaps);
     
-    UINT srv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    CD3DX12_GPU_DESCRIPTOR_HANDLE srv_gpu_handle(srv_descriptor_heap->GetGPUDescriptorHandleForHeapStart());
-    srv_gpu_handle.Offset(srv_inc_size);
-    command_list_direct->SetGraphicsRootDescriptorTable(
-        0,
-        srv_gpu_handle
-    );
-    command_list_direct->RSSetViewports(1, &viewport2);
-    command_list_direct->DrawInstanced(sizeof(quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
+    sprite_batch->Begin(command_list_direct.Get());
     
+    //const wchar_t* text_output = L"This is the output";
+    XMFLOAT2 origin;
+    XMStoreFloat2(&origin, sprite_font->MeasureString(text_output.c_str()) / 2.f);
+
+    sprite_font->DrawString(sprite_batch.get(), text_output.c_str(), font_pos, Colors::White, 0.f, origin);
+    sprite_batch->End();
+
     // Present
     {
         transition_resource(
@@ -412,6 +426,8 @@ void FrustumCulling::render()
         command_queue_signal(++fence_value);
         swap_chain->Present(1, 0);
         wait_for_fence(fence_value);
+
+        m_graphicsMemory->Commit(command_queue.Get());
     }
 }
 
@@ -430,12 +446,14 @@ void FrustumCulling::update()
 
     float aspect_ratio = static_cast<float>(window_width) / static_cast<float>(window_height);
     const float scale_factor = 1.f;
+    static float near_clip_distance = 0.1f;
+    static float far_clip_distance = 1000.f;
     XMMATRIX model_matrix = XMMatrixScaling(scale_factor, scale_factor, scale_factor);
     XMMATRIX projection_matrix = XMMatrixPerspectiveFovLH(
         XMConvertToRadians(45.f),
         aspect_ratio,
-        0.1,
-        100.f
+        near_clip_distance,
+        far_clip_distance
     );
 
     uint32_t keycode = 0;
@@ -480,10 +498,11 @@ void FrustumCulling::update()
         *reinterpret_cast<Vector3*>(&camera_direction),
         XMConvertToRadians(45.f),
         aspect_ratio,
-        0.1,
-        100.f
+        near_clip_distance,
+        far_clip_distance
     );
     // Change the color of the box to yellow, if it doesn't intersect the frustum
+    uint32_t n_culled_objects = 0;
     for (int i = 0; i < _countof(instance_ids); ++i)
     {
         constexpr int stride = 8;
@@ -493,9 +512,19 @@ void FrustumCulling::update()
         }
         else
         {
+            n_culled_objects++;
             instance_vertex_offsets[i].color.x = 1.f;
         }
     }
+    text_output.resize(128);
+    swprintf(
+        text_output.data(), 
+        L"Number of objects: %d\nCulled: %d\nVertices: %d", 
+        _countof(instance_ids),
+        n_culled_objects,
+        n_culled_objects * 36
+    );
+
     instance_buffer->update(
         device.Get(), 
         command_list_direct.Get(), 
@@ -536,9 +565,63 @@ void FrustumCulling::load_assets()
         instance_vertex_offsets[i].color = XMFLOAT4(0.f, 1.f, 0.f, 1.f);
     }
 
+    initialize_font_rendering();
     load_scene_shader_assets();
     load_quad_shader_assets();
     construct_aabbs();
+}
+
+void FrustumCulling::initialize_font_rendering()
+{
+    m_graphicsMemory = std::make_unique<GraphicsMemory>(device.Get());
+    //
+    // Initialize descriptor heap for font
+    {
+        font_descriptor_heap = std::make_unique<DescriptorHeap>(
+            device.Get(),
+            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+            Descriptors::Count
+        );
+    }
+
+    //
+    // Set up the SpriteBatch object
+    {
+        ResourceUploadBatch resource_upload(device.Get());
+        resource_upload.Begin();
+
+        RenderTargetState rt_state(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT);
+        SpriteBatchPipelineStateDescription pps(rt_state);
+
+        sprite_batch = std::make_unique<SpriteBatch>(device.Get(), resource_upload, pps);;
+
+        auto upload_resource_finished = resource_upload.End(command_queue.Get());
+        upload_resource_finished.wait();
+
+        sprite_batch->SetViewport(viewport0);
+        font_pos.x = static_cast<float>(window_width) * 0.9;
+        font_pos.y = static_cast<float>(window_height) * 0.5;
+    }
+
+    //
+    // Set up the SpriteFont object
+    {
+        ResourceUploadBatch resource_upload(device.Get());
+        resource_upload.Begin();
+
+        std::wstring filename = std::wstring(ROOT_DIRECTORY_WIDE) + L"/rsc/myfile.spriteFont";
+        sprite_font = std::make_unique<SpriteFont>(
+            device.Get(),
+            resource_upload,
+            filename.c_str(),
+            font_descriptor_heap->GetCpuHandle(Descriptors::CourierFont),
+            font_descriptor_heap->GetGpuHandle(Descriptors::CourierFont)
+        );
+
+        auto upload_resource_finished = resource_upload.End(command_queue.Get());
+        upload_resource_finished.wait();
+    }
 }
 
 void FrustumCulling::load_scene_shader_assets()

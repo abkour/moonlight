@@ -83,13 +83,19 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
             }
         }
         break;
+        case WM_INPUT:
+            app->on_mouse_move(lParam);
+            break;
         case WM_KEYUP:
             app->on_key_up(wParam);
             break;
         case WM_SYSCHAR:
             break;
-        case WM_MOUSEMOVE:
-            app->on_mouse_move(lParam);
+        case WM_SETCURSOR:
+            if (LOWORD(lParam) == HTCLIENT)
+            {
+                SetCursor(NULL);
+            }
             break;
         case WM_SIZE:
             app->resize();

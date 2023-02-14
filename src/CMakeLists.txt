@@ -9,7 +9,11 @@ add_executable (moonlight WIN32
 	"window.cpp" 
 	"demos/00_cube_application/cube_application.cpp"
 	"demos/01_frustum_culling/frustum_culling.cpp"
- "camera.cpp" "render_texture.cpp" "dx12_resource.cpp")
+	"camera.cpp" 
+	"render_texture.cpp" 
+	"dx12_resource.cpp"  
+	"utility/arena_allocator.cpp"
+)
 
 if (CMAKE_VERSION VERSION_GREATER 3.13)
   set_property(TARGET moonlight PROPERTY CXX_STANDARD 20)

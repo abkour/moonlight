@@ -71,7 +71,7 @@ void Window::register_window_class(HINSTANCE hinstance, const wchar_t* class_nam
     // I don't understand what BRUSHES are. This is what I saw from a tutorial.
     window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     // Why is the first parameter NULL?
-    window_class.hCursor = LoadCursor(NULL, IDC_ARROW);
+    window_class.hCursor = NULL;// LoadCursor(NULL, IDC_ARROW);
     // Why is the first parameter HINSTANCE?
     //window_class.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     //window_class.hIconSm = LoadIcon(NULL, IDI_APPLICATION);

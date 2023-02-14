@@ -14,7 +14,7 @@ namespace moonlight {
 
 struct Window {
 
-    Window(    HINSTANCE hinstance,
+    Window( HINSTANCE hinstance,
             const wchar_t* window_class_name,
             const wchar_t* window_title,
             uint32_t width, 
@@ -44,7 +44,7 @@ private:
     void enable_debug_layer();
     BOOL check_tearing_support();
     void register_window_class(HINSTANCE hinstance, const wchar_t* class_name, WNDPROC wndproc);
-    void create_window(    HINSTANCE hinstance,
+    void create_window( HINSTANCE hinstance,
                         const wchar_t* window_class_name,
                         const wchar_t* window_title,
                         uint32_t width,

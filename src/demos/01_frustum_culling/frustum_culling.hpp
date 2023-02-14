@@ -6,6 +6,9 @@
 #include "../../render_texture.hpp"
 #include "../../math/aabb.hpp"
 #include "../../math/primitive_tests.hpp"
+#include "../../utility/arena_allocator.hpp"
+#include "../../../ext/DirectXTK12/Inc/DescriptorHeap.h"
+#include "../../../ext/DirectXTK12/Inc/ResourceUploadBatch.h"
 #include "../../../ext/DirectXTK12/Inc/SpriteBatch.h"
 #include "../../../ext/DirectXTK12/Inc/SpriteFont.h"
 
@@ -18,6 +21,7 @@ class FrustumCulling : public IApplication
 public:
 
     FrustumCulling(HINSTANCE hinstance);
+    ~FrustumCulling();
 
     bool is_application_initialized() override;
 
@@ -30,6 +34,8 @@ public:
     void update() override;
 
 private:
+
+    ArenaAllocator arena;
 
     Microsoft::WRL::ComPtr<ID3D12Device2> device;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue;
@@ -75,6 +81,7 @@ private:
     void load_assets();
     void load_scene_shader_assets();
     void load_quad_shader_assets();
+    void initialize_font_rendering();
     void construct_aabbs();
 
     void transition_resource(
@@ -95,12 +102,15 @@ private:
 
     std::vector<AABB> aabbs;
 
+    Camera camera;
+    Camera top_down_camera;
+
 private:
 
     // Mouse/Keyboard controls
+    void initialize_raw_input_devices();
+
     uint16_t window_width, window_height;
-    Camera camera;
-    Camera top_down_camera;
 
     uint32_t xcoord_old;
     uint32_t ycoord_old;
@@ -111,7 +121,19 @@ private:
 private:
 
     // Font related
-    DirectX::SpriteBatch sprite_batch;
+    std::unique_ptr<DirectX::SpriteBatch> sprite_batch;
+    std::unique_ptr<DirectX::SpriteFont> sprite_font;
+    std::unique_ptr<DirectX::DescriptorHeap> font_descriptor_heap;
+    DirectX::XMFLOAT2 font_pos;
+    std::wstring text_output;
+
+    enum Descriptors
+    {
+        CourierFont,
+        Count
+    };
+
+    std::unique_ptr<DirectX::GraphicsMemory> m_graphicsMemory;
 };
 
 }
