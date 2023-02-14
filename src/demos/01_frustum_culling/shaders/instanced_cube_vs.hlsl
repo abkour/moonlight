@@ -1,8 +1,10 @@
 struct VertexShaderInput
 {
-    float3 Position : POSITION;
-    float3 TexCoord : TEXCOORD;
-    uint InstanceID : SV_InstanceID;
+    float3 Position  : POSITION;
+    float2 TexCoord  : TEXCOORD;
+    uint InstanceID  : SV_InstanceID;
+    float4 pi_offset : POSITION1;   // Per-Instance offset
+    float4 pi_color  : COLOR0;      // Per-Instance color
 };
 
 struct VertexShaderOutput
@@ -16,26 +18,14 @@ struct VertexTransform
     matrix MVP;
 };
 
-struct PerInstanceData
-{
-    float4 offset;
-    float4 color;
-};
-
-struct InstanceBuffer
-{
-    PerInstanceData id[32];
-};
-
 ConstantBuffer<VertexTransform> TransformationCB : register(b0);
-ConstantBuffer<InstanceBuffer> InstanceCB : register(b1);
 
 VertexShaderOutput main(VertexShaderInput IN)
 {
     VertexShaderOutput OUT;
 
-    OUT.Color = InstanceCB.id[IN.InstanceID].color;
-    OUT.Position = mul(TransformationCB.MVP, float4(IN.Position + InstanceCB.id[IN.InstanceID].offset.xyz, 1.f));
+    OUT.Color = IN.pi_color;
+    OUT.Position = mul(TransformationCB.MVP, float4(IN.Position + IN.pi_offset.xyz, 1.f));
 
     return OUT;
 }

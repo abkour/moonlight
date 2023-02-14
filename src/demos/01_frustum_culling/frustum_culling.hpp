@@ -61,9 +61,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> instance_id_buffer;
     D3D12_VERTEX_BUFFER_VIEW instance_id_buffer_view;
 
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> instance_descriptor_heap;
-    D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc;
-    std::unique_ptr<DX12Resource> instance_buffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> instance_data_buffer;
+    D3D12_VERTEX_BUFFER_VIEW instance_data_buffer_view;
 
     uint64_t fence_value;
     HANDLE fence_event;
@@ -83,6 +82,7 @@ private:
     void load_quad_shader_assets();
     void initialize_font_rendering();
     void construct_aabbs();
+    void construct_scene();
 
     void transition_resource(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list,
@@ -104,6 +104,23 @@ private:
 
     Camera camera;
     Camera top_down_camera;
+
+    struct InstanceDataFormat
+    {
+        DirectX::XMFLOAT4 displacement;
+        DirectX::XMFLOAT4 color;
+    };
+
+    // The buffer has to be 256-byte aligned to satisfy D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.
+    std::size_t n_instances;
+    std::size_t n_visible_instances;
+    std::unique_ptr<InstanceDataFormat[]> instance_vertex_offsets;
+    std::unique_ptr<InstanceDataFormat[]> copy_instance_vertex_offsets;
+    std::unique_ptr<UINT[]> instance_ids;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> vertex_intermediate_resource;
+    Microsoft::WRL::ComPtr<ID3D12Resource> instance_ids_intermediate_resource;
+    Microsoft::WRL::ComPtr<ID3D12Resource> instance_data_intermediate_resource;
 
 private:
 

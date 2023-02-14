@@ -96,16 +96,6 @@ static float quad_vertices[] =
     -1.f, 1.f, 0.f,     0.f, 1.f
 };
 
-struct InstanceDataFormat
-{
-    XMFLOAT4 displacement;
-    XMFLOAT4 color;
-};
-
-// The buffer has to be 256-byte aligned to satisfy D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.
-static InstanceDataFormat instance_vertex_offsets[32];
-static UINT instance_ids[_countof(instance_vertex_offsets)];
-
 FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     : IApplication(hinstance)
     , app_initialized(false)
@@ -139,7 +129,6 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     quad_rtv_descriptor_heap    = _pimpl_create_rtv_descriptor_heap(device, 2);
     srv_descriptor_heap         = _pimpl_create_srv_descriptor_heap(device, 2);
     dsv_descriptor_heap         = _pimpl_create_dsv_descriptor_heap(device, 2);
-    instance_descriptor_heap    = _pimpl_create_srv_descriptor_heap(device, 1);
     _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap, backbuffers, 3);
     command_allocator           = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
     command_list_direct         = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -192,8 +181,6 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     ortho_scene_texture->set_clear_color(DirectX::XMFLOAT4(0.f, 0.f, 0.f, 0.f));
     ortho_scene_texture->init(window_width, window_height);
 
-    instance_buffer = std::make_unique<DX12Resource>();
-
     load_assets();
     UINT dsv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
     CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
@@ -243,7 +230,6 @@ void FrustumCulling::initialize_raw_input_devices()
 
     ThrowIfFailed(RegisterRawInputDevices(rids, 1, sizeof(rids[0])));
 }
-
 
 void FrustumCulling::on_key_down(WPARAM wparam)
 {
@@ -354,21 +340,19 @@ void FrustumCulling::render()
     // Record Scene
     command_list_direct->SetPipelineState(scene_pso.Get());
     command_list_direct->SetGraphicsRootSignature(scene_root_signature.Get());
-    
-    ID3D12Resource* instance_resource = instance_buffer->get_underlying();
-    command_list_direct->SetGraphicsRootConstantBufferView(1, instance_resource->GetGPUVirtualAddress());
     command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     D3D12_VERTEX_BUFFER_VIEW vb_views[] =
     {
         vertex_buffer_view,
-        instance_id_buffer_view
+        instance_id_buffer_view,
+        instance_data_buffer_view
     };
-    command_list_direct->IASetVertexBuffers(0, 2, vb_views);
+    command_list_direct->IASetVertexBuffers(0, 3, vb_views);
     command_list_direct->RSSetViewports(1, &viewport0);
     command_list_direct->RSSetScissorRects(1, &scissor_rect);
     command_list_direct->OMSetRenderTargets(1, &rt_descriptor, FALSE, &dsv_handle);
     command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
-    command_list_direct->DrawInstanced(sizeof(vertices) / sizeof(VertexFormat), _countof(instance_ids), 0, 0);
+    command_list_direct->DrawInstanced(sizeof(vertices) / sizeof(VertexFormat), n_visible_instances, 0, 0);
     // Transition RTV to SRV
     scene_texture->transition_to_read_state(command_list_direct.Get());
 
@@ -437,6 +421,8 @@ void FrustumCulling::resize()
 
 void FrustumCulling::update()
 {
+    static uint32_t update_count = 0;
+    static float elapsed_time_at_threshold = 0.f;
     static auto t0 = std::chrono::high_resolution_clock::now();
     static float total_time = 0.f;
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -503,33 +489,63 @@ void FrustumCulling::update()
     );
     // Change the color of the box to yellow, if it doesn't intersect the frustum
     uint32_t n_culled_objects = 0;
-    for (int i = 0; i < _countof(instance_ids); ++i)
+    uint32_t j = 0;
+    for (int i = 0; i < n_instances; ++i)
     {
         constexpr int stride = 8;
         if (frustum_contains_aabb(frustum, aabbs[i]))
         {
             instance_vertex_offsets[i].color.x = 0.f;
+            // Update the instance id in the instance_ids buffer
+            instance_vertex_offsets[j].displacement = 
+                copy_instance_vertex_offsets[i].displacement;
+            ++j;
         }
         else
         {
             n_culled_objects++;
-            instance_vertex_offsets[i].color.x = 1.f;
         }
     }
+
+    n_visible_instances = n_instances - n_culled_objects;
+    
+    // This is doing nothing
+    {
+        D3D12_SUBRESOURCE_DATA data_desc = {};
+        data_desc.pData = instance_vertex_offsets.get();
+        data_desc.RowPitch = sizeof(InstanceDataFormat) * n_visible_instances;
+        data_desc.SlicePitch = sizeof(InstanceDataFormat) * n_visible_instances;
+
+        transition_resource(
+            command_list_direct,
+            instance_data_buffer.Get(),
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+            D3D12_RESOURCE_STATE_COPY_DEST
+        );
+
+        UpdateSubresources(
+            command_list_direct.Get(),
+            instance_data_buffer.Get(),
+            instance_data_intermediate_resource.Get(),
+            0, 0, 1, &data_desc
+        );
+
+        transition_resource(
+            command_list_direct,
+            instance_id_buffer.Get(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+        );
+    }
+
     text_output.resize(128);
     swprintf(
         text_output.data(), 
-        L"Number of objects: %d\nCulled: %d\nVertices: %d", 
-        _countof(instance_ids),
+        L"Frame time: %dms\nNumber of cubes: %d\nCulled: %d\nVertices: %d", 
+        static_cast<uint32_t>(elapsed_time_at_threshold * 1e3),
+        n_instances,
         n_culled_objects,
         n_culled_objects * 36
-    );
-
-    instance_buffer->update(
-        device.Get(), 
-        command_list_direct.Get(), 
-        instance_vertex_offsets, 
-        sizeof(instance_vertex_offsets)
     );
 
     command_list_direct->Close();
@@ -542,29 +558,17 @@ void FrustumCulling::update()
     command_queue->ExecuteCommandLists(1, command_lists);
     command_queue_signal(++fence_value);
     wait_for_fence(fence_value);
+
+    update_count++;
+    if (update_count % 100 == 0)
+    {
+        elapsed_time_at_threshold = elapsed_time;
+    }
 }
 
 void FrustumCulling::load_assets()
 {
-    // Create a circle of boxes around the origin
-    for (int i = 0; i < _countof(instance_vertex_offsets); ++i)
-    {
-        instance_ids[i] = i;
-
-        static float angle = 0.f;
-        static float radial_distance = 30.f;
-        static float angle_increment = 360.f / _countof(instance_vertex_offsets);
-        instance_vertex_offsets[i].displacement = XMFLOAT4(
-            cos(angle) * radial_distance, 
-            0.f, 
-            sin(angle) * radial_distance, 
-            0.f
-        );
-        angle += angle_increment;
-
-        instance_vertex_offsets[i].color = XMFLOAT4(0.f, 1.f, 0.f, 1.f);
-    }
-
+    construct_scene();
     initialize_font_rendering();
     load_scene_shader_assets();
     load_quad_shader_assets();
@@ -629,67 +633,135 @@ void FrustumCulling::load_scene_shader_assets()
     // Vertex buffer uploading
     {
         ThrowIfFailed(device->CreateCommittedResource(
+            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+            D3D12_HEAP_FLAG_NONE,
+            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices))),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            nullptr,
+            IID_PPV_ARGS(&vertex_buffer)
+        ));
+
+        ThrowIfFailed(device->CreateCommittedResource(
             temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
             D3D12_HEAP_FLAG_NONE,
             temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices))),
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
-            IID_PPV_ARGS(&vertex_buffer)
+            IID_PPV_ARGS(&vertex_intermediate_resource)
         ));
 
-        UINT32* vertex_data_begin = nullptr;
-        CD3DX12_RANGE read_range(0, 0);
-        ThrowIfFailed(vertex_buffer->Map(
-            0,
-            &read_range,
-            reinterpret_cast<void**>(&vertex_data_begin)
-        ));
-        memcpy(vertex_data_begin, vertices, sizeof(vertices));
-        vertex_buffer->Unmap(0, nullptr);
+        D3D12_SUBRESOURCE_DATA data_desc = {};
+        data_desc.pData = vertices;
+        data_desc.RowPitch = sizeof(vertices);
+        data_desc.SlicePitch = sizeof(vertices);
+
+        UpdateSubresources(
+            command_list_direct.Get(), 
+            vertex_buffer.Get(), 
+            vertex_intermediate_resource.Get(), 
+            0, 0, 1, &data_desc
+        );
+
+        transition_resource(
+            command_list_direct,
+            vertex_buffer.Get(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+        );
 
         vertex_buffer_view.BufferLocation = vertex_buffer->GetGPUVirtualAddress();
         vertex_buffer_view.SizeInBytes = sizeof(vertices);
         vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
-    // Instancing data
+    // Instancing id buffer
     {
-        instance_buffer->upload(
-            device.Get(), 
-            command_list_direct.Get(), 
-            (void*)instance_vertex_offsets, 
-            sizeof(instance_vertex_offsets)
-        );
-
-        // Create the CBV view
-        ID3D12Resource* resource = instance_buffer->get_underlying();
-        cbv_desc.BufferLocation = resource->GetGPUVirtualAddress();
-        cbv_desc.SizeInBytes = sizeof(instance_vertex_offsets);
-        device->CreateConstantBufferView(&cbv_desc, instance_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
-
         // Instance vertex buffer
         ThrowIfFailed(device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
             D3D12_HEAP_FLAG_NONE,
-            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(instance_ids))),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
+            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT) * n_instances)),
+            D3D12_RESOURCE_STATE_COPY_DEST,
             nullptr,
             IID_PPV_ARGS(&instance_id_buffer)
         ));
 
-        UINT32* vertex_data_begin = nullptr;
-        CD3DX12_RANGE read_range(0, 0);
-        ThrowIfFailed(instance_id_buffer->Map(
-            0,
-            &read_range,
-            reinterpret_cast<void**>(&vertex_data_begin)
+        ThrowIfFailed(device->CreateCommittedResource(
+            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+            D3D12_HEAP_FLAG_NONE,
+            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT) * n_instances)),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&instance_ids_intermediate_resource)
         ));
-        memcpy(vertex_data_begin, instance_ids, sizeof(instance_ids));
-        instance_id_buffer->Unmap(0, nullptr);
+
+        D3D12_SUBRESOURCE_DATA data_desc = {};
+        data_desc.pData = instance_ids.get();
+        data_desc.RowPitch = sizeof(UINT) * n_instances;
+        data_desc.SlicePitch = sizeof(UINT) * n_instances;
+
+        UpdateSubresources(
+            command_list_direct.Get(),
+            instance_id_buffer.Get(),
+            instance_ids_intermediate_resource.Get(),
+            0, 0, 1, &data_desc
+        );
+
+        transition_resource(
+            command_list_direct,
+            instance_id_buffer.Get(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+        );
 
         instance_id_buffer_view.BufferLocation = instance_id_buffer->GetGPUVirtualAddress();
-        instance_id_buffer_view.SizeInBytes = sizeof(instance_ids);
+        instance_id_buffer_view.SizeInBytes = sizeof(UINT) * n_instances;
         instance_id_buffer_view.StrideInBytes = sizeof(UINT);
+    }
+
+    // Instance data buffer
+    {
+        // Instance vertex buffer
+        ThrowIfFailed(device->CreateCommittedResource(
+            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+            D3D12_HEAP_FLAG_NONE,
+            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(InstanceDataFormat) * n_instances)),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            nullptr,
+            IID_PPV_ARGS(&instance_data_buffer)
+        ));
+
+        ThrowIfFailed(device->CreateCommittedResource(
+            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+            D3D12_HEAP_FLAG_NONE,
+            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(InstanceDataFormat)* n_instances)),
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&instance_data_intermediate_resource)
+        ));
+
+        D3D12_SUBRESOURCE_DATA data_desc = {};
+        data_desc.pData = instance_vertex_offsets.get();
+        data_desc.RowPitch = sizeof(InstanceDataFormat) * n_instances;
+        data_desc.SlicePitch = sizeof(InstanceDataFormat) * n_instances;
+
+        UpdateSubresources(
+            command_list_direct.Get(),
+            instance_data_buffer.Get(),
+            instance_data_intermediate_resource.Get(),
+            0, 0, 1, &data_desc
+        );
+
+        transition_resource(
+            command_list_direct,
+            instance_data_buffer.Get(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+        );
+
+        instance_data_buffer_view.BufferLocation = instance_data_buffer->GetGPUVirtualAddress();
+        instance_data_buffer_view.SizeInBytes = sizeof(InstanceDataFormat) * n_instances;
+        instance_data_buffer_view.StrideInBytes = sizeof(InstanceDataFormat);
     }
 
     ComPtr<ID3DBlob> vs_blob;
@@ -704,15 +776,23 @@ void FrustumCulling::load_scene_shader_assets()
     D3D12_INPUT_ELEMENT_DESC input_layout[] =
     {
         {
-            "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+            "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
         },
         {
-            "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
+            "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
         },
         {
-            "SV_InstanceID", 0, DXGI_FORMAT_R32_UINT, 1, 0,
+            "SV_InstanceID", 0, DXGI_FORMAT_R32_UINT, 1, D3D12_APPEND_ALIGNED_ELEMENT ,
+            D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1
+        },
+        {
+            "POSITION", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT ,
+            D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1
+        },
+        {
+            "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT ,
             D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1
         }
     };
@@ -896,9 +976,50 @@ void FrustumCulling::load_quad_shader_assets()
     ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&quad_pso)));
 }
 
+void FrustumCulling::construct_scene()
+{
+    const float xdim = 300.f;
+    const float zdim = 300.f;
+    const int cubes_per_row = 512;
+    const int cubes_per_column = 512;
+    const float xdelta = xdim / cubes_per_row;
+    const float zdelta = zdim / cubes_per_column;
+
+    n_instances = cubes_per_row * cubes_per_column;
+    copy_instance_vertex_offsets = std::make_unique<InstanceDataFormat[]>(n_instances);
+    instance_vertex_offsets = std::make_unique<InstanceDataFormat[]>(n_instances);
+    instance_ids = std::make_unique<UINT[]>(n_instances);
+
+    const float ypos = 0.f;
+    float xpos = -xdim / 2.f;
+    for (int x = 0; x < cubes_per_column; ++x)
+    {
+        float zpos = -zdim / 2.f;
+        for (int z = 0; z < cubes_per_row; ++z)
+        {
+            int idx = x * cubes_per_column + z;
+            instance_vertex_offsets[idx].displacement = XMFLOAT4(
+                xpos, ypos, zpos, 0.f
+            );
+            instance_vertex_offsets[idx].color = XMFLOAT4(0.f, 1.f, 0.f, 1.f);
+            instance_ids[idx] = idx;
+
+            zpos += zdelta;
+        }
+
+        xpos += xdelta;
+    }
+
+    // Create a copy of the instance data, for use in frustum culling (see update() function)
+    memcpy(
+        copy_instance_vertex_offsets.get(), 
+        instance_vertex_offsets.get(), 
+        sizeof(InstanceDataFormat) * n_instances
+    );
+}
+
 void FrustumCulling::construct_aabbs()
 {
-    const uint32_t n_instances = _countof(instance_ids);
     const uint32_t n_vertices = sizeof(vertices) / sizeof(VertexFormat);
     
     // Prepare the data first, magical/phantastical numbers! (do you write that word with ph or f, not sure, probably f)
