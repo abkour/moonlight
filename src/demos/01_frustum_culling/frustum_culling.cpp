@@ -347,7 +347,7 @@ void FrustumCulling::render()
         instance_id_buffer_view,
         instance_data_buffer_view
     };
-    command_list_direct->IASetVertexBuffers(0, 3, vb_views);
+    command_list_direct->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list_direct->RSSetViewports(1, &viewport0);
     command_list_direct->RSSetScissorRects(1, &scissor_rect);
     command_list_direct->OMSetRenderTargets(1, &rt_descriptor, FALSE, &dsv_handle);
@@ -490,6 +490,8 @@ void FrustumCulling::update()
     // Change the color of the box to yellow, if it doesn't intersect the frustum
     uint32_t n_culled_objects = 0;
     uint32_t j = 0;
+    
+    auto cull_t0 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < n_instances; ++i)
     {
         constexpr int stride = 8;
@@ -506,10 +508,10 @@ void FrustumCulling::update()
             n_culled_objects++;
         }
     }
+    auto cull_t1 = std::chrono::high_resolution_clock::now();
+    auto cull_time = (cull_t1 - cull_t0).count() * 1e-6;
 
     n_visible_instances = n_instances - n_culled_objects;
-    
-    // This is doing nothing
     {
         D3D12_SUBRESOURCE_DATA data_desc = {};
         data_desc.pData = instance_vertex_offsets.get();
@@ -541,8 +543,9 @@ void FrustumCulling::update()
     text_output.resize(128);
     swprintf(
         text_output.data(), 
-        L"Frame time: %dms\nNumber of cubes: %d\nCulled: %d\nVertices: %d", 
+        L"Frame time: %dms\nCull time: %dms\nNumber of cubes: %d\nCulled: %d\nVertices: %d", 
         static_cast<uint32_t>(elapsed_time_at_threshold * 1e3),
+        static_cast<uint32_t>(cull_time),
         n_instances,
         n_culled_objects,
         n_culled_objects * 36
@@ -560,7 +563,7 @@ void FrustumCulling::update()
     wait_for_fence(fence_value);
 
     update_count++;
-    if (update_count % 100 == 0)
+    if (update_count % 25 == 0)
     {
         elapsed_time_at_threshold = elapsed_time;
     }
@@ -675,6 +678,7 @@ void FrustumCulling::load_scene_shader_assets()
     }
 
     // Instancing id buffer
+    
     {
         // Instance vertex buffer
         ThrowIfFailed(device->CreateCommittedResource(
@@ -978,19 +982,19 @@ void FrustumCulling::load_quad_shader_assets()
 
 void FrustumCulling::construct_scene()
 {
-    const float xdim = 300.f;
-    const float zdim = 300.f;
-    const int cubes_per_row = 512;
-    const int cubes_per_column = 512;
-    const float xdelta = xdim / cubes_per_row;
-    const float zdelta = zdim / cubes_per_column;
+    constexpr float xdim = 500.f;
+    constexpr float zdim = 500.f;
+    constexpr int cubes_per_row = 1000;
+    constexpr int cubes_per_column = 1000;
+    constexpr float xdelta = xdim / cubes_per_row;
+    constexpr float zdelta = zdim / cubes_per_column;
 
     n_instances = cubes_per_row * cubes_per_column;
     copy_instance_vertex_offsets = std::make_unique<InstanceDataFormat[]>(n_instances);
     instance_vertex_offsets = std::make_unique<InstanceDataFormat[]>(n_instances);
     instance_ids = std::make_unique<UINT[]>(n_instances);
 
-    const float ypos = 0.f;
+    constexpr float ypos = 0.f;
     float xpos = -xdim / 2.f;
     for (int x = 0; x < cubes_per_column; ++x)
     {
