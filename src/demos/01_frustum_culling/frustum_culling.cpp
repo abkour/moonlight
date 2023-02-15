@@ -459,18 +459,6 @@ void FrustumCulling::update()
     mvp_matrix = XMMatrixMultiply(model_matrix, camera.view);
     mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
 
-    XMMATRIX projection_matrix_2 = XMMatrixPerspectiveFovLH(
-        XMConvertToRadians(45.f),
-        aspect_ratio,
-        0.1,
-        200.f
-    );
-
-    const float scale_factor_2 = 1.5f;
-    model_matrix = XMMatrixScaling(scale_factor_2, scale_factor_2, scale_factor_2);
-    mvp_matrix_v2 = XMMatrixMultiply(model_matrix, top_down_camera.view);
-    mvp_matrix_v2 = XMMatrixMultiply(mvp_matrix_v2, projection_matrix_2);
-
     // Ensure that the GPU has finished work, before we render the next frame.
     ThrowIfFailed(command_allocator->Reset());
     ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
@@ -496,7 +484,7 @@ void FrustumCulling::update()
         }
     };
     
-    alignas(16) FrustumSIMD frustum_avx2;
+    alignas(32) FrustumSIMD frustum_avx2;
     float_set(frustum_avx2.normals[0].nx, frustum.near.normal.x, 8);
     float_set(frustum_avx2.normals[0].ny, frustum.near.normal.y, 8);
     float_set(frustum_avx2.normals[0].nz, frustum.near.normal.z, 8);
@@ -516,7 +504,7 @@ void FrustumCulling::update()
     float_set(frustum_avx2.normals[5].ny, frustum.top.normal.y, 8);
     float_set(frustum_avx2.normals[5].nz, frustum.top.normal.z, 8);
 
-    alignas(16) FrustumSIMD abs_frustum_avx2;
+    alignas(32) FrustumSIMD abs_frustum_avx2;
     float_set(abs_frustum_avx2.normals[0].nx, std::abs(frustum.near.normal.x), 8);
     float_set(abs_frustum_avx2.normals[0].ny, std::abs(frustum.near.normal.y), 8);
     float_set(abs_frustum_avx2.normals[0].nz, std::abs(frustum.near.normal.z), 8);
@@ -540,20 +528,13 @@ void FrustumCulling::update()
     uint32_t n_culled_objects = 0;
     uint32_t j = 0;
     
-    float d[6];
+    alignas(32) float d_avx2[48];
     auto cull_t0 = std::chrono::high_resolution_clock::now();
     const Plane* planes = (Plane*)&frustum;
     for (int i = 0; i < 6; ++i)
     {
-        d[i] = dot(planes[i].normal, planes[i].point);
+        float_set(&d_avx2[i * 8], dot(planes[i].normal, planes[i].point), 8);
     }
-    alignas(16) float d_avx2[48];
-    float_set(&d_avx2[0], d[0], 8);
-    float_set(&d_avx2[8], d[1], 8);
-    float_set(&d_avx2[16], d[2], 8);
-    float_set(&d_avx2[24], d[3], 8);
-    float_set(&d_avx2[32], d[4], 8);
-    float_set(&d_avx2[40], d[5], 8);
     
     for (int i = 0; i < n_instances / 8; ++i)
     {
@@ -1087,49 +1068,6 @@ void FrustumCulling::construct_scene()
     );
 }
 
-/*
-void FrustumCulling::construct_aabbs()
-{
-    const uint32_t n_vertices = sizeof(vertices) / sizeof(VertexFormat);
-    
-    // Prepare the data first, magical/phantastical numbers! (do you write that word with ph or f, not sure, probably f)
-    float intermediate_buffer[n_vertices * 3];
-    for (int i = 0; i < n_vertices; ++i)
-    {
-        intermediate_buffer[i * 3] = vertices[i * 5];
-        intermediate_buffer[i * 3 + 1] = vertices[i * 5 + 1];
-        intermediate_buffer[i * 3 + 2] = vertices[i * 5 + 2];
-    }
-    
-    AABB os_aabb = construct_aabb_from_points(
-        reinterpret_cast<Vector3*>(intermediate_buffer),
-        n_vertices
-    );
-
-    for (int j = 0; j < n_instances; ++j)
-    {
-        AABB new_aabb;
-        new_aabb.bmin = os_aabb.bmin;
-        new_aabb.bmax = os_aabb.bmax;
-        new_aabb.bmin += *(Vector3*)&instance_vertex_offsets[j].displacement;
-        new_aabb.bmax += *(Vector3*)&instance_vertex_offsets[j].displacement;
-        aabbs.emplace_back(new_aabb);
-#ifdef _DEBUG
-        char buffer[512];
-        sprintf_s(buffer, "bmin: (%f, %f, %f)\t\tbmax: (%f, %f, %f)\n",
-            aabbs.back().bmin.x,
-            aabbs.back().bmin.y,
-            aabbs.back().bmin.z,
-            aabbs.back().bmax.x,
-            aabbs.back().bmax.y,
-            aabbs.back().bmax.z
-        );
-        OutputDebugStringA(buffer);
-#endif
-    }
-}
-*/
-
 void FrustumCulling::construct_aabbs_avx2()
 {
     const uint32_t n_vertices = sizeof(vertices) / sizeof(VertexFormat);
@@ -1163,7 +1101,7 @@ void FrustumCulling::construct_aabbs_avx2()
             aabb.bmax_y[k] = os_aabb.bmax.y + instance_vertex_offsets[i].displacement.y;
             aabb.bmax_z[k] = os_aabb.bmax.z + instance_vertex_offsets[i].displacement.z;
         }
-        aabbs.push_back(aabb);
+        aabbs.emplace_back(aabb);
     }
 }
 

@@ -102,7 +102,7 @@ private:
     bool APressed, DPressed, SPressed, WPressed;
 
     //std::vector<AABB> aabbs;
-    alignas(16) std::vector<AABBSIMD> aabbs;
+    alignas(32) std::vector<AABBSIMD> aabbs;
 
     Camera camera;
     Camera top_down_camera;
