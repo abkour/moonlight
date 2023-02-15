@@ -101,26 +101,22 @@ inline uint8_t frustum_contains_aabb_avx2(
     uint8_t output_mask = 0xFF;
     //Vector3 c = (aabb.bmax + aabb.bmin) * 0.5f;
     __m256 r0 = _mm256_set1_ps(0.5f);
-    __m256 cx = _mm256_load_ps(aabb.bmax_x);
+    __m256 e0 = _mm256_load_ps(aabb.bmax_x);
+    __m256 e1 = _mm256_load_ps(aabb.bmax_y);
+    __m256 e2 = _mm256_load_ps(aabb.bmax_z);
     __m256 r1 = _mm256_load_ps(aabb.bmin_x);
-    cx = _mm256_add_ps(cx, r1);
+    __m256 cx = _mm256_add_ps(e0, r1);
     
-    __m256 cy = _mm256_load_ps(aabb.bmax_y);
     r1 = _mm256_load_ps(aabb.bmin_y);
-    cy = _mm256_add_ps(cy, r1);
-
-    __m256 cz = _mm256_load_ps(aabb.bmax_z);
+    __m256 cy = _mm256_add_ps(e1, r1);
     r1 = _mm256_load_ps(aabb.bmin_z);
-    cz = _mm256_add_ps(cz, r1);
+    __m256 cz = _mm256_add_ps(e2, r1);
 
     cx = _mm256_mul_ps(cx, r0);
     cy = _mm256_mul_ps(cy, r0);
     cz = _mm256_mul_ps(cz, r0);
 
     // Vector3 e = aabb.bmax - c;
-    __m256 e0 = _mm256_load_ps(aabb.bmax_x);
-    __m256 e1 = _mm256_load_ps(aabb.bmax_y);
-    __m256 e2 = _mm256_load_ps(aabb.bmax_z);
     e0 = _mm256_sub_ps(e0, cx); // ex
     e1 = _mm256_sub_ps(e1, cy); // ey
     e2 = _mm256_sub_ps(e2, cz); // ez
@@ -129,29 +125,24 @@ inline uint8_t frustum_contains_aabb_avx2(
     {
         // float s = dot(planes[i].normal, c) - d[i];
         // float s = p[i].normal.x * cx + p[i].normal.y * cy + p[i].normal.z * cz
-        __m256 sx = _mm256_load_ps(frustum->normals[i].nx);
+        __m256 s = _mm256_load_ps(frustum->normals[i].nx);
         __m256 r2 = _mm256_load_ps(frustum->normals[i].ny);
         r0 = _mm256_load_ps(frustum->normals[i].nz);
-        r1 = _mm256_load_ps(&d[i * 8]); 
-        sx = _mm256_mul_ps(sx, cx);
-        r2 = _mm256_mul_ps(r2, cy);
-        r0 = _mm256_mul_ps(r0, cz);
-        sx = _mm256_add_ps(sx, r2);
-        sx = _mm256_add_ps(sx, r0);
-        sx = _mm256_sub_ps(sx, r1); // final s
+        r1 = _mm256_load_ps(&d[i * 8]);
+        s = _mm256_fmsub_ps(s, cx, r1);
+        s = _mm256_fmadd_ps(r2, cy, s);
+        s = _mm256_fmadd_ps(r0, cz, s);
 
         // float r = e.x * abs(planes[i].normal.x) + e.y * abs(planes[i].normal.y) + e.z * abs(planes[i].normal.z);
         r0 = _mm256_load_ps(abs_frustum->normals[i].nx);
         r1 = _mm256_load_ps(abs_frustum->normals[i].ny);
         r2 = _mm256_load_ps(abs_frustum->normals[i].nz);
         r0 = _mm256_mul_ps(e0, r0);
-        r1 = _mm256_mul_ps(e1, r1);
-        r2 = _mm256_mul_ps(e2, r2);
-        r0 = _mm256_add_ps(r0, r1);
-        r0 = _mm256_add_ps(r0, r2); // final r
+        r0 = _mm256_fmadd_ps(e1, r1, r0);
+        r0 = _mm256_fmadd_ps(e2, r2, r0);
 
         // if (s > r) return false;
-        r0 = _mm256_cmp_ps(sx, r0, 0x12); // 0x12 stands for _CMP_LE_OQ (LESS THAN OR EQUAL TO)
+        r0 = _mm256_cmp_ps(s, r0, 0x12); // 0x12 stands for _CMP_LE_OQ (LESS THAN OR EQUAL TO)
         uint8_t sign_mask = _mm256_movemask_ps(r0);
         output_mask = output_mask & sign_mask;
     }
