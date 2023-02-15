@@ -487,25 +487,89 @@ void FrustumCulling::update()
         near_clip_distance,
         far_clip_distance
     );
+
+    auto float_set = [](float* arr, float val, int size) 
+    {
+        for (int i = 0; i < size; ++i)
+        {
+            arr[i] = val;
+        }
+    };
+    
+    alignas(16) FrustumSIMD frustum_avx2;
+    float_set(frustum_avx2.normals[0].nx, frustum.near.normal.x, 8);
+    float_set(frustum_avx2.normals[0].ny, frustum.near.normal.y, 8);
+    float_set(frustum_avx2.normals[0].nz, frustum.near.normal.z, 8);
+    float_set(frustum_avx2.normals[1].nx, frustum.far.normal.x, 8);
+    float_set(frustum_avx2.normals[1].ny, frustum.far.normal.y, 8);
+    float_set(frustum_avx2.normals[1].nz, frustum.far.normal.z, 8);
+    float_set(frustum_avx2.normals[2].nx, frustum.left.normal.x, 8);
+    float_set(frustum_avx2.normals[2].ny, frustum.left.normal.y, 8);
+    float_set(frustum_avx2.normals[2].nz, frustum.left.normal.z, 8);
+    float_set(frustum_avx2.normals[3].nx, frustum.right.normal.x, 8);
+    float_set(frustum_avx2.normals[3].ny, frustum.right.normal.y, 8);
+    float_set(frustum_avx2.normals[3].nz, frustum.right.normal.z, 8);
+    float_set(frustum_avx2.normals[4].nx, frustum.bottom.normal.x, 8);
+    float_set(frustum_avx2.normals[4].ny, frustum.bottom.normal.y, 8);
+    float_set(frustum_avx2.normals[4].nz, frustum.bottom.normal.z, 8);
+    float_set(frustum_avx2.normals[5].nx, frustum.top.normal.x, 8);
+    float_set(frustum_avx2.normals[5].ny, frustum.top.normal.y, 8);
+    float_set(frustum_avx2.normals[5].nz, frustum.top.normal.z, 8);
+
+    alignas(16) FrustumSIMD abs_frustum_avx2;
+    float_set(abs_frustum_avx2.normals[0].nx, std::abs(frustum.near.normal.x), 8);
+    float_set(abs_frustum_avx2.normals[0].ny, std::abs(frustum.near.normal.y), 8);
+    float_set(abs_frustum_avx2.normals[0].nz, std::abs(frustum.near.normal.z), 8);
+    float_set(abs_frustum_avx2.normals[1].nx, std::abs(frustum.far.normal.x), 8);
+    float_set(abs_frustum_avx2.normals[1].ny, std::abs(frustum.far.normal.y), 8);
+    float_set(abs_frustum_avx2.normals[1].nz, std::abs(frustum.far.normal.z), 8);
+    float_set(abs_frustum_avx2.normals[2].nx, std::abs(frustum.left.normal.x), 8);
+    float_set(abs_frustum_avx2.normals[2].ny, std::abs(frustum.left.normal.y), 8);
+    float_set(abs_frustum_avx2.normals[2].nz, std::abs(frustum.left.normal.z), 8);
+    float_set(abs_frustum_avx2.normals[3].nx, std::abs(frustum.right.normal.x), 8);
+    float_set(abs_frustum_avx2.normals[3].ny, std::abs(frustum.right.normal.y), 8);
+    float_set(abs_frustum_avx2.normals[3].nz, std::abs(frustum.right.normal.z), 8);
+    float_set(abs_frustum_avx2.normals[4].nx, std::abs(frustum.bottom.normal.x), 8);
+    float_set(abs_frustum_avx2.normals[4].ny, std::abs(frustum.bottom.normal.y), 8);
+    float_set(abs_frustum_avx2.normals[4].nz, std::abs(frustum.bottom.normal.z), 8);
+    float_set(abs_frustum_avx2.normals[5].nx, std::abs(frustum.top.normal.x), 8);
+    float_set(abs_frustum_avx2.normals[5].ny, std::abs(frustum.top.normal.y), 8);
+    float_set(abs_frustum_avx2.normals[5].nz, std::abs(frustum.top.normal.z), 8);
+
     // Change the color of the box to yellow, if it doesn't intersect the frustum
     uint32_t n_culled_objects = 0;
     uint32_t j = 0;
     
+    float d[6];
     auto cull_t0 = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < n_instances; ++i)
+    const Plane* planes = (Plane*)&frustum;
+    for (int i = 0; i < 6; ++i)
     {
-        constexpr int stride = 8;
-        if (frustum_contains_aabb(frustum, aabbs[i]))
+        d[i] = dot(planes[i].normal, planes[i].point);
+    }
+    alignas(16) float d_avx2[48];
+    float_set(&d_avx2[0], d[0], 8);
+    float_set(&d_avx2[8], d[1], 8);
+    float_set(&d_avx2[16], d[2], 8);
+    float_set(&d_avx2[24], d[3], 8);
+    float_set(&d_avx2[32], d[4], 8);
+    float_set(&d_avx2[40], d[5], 8);
+    
+    for (int i = 0; i < n_instances / 8; ++i)
+    {
+        uint8_t mask = frustum_contains_aabb_avx2(&frustum_avx2, &abs_frustum_avx2, aabbs[i], d_avx2);
+        for (int k = 0; k < 8; ++k)
         {
-            instance_vertex_offsets[i].color.x = 0.f;
-            // Update the instance id in the instance_ids buffer
-            instance_vertex_offsets[j].displacement = 
-                copy_instance_vertex_offsets[i].displacement;
-            ++j;
-        }
-        else
-        {
-            n_culled_objects++;
+            if (mask & (0x01 << k))
+            {
+                int idx = i * 8 + k;
+                instance_vertex_offsets[j].displacement =
+                    copy_instance_vertex_offsets[idx].displacement;
+                ++j;
+            } else
+            {
+                n_culled_objects++;
+            }
         }
     }
     auto cull_t1 = std::chrono::high_resolution_clock::now();
@@ -575,12 +639,13 @@ void FrustumCulling::load_assets()
     initialize_font_rendering();
     load_scene_shader_assets();
     load_quad_shader_assets();
-    construct_aabbs();
+    construct_aabbs_avx2();
 }
 
 void FrustumCulling::initialize_font_rendering()
 {
     m_graphicsMemory = std::make_unique<GraphicsMemory>(device.Get());
+    
     //
     // Initialize descriptor heap for font
     {
@@ -1022,6 +1087,7 @@ void FrustumCulling::construct_scene()
     );
 }
 
+/*
 void FrustumCulling::construct_aabbs()
 {
     const uint32_t n_vertices = sizeof(vertices) / sizeof(VertexFormat);
@@ -1060,6 +1126,44 @@ void FrustumCulling::construct_aabbs()
         );
         OutputDebugStringA(buffer);
 #endif
+    }
+}
+*/
+
+void FrustumCulling::construct_aabbs_avx2()
+{
+    const uint32_t n_vertices = sizeof(vertices) / sizeof(VertexFormat);
+
+    // Prepare the data first, magical/phantastical numbers! (do you write that word with ph or f, not sure, probably f)
+    float intermediate_buffer[n_vertices * 3];
+    for (int i = 0; i < n_vertices; ++i)
+    {
+        intermediate_buffer[i * 3] = vertices[i * 5];
+        intermediate_buffer[i * 3 + 1] = vertices[i * 5 + 1];
+        intermediate_buffer[i * 3 + 2] = vertices[i * 5 + 2];
+    }
+
+    AABB os_aabb = construct_aabb_from_points(
+        reinterpret_cast<Vector3*>(intermediate_buffer),
+        n_vertices
+    );
+
+    aabbs.reserve(n_instances / 8);
+
+    for (int j = 0; j < n_instances / 8; ++j)
+    {
+        AABBSIMD aabb;
+        for (int k = 0; k < 8; ++k)
+        {
+            int i = j * 8 + k;
+            aabb.bmin_x[k] = os_aabb.bmin.x + instance_vertex_offsets[i].displacement.x;
+            aabb.bmin_y[k] = os_aabb.bmin.y + instance_vertex_offsets[i].displacement.y;
+            aabb.bmin_z[k] = os_aabb.bmin.z + instance_vertex_offsets[i].displacement.z;
+            aabb.bmax_x[k] = os_aabb.bmax.x + instance_vertex_offsets[i].displacement.x;
+            aabb.bmax_y[k] = os_aabb.bmax.y + instance_vertex_offsets[i].displacement.y;
+            aabb.bmax_z[k] = os_aabb.bmax.z + instance_vertex_offsets[i].displacement.z;
+        }
+        aabbs.push_back(aabb);
     }
 }
 

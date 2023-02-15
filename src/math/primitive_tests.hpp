@@ -3,6 +3,8 @@
 #include "plane.hpp"
 #include "frustum.hpp"
 
+#include <immintrin.h>
+
 namespace moonlight
 {
 
@@ -46,34 +48,115 @@ inline bool aabb_intersects_positive_halfspace_of_plane(const Plane& plane, cons
     return s > r || abs(s) <= r;
 }
 
-inline bool frustum_contains_aabb(const Frustum& frustum, const AABB& aabb)
+inline bool frustum_contains_aabb(const Plane* planes, const AABB& aabb, float* d)
 {
-    if (aabb_in_positive_halfspace_of_plane(frustum.near, aabb))
+    Vector3 c = (aabb.bmax + aabb.bmin) * 0.5f;
+    Vector3 e = aabb.bmax - c;
+
+    for (int i = 0; i < 6; ++i)
     {
-        return false;
-    }
-    if (aabb_in_positive_halfspace_of_plane(frustum.left, aabb))
-    {
-        return false;
-    }
-    if (aabb_in_positive_halfspace_of_plane(frustum.right, aabb))
-    {
-        return false;
-    }
-    if (aabb_in_positive_halfspace_of_plane(frustum.bottom, aabb))
-    {
-        return false;
-    }
-    if (aabb_in_positive_halfspace_of_plane(frustum.top, aabb))
-    {
-        return false;
-    }
-    if (aabb_in_positive_halfspace_of_plane(frustum.far, aabb))
-    {
-        return false;
+        float r = e.x * abs(planes[i].normal.x) + e.y * abs(planes[i].normal.y) + e.z * abs(planes[i].normal.z);
+        float s = dot(planes[i].normal, c) - d[i];
+
+        if (s > r)
+        {
+            return false;
+        }
     }
 
     return true;
+}
+
+struct AABBSIMD
+{
+    float bmin_x[8];
+    float bmax_x[8];
+    float bmin_y[8];
+    float bmax_y[8];
+    float bmin_z[8];
+    float bmax_z[8];
+};
+
+struct PlaneSIMD
+{
+    float nx[8];
+    float ny[8];
+    float nz[8];
+};
+
+struct FrustumSIMD
+{
+    PlaneSIMD normals[6];
+};
+
+// Perform 8 AABB intersection tests against @frustum.
+// The result is returned as a uint8_t bitmask, where there
+// positive bits describe an AABB that is inside the frustum and vice versa.
+inline uint8_t frustum_contains_aabb_avx2(
+    const FrustumSIMD* frustum,
+    const FrustumSIMD* abs_frustum,
+    const AABBSIMD& aabb,
+    float* d)
+{
+    uint8_t output_mask = 0xFF;
+    //Vector3 c = (aabb.bmax + aabb.bmin) * 0.5f;
+    __m256 r0 = _mm256_set1_ps(0.5f);
+    __m256 cx = _mm256_load_ps(aabb.bmax_x);
+    __m256 r1 = _mm256_load_ps(aabb.bmin_x);
+    cx = _mm256_add_ps(cx, r1);
+    
+    __m256 cy = _mm256_load_ps(aabb.bmax_y);
+    r1 = _mm256_load_ps(aabb.bmin_y);
+    cy = _mm256_add_ps(cy, r1);
+
+    __m256 cz = _mm256_load_ps(aabb.bmax_z);
+    r1 = _mm256_load_ps(aabb.bmin_z);
+    cz = _mm256_add_ps(cz, r1);
+
+    cx = _mm256_mul_ps(cx, r0);
+    cy = _mm256_mul_ps(cy, r0);
+    cz = _mm256_mul_ps(cz, r0);
+
+    // Vector3 e = aabb.bmax - c;
+    __m256 e0 = _mm256_load_ps(aabb.bmax_x);
+    __m256 e1 = _mm256_load_ps(aabb.bmax_y);
+    __m256 e2 = _mm256_load_ps(aabb.bmax_z);
+    e0 = _mm256_sub_ps(e0, cx); // ex
+    e1 = _mm256_sub_ps(e1, cy); // ey
+    e2 = _mm256_sub_ps(e2, cz); // ez
+
+    for (int i = 0; i < 6; ++i)
+    {
+        // float s = dot(planes[i].normal, c) - d[i];
+        // float s = p[i].normal.x * cx + p[i].normal.y * cy + p[i].normal.z * cz
+        __m256 sx = _mm256_load_ps(frustum->normals[i].nx);
+        __m256 r2 = _mm256_load_ps(frustum->normals[i].ny);
+        r0 = _mm256_load_ps(frustum->normals[i].nz);
+        r1 = _mm256_load_ps(&d[i * 8]); 
+        sx = _mm256_mul_ps(sx, cx);
+        r2 = _mm256_mul_ps(r2, cy);
+        r0 = _mm256_mul_ps(r0, cz);
+        sx = _mm256_add_ps(sx, r2);
+        sx = _mm256_add_ps(sx, r0);
+        sx = _mm256_sub_ps(sx, r1); // final s
+
+        // float r = e.x * abs(planes[i].normal.x) + e.y * abs(planes[i].normal.y) + e.z * abs(planes[i].normal.z);
+        r0 = _mm256_load_ps(abs_frustum->normals[i].nx);
+        r1 = _mm256_load_ps(abs_frustum->normals[i].ny);
+        r2 = _mm256_load_ps(abs_frustum->normals[i].nz);
+        r0 = _mm256_mul_ps(e0, r0);
+        r1 = _mm256_mul_ps(e1, r1);
+        r2 = _mm256_mul_ps(e2, r2);
+        r0 = _mm256_add_ps(r0, r1);
+        r0 = _mm256_add_ps(r0, r2); // final r
+
+        // if (s > r) return false;
+        r0 = _mm256_cmp_ps(sx, r0, 0x12); // 0x12 stands for _CMP_LE_OQ (LESS THAN OR EQUAL TO)
+        uint8_t sign_mask = _mm256_movemask_ps(r0);
+        output_mask = output_mask & sign_mask;
+    }
+
+    return output_mask;
 }
 
 }

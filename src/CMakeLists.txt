@@ -15,6 +15,8 @@ add_executable (moonlight WIN32
 	"utility/arena_allocator.cpp"
 )
 
+set(CMAKE_CXX_FLAGS_RELEASE "/MD /O2 /Ob2 /DNDEBUG" CACHE INTERNAL "")
+
 if (CMAKE_VERSION VERSION_GREATER 3.13)
   set_property(TARGET moonlight PROPERTY CXX_STANDARD 20)
   add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX)

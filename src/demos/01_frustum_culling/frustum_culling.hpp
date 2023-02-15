@@ -81,7 +81,8 @@ private:
     void load_scene_shader_assets();
     void load_quad_shader_assets();
     void initialize_font_rendering();
-    void construct_aabbs();
+    //void construct_aabbs();
+    void construct_aabbs_avx2();
     void construct_scene();
 
     void transition_resource(
@@ -100,7 +101,8 @@ private:
 
     bool APressed, DPressed, SPressed, WPressed;
 
-    std::vector<AABB> aabbs;
+    //std::vector<AABB> aabbs;
+    alignas(16) std::vector<AABBSIMD> aabbs;
 
     Camera camera;
     Camera top_down_camera;
