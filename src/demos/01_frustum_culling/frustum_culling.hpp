@@ -46,7 +46,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_descriptor_heap;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> vs_srv_descriptor_heap;
     Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
-    Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer2;
     Microsoft::WRL::ComPtr<ID3D12Resource> backbuffers[3];
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator;
     Microsoft::WRL::ComPtr<ID3D12CommandList> command_list_copy;
@@ -60,30 +59,24 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> quad_vertex_buffer;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> instance_id_buffer;
-    Microsoft::WRL::ComPtr<ID3D12Resource> instance_color_buffer;
-    Microsoft::WRL::ComPtr<ID3D12Resource> instance_color_intermediate_buffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> instance_data_buffer;
     D3D12_VERTEX_BUFFER_VIEW instance_data_buffer_view;
 
     uint64_t fence_value;
     HANDLE fence_event;
     D3D12_VIEWPORT viewport0;
-    D3D12_VIEWPORT viewport1;
-    D3D12_VIEWPORT viewport2;
     D3D12_RECT scissor_rect;
     D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
     D3D12_VERTEX_BUFFER_VIEW quad_vertex_buffer_view;
 
     DirectX::XMMATRIX mvp_matrix;
-    DirectX::XMMATRIX mvp_matrix_v2;
     bool app_initialized;
 
     void load_assets();
     void load_scene_shader_assets();
     void load_quad_shader_assets();
     void initialize_font_rendering();
-    //void construct_aabbs();
-    void construct_aabbs_avx2();
+    void construct_aabbs();
     void construct_scene();
 
     void transition_resource(
@@ -98,7 +91,6 @@ private:
     void wait_for_fence(uint64_t fence_value);
 
     std::unique_ptr<RenderTexture> scene_texture;
-    std::unique_ptr<RenderTexture> ortho_scene_texture;
 
     bool APressed, DPressed, SPressed, WPressed;
 
@@ -106,7 +98,6 @@ private:
     alignas(32) std::vector<AABB256> aabbs;
 
     Camera camera;
-    Camera top_down_camera;
 
     struct InstanceDataFormat
     {
@@ -118,7 +109,6 @@ private:
     std::size_t n_instances;
     std::size_t n_visible_instances;
     std::unique_ptr<InstanceDataFormat[]> instance_vertex_offsets;
-    std::unique_ptr<InstanceDataFormat[]> copy_instance_vertex_offsets;
     std::unique_ptr<UINT[]> instance_ids;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> vertex_intermediate_resource;
@@ -129,13 +119,6 @@ private:
 
     // Mouse/Keyboard controls
     void initialize_raw_input_devices();
-
-    uint16_t window_width, window_height;
-
-    uint32_t xcoord_old;
-    uint32_t ycoord_old;
-    bool first_cursor_entry = true;
-
     float elapsed_time = 0.f;
 
 private:

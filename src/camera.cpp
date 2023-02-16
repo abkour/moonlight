@@ -5,10 +5,14 @@ using namespace DirectX;;
 namespace moonlight
 {
 
-Camera::Camera(DirectX::XMFLOAT3 eye_position, DirectX::XMFLOAT3 eye_direction)
+Camera::Camera(
+    DirectX::XMFLOAT3 eye_position, 
+    DirectX::XMFLOAT3 eye_direction, 
+    const float movement_speed)
 {
     pitch = 0.f;
     yaw = 0.f;
+    this->movement_speed = movement_speed;
     this->eye_direction = eye_direction;
     this->eye_position = eye_position;
 
@@ -57,7 +61,7 @@ void Camera::translate(uint32_t keycode, float delta_time)
     XMVECTOR right = XMVector3Normalize(XMVector3Cross(eye_direction_xmv, world_up));
     XMVECTOR up = XMVector3Normalize(XMVector3Cross(eye_direction_xmv, right));
 
-    const float ms_v = 100.f * delta_time;
+    const float ms_v = movement_speed * delta_time;
     XMVECTOR ms = XMVectorSet(ms_v, ms_v, ms_v, ms_v);
     
     if(keycode & 0x08)  // 'W'

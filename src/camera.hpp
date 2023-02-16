@@ -8,7 +8,11 @@ namespace moonlight
 
 struct Camera
 {
-    Camera(DirectX::XMFLOAT3 eye_position, DirectX::XMFLOAT3 eye_direction);
+    Camera(
+        DirectX::XMFLOAT3 eye_position, 
+        DirectX::XMFLOAT3 eye_direction,
+        const float moveemnt_speed
+    );
 
     void rotate(float dx, float dy);
     // The keycode is a 32-bit unsigned integer that contains a bitmask of the 
@@ -26,10 +30,13 @@ struct Camera
         return eye_position;
     }
 
+    void set_movement_speed(const float movement_speed);
+
     DirectX::XMMATRIX view;
 
 private:
 
+    float movement_speed;
     float pitch, yaw;
     DirectX::XMFLOAT3 eye_position, eye_direction;
 };
