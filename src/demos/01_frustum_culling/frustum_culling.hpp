@@ -55,11 +55,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> scene_pso;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> quad_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> quad_pso;
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertex_buffer;
-    Microsoft::WRL::ComPtr<ID3D12Resource> quad_vertex_buffer;
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> instance_id_buffer;
-    Microsoft::WRL::ComPtr<ID3D12Resource> instance_data_buffer;
+    std::unique_ptr<DX12Resource> vertex_buffer;
+    std::unique_ptr<DX12Resource> quad_vertex_buffer;
+    std::unique_ptr<DX12Resource> instance_id_buffer;
+    std::unique_ptr<DX12Resource> instance_data_buffer;
     D3D12_VERTEX_BUFFER_VIEW instance_data_buffer_view;
 
     uint64_t fence_value;

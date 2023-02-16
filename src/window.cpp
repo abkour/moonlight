@@ -8,7 +8,7 @@ using namespace Microsoft::WRL;
 
 namespace moonlight {
 
-Window::Window(    HINSTANCE hinstance,
+Window::Window( HINSTANCE hinstance,
                 const wchar_t* window_class_name,
                 const wchar_t* window_title,
                 uint32_t width,

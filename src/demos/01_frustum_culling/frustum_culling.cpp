@@ -304,8 +304,8 @@ void FrustumCulling::render()
     // Record Scene
     command_list_direct->SetPipelineState(scene_pso.Get());
     command_list_direct->SetGraphicsRootSignature(scene_root_signature.Get());
-    command_list_direct->SetGraphicsRootShaderResourceView(1, instance_id_buffer->GetGPUVirtualAddress());
-    command_list_direct->SetGraphicsRootShaderResourceView(2, instance_data_buffer->GetGPUVirtualAddress());
+    command_list_direct->SetGraphicsRootShaderResourceView(1, instance_id_buffer->gpu_virtual_address());
+    command_list_direct->SetGraphicsRootShaderResourceView(2, instance_data_buffer->gpu_virtual_address());
     D3D12_VERTEX_BUFFER_VIEW vb_views[] = { vertex_buffer_view };
     command_list_direct->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -493,36 +493,14 @@ void FrustumCulling::update()
             }
         }
     }
+
     auto cull_t1 = std::chrono::high_resolution_clock::now();
     auto cull_time = (cull_t1 - cull_t0).count() * 1e-3;
-    
-    {
-        D3D12_SUBRESOURCE_DATA data_desc = {};
-        data_desc.pData = instance_ids.get();
-        data_desc.RowPitch = sizeof(UINT) * n_visible_instances;
-        data_desc.SlicePitch = sizeof(UINT) * n_visible_instances;
-
-        transition_resource(
-            command_list_direct,
-            instance_id_buffer.Get(),
-            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-            D3D12_RESOURCE_STATE_COPY_DEST
-        );
-
-        UpdateSubresources(
-            command_list_direct.Get(),
-            instance_id_buffer.Get(),
-            instance_ids_intermediate_resource.Get(),
-            0, 0, 1, &data_desc
-        );
-
-        transition_resource(
-            command_list_direct,
-            instance_id_buffer.Get(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-        );
-    }
+    // Update the contents of the offset buffer
+    instance_id_buffer->update(
+        device.Get(), command_list_direct.Get(), 
+        instance_ids.get(), sizeof(UINT) * n_visible_instances
+    );
 
     text_output.resize(128);
     uint32_t n_culled_objects = n_instances - n_visible_instances;
@@ -625,88 +603,22 @@ void FrustumCulling::load_scene_shader_assets()
 {
     // Vertex buffer uploading
     {
-        ThrowIfFailed(device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-            D3D12_HEAP_FLAG_NONE,
-            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices))),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            nullptr,
-            IID_PPV_ARGS(&vertex_buffer)
-        ));
+        vertex_buffer = std::make_unique<DX12Resource>();
+        vertex_buffer->upload(device.Get(), command_list_direct.Get(), vertices, sizeof(vertices));
 
-        ThrowIfFailed(device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
-            D3D12_HEAP_FLAG_NONE,
-            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices))),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&vertex_intermediate_resource)
-        ));
-
-        D3D12_SUBRESOURCE_DATA data_desc = {};
-        data_desc.pData = vertices;
-        data_desc.RowPitch = sizeof(vertices);
-        data_desc.SlicePitch = sizeof(vertices);
-
-        UpdateSubresources(
-            command_list_direct.Get(), 
-            vertex_buffer.Get(), 
-            vertex_intermediate_resource.Get(), 
-            0, 0, 1, &data_desc
-        );
-
-        transition_resource(
-            command_list_direct,
-            vertex_buffer.Get(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-        );
-
-        vertex_buffer_view.BufferLocation = vertex_buffer->GetGPUVirtualAddress();
+        vertex_buffer_view.BufferLocation = vertex_buffer->gpu_virtual_address();
         vertex_buffer_view.SizeInBytes = sizeof(vertices);
         vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
     // Instancing ID SRV
     {
-        // Instance vertex buffer
-        ThrowIfFailed(device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-            D3D12_HEAP_FLAG_NONE,
-            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT) * n_instances)),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            nullptr,
-            IID_PPV_ARGS(&instance_id_buffer)
-        ));
-
-        ThrowIfFailed(device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
-            D3D12_HEAP_FLAG_NONE,
-            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(UINT) * n_instances)),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&instance_ids_intermediate_resource)
-        ));
-
-        D3D12_SUBRESOURCE_DATA data_desc = {};
-        data_desc.pData = instance_ids.get();
-        data_desc.RowPitch = sizeof(UINT) * n_instances;
-        data_desc.SlicePitch = sizeof(UINT) * n_instances;
-
-        UpdateSubresources(
-            command_list_direct.Get(),
-            instance_id_buffer.Get(),
-            instance_ids_intermediate_resource.Get(),
-            0, 0, 1, &data_desc
+        instance_id_buffer = std::make_unique<DX12Resource>();
+        instance_id_buffer->upload(
+            device.Get(), command_list_direct.Get(),
+            instance_ids.get(), sizeof(UINT) * n_instances
         );
-
-        transition_resource(
-            command_list_direct,
-            instance_id_buffer.Get(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-        );
-
+        
         D3D12_BUFFER_SRV buffer_desc = {};
         buffer_desc.FirstElement = 0;
         buffer_desc.NumElements = n_instances;
@@ -719,7 +631,7 @@ void FrustumCulling::load_scene_shader_assets()
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
         device->CreateShaderResourceView(
-            instance_id_buffer.Get(),
+            instance_id_buffer->get_underlying(),
             &srv_desc,
             vs_srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
         );
@@ -727,42 +639,10 @@ void FrustumCulling::load_scene_shader_assets()
 
     // Instance data SRV
     {
-        // Instance vertex buffer
-        ThrowIfFailed(device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-            D3D12_HEAP_FLAG_NONE,
-            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(InstanceDataFormat)* n_instances)),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            nullptr,
-            IID_PPV_ARGS(&instance_data_buffer)
-        ));
-
-        ThrowIfFailed(device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
-            D3D12_HEAP_FLAG_NONE,
-            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(InstanceDataFormat)* n_instances)),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&instance_data_intermediate_resource)
-        ));
-
-        D3D12_SUBRESOURCE_DATA data_desc = {};
-        data_desc.pData = instance_vertex_offsets.get();
-        data_desc.RowPitch = sizeof(InstanceDataFormat) * n_instances;
-        data_desc.SlicePitch = sizeof(InstanceDataFormat) * n_instances;
-
-        UpdateSubresources(
-            command_list_direct.Get(),
-            instance_data_buffer.Get(),
-            instance_data_intermediate_resource.Get(),
-            0, 0, 1, &data_desc
-        );
-
-        transition_resource(
-            command_list_direct,
-            instance_data_buffer.Get(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+        instance_data_buffer = std::make_unique<DX12Resource>();
+        instance_data_buffer->upload(
+            device.Get(), command_list_direct.Get(),
+            instance_vertex_offsets.get(), sizeof(InstanceDataFormat) * n_instances
         );
 
         D3D12_BUFFER_SRV buffer_desc = {};
@@ -780,7 +660,7 @@ void FrustumCulling::load_scene_shader_assets()
         cpu_handle.Offset(device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
 
         device->CreateShaderResourceView(
-            instance_data_buffer.Get(),
+            instance_data_buffer->get_underlying(),
             &srv_desc,
             cpu_handle
         );
@@ -881,26 +761,13 @@ void FrustumCulling::load_quad_shader_assets()
 {
     // Quad vertex buffer
     {
-        ThrowIfFailed(device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
-            D3D12_HEAP_FLAG_NONE,
-            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(quad_vertices))),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&quad_vertex_buffer)
-        ));
+        quad_vertex_buffer = std::make_unique<DX12Resource>();
+        quad_vertex_buffer->upload(
+            device.Get(), command_list_direct.Get(), 
+            quad_vertices, sizeof(quad_vertices)
+        );
 
-        UINT32* vertex_data_begin = nullptr;
-        CD3DX12_RANGE read_range(0, 0);
-        ThrowIfFailed(quad_vertex_buffer->Map(
-            0,
-            &read_range,
-            reinterpret_cast<void**>(&vertex_data_begin)
-        ));
-        memcpy(vertex_data_begin, quad_vertices, sizeof(quad_vertices));
-        quad_vertex_buffer->Unmap(0, nullptr);
-
-        quad_vertex_buffer_view.BufferLocation = quad_vertex_buffer->GetGPUVirtualAddress();
+        quad_vertex_buffer_view.BufferLocation = quad_vertex_buffer->gpu_virtual_address();
         quad_vertex_buffer_view.SizeInBytes = sizeof(quad_vertices);
         quad_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }

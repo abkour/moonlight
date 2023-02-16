@@ -26,6 +26,11 @@ struct DX12Resource
         return resource.Get();
     }
 
+    D3D12_GPU_VIRTUAL_ADDRESS gpu_virtual_address()
+    {
+        return resource->GetGPUVirtualAddress();
+    }
+
     void update(
         ID3D12Device* device,
         ID3D12GraphicsCommandList* command_list,
@@ -47,9 +52,9 @@ struct DX12Resource
 
 private:
 
-    /*    Keeping track of the state is much more difficult than this.
+    /*   Keeping track of the state is much more difficult than this.
     *    The state transition only happens after the responsible command list
-    *    has been executed. This 
+    *    has been executed.
     */
     D3D12_RESOURCE_STATES state;
     Microsoft::WRL::ComPtr<ID3D12Resource> resource;
