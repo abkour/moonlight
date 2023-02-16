@@ -15,6 +15,10 @@ add_executable (moonlight WIN32
 	"utility/arena_allocator.cpp"
 )
 
+if (MSVC)
+set_target_properties(${BUILD_TARGET} PROPERTIES LINK_FLAGS "/PROFILE")
+endif()
+
 set(CMAKE_CXX_FLAGS_RELEASE "/MD /O2 /Ob2 /DNDEBUG" CACHE INTERNAL "")
 
 if (CMAKE_VERSION VERSION_GREATER 3.13)

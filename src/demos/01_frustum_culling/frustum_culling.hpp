@@ -44,6 +44,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> quad_rtv_descriptor_heap;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_descriptor_heap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> vs_srv_descriptor_heap;
     Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer2;
     Microsoft::WRL::ComPtr<ID3D12Resource> backbuffers[3];
@@ -59,8 +60,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> quad_vertex_buffer;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> instance_id_buffer;
-    D3D12_VERTEX_BUFFER_VIEW instance_id_buffer_view;
-
+    Microsoft::WRL::ComPtr<ID3D12Resource> instance_color_buffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> instance_color_intermediate_buffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> instance_data_buffer;
     D3D12_VERTEX_BUFFER_VIEW instance_data_buffer_view;
 
@@ -102,7 +103,7 @@ private:
     bool APressed, DPressed, SPressed, WPressed;
 
     //std::vector<AABB> aabbs;
-    alignas(32) std::vector<AABBSIMD> aabbs;
+    alignas(32) std::vector<AABB256> aabbs;
 
     Camera camera;
     Camera top_down_camera;

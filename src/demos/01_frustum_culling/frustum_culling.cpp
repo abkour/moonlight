@@ -96,6 +96,27 @@ static float quad_vertices[] =
     -1.f, 1.f, 0.f,     0.f, 1.f
 };
 
+static float random_colors[] =
+{
+    0.f, 1.f, 0.f,
+    0.5f, 1.f, 0.9f,
+    0.2f, 1.f, 0.6f,
+    0.1f, 1.f, 0.2f,
+    0.8f, 1.f, 0.4f,
+    0.6f, 0.9f, 0.1f,
+    0.4f, 0.1f, 0.1f,
+    1.f, 0.f, 0.f,
+
+    0.1f, 1.f, 0.4f,
+    0.2f, 1.f, 0.5f,
+    0.3f, 1.f, 0.1f,
+    0.4f, 1.f, 0.8f,
+    0.5f, 1.f, 0.9f,
+    0.6f, 1.f, 0.2f,
+    0.7f, 1.f, 0.33f,
+    0.8f, 1.f, 0.4f,
+};
+
 FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     : IApplication(hinstance)
     , app_initialized(false)
@@ -129,6 +150,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     quad_rtv_descriptor_heap    = _pimpl_create_rtv_descriptor_heap(device, 2);
     srv_descriptor_heap         = _pimpl_create_srv_descriptor_heap(device, 2);
     dsv_descriptor_heap         = _pimpl_create_dsv_descriptor_heap(device, 2);
+    vs_srv_descriptor_heap      = _pimpl_create_srv_descriptor_heap(device, 2);
     _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap, backbuffers, 3);
     command_allocator           = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
     command_list_direct         = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -161,7 +183,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
         quad_rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart(), 
         srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
     );
-    scene_texture->set_clear_color(DirectX::XMFLOAT4(0.05f, 0.05f, 0.05f, 0.f));
+    scene_texture->set_clear_color(DirectX::XMFLOAT4(0.1f, 0.1f, 0.1f, 0.f));
     scene_texture->init(window_width, window_height);
 
     // For orthographic view texture
@@ -198,7 +220,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     command_queue->ExecuteCommandLists(1, command_lists);
     command_queue_signal(++fence_value);
     wait_for_fence(fence_value);
-
+    
     app_initialized = true;
 }
 
@@ -320,7 +342,7 @@ void FrustumCulling::render()
         );
 
         // Clear backbuffer
-        const FLOAT clear_color[] = { 0.1f, 0.1f, 0.1f, 1.f };
+        const FLOAT clear_color[] = { 0.7f, 0.7f, 0.7f, 1.f };
         command_list_direct->ClearRenderTargetView(
             backbuffer_rtv_handle.Offset(rtv_inc_size * backbuffer_idx),
             clear_color,
@@ -340,12 +362,12 @@ void FrustumCulling::render()
     // Record Scene
     command_list_direct->SetPipelineState(scene_pso.Get());
     command_list_direct->SetGraphicsRootSignature(scene_root_signature.Get());
+    command_list_direct->SetGraphicsRootShaderResourceView(1, instance_id_buffer->GetGPUVirtualAddress());
+    command_list_direct->SetGraphicsRootShaderResourceView(2, instance_data_buffer->GetGPUVirtualAddress());
     command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     D3D12_VERTEX_BUFFER_VIEW vb_views[] =
     {
         vertex_buffer_view,
-        instance_id_buffer_view,
-        instance_data_buffer_view
     };
     command_list_direct->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list_direct->RSSetViewports(1, &viewport0);
@@ -423,6 +445,7 @@ void FrustumCulling::update()
 {
     static uint32_t update_count = 0;
     static float elapsed_time_at_threshold = 0.f;
+    static float cull_time_at_threshold = 0.f;
     static auto t0 = std::chrono::high_resolution_clock::now();
     static float total_time = 0.f;
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -433,7 +456,7 @@ void FrustumCulling::update()
     float aspect_ratio = static_cast<float>(window_width) / static_cast<float>(window_height);
     const float scale_factor = 1.f;
     static float near_clip_distance = 0.1f;
-    static float far_clip_distance = 1000.f;
+    static float far_clip_distance = 2000.f;
     XMMATRIX model_matrix = XMMatrixScaling(scale_factor, scale_factor, scale_factor);
     XMMATRIX projection_matrix = XMMatrixPerspectiveFovLH(
         XMConvertToRadians(45.f),
@@ -544,8 +567,10 @@ void FrustumCulling::update()
             if (mask & (0x01 << k))
             {
                 int idx = i * 8 + k;
-                instance_vertex_offsets[j].displacement =
-                    copy_instance_vertex_offsets[idx].displacement;
+                instance_ids[j] = idx;
+                //instance_vertex_offsets[j].displacement =
+                //    copy_instance_vertex_offsets[idx].displacement;
+
                 ++j;
             } else
             {
@@ -554,26 +579,26 @@ void FrustumCulling::update()
         }
     }
     auto cull_t1 = std::chrono::high_resolution_clock::now();
-    auto cull_time = (cull_t1 - cull_t0).count() * 1e-6;
-
+    auto cull_time = (cull_t1 - cull_t0).count() * 1e-3;
+    
     n_visible_instances = n_instances - n_culled_objects;
     {
         D3D12_SUBRESOURCE_DATA data_desc = {};
-        data_desc.pData = instance_vertex_offsets.get();
-        data_desc.RowPitch = sizeof(InstanceDataFormat) * n_visible_instances;
-        data_desc.SlicePitch = sizeof(InstanceDataFormat) * n_visible_instances;
+        data_desc.pData = instance_ids.get();
+        data_desc.RowPitch = sizeof(UINT) * n_visible_instances;
+        data_desc.SlicePitch = sizeof(UINT) * n_visible_instances;
 
         transition_resource(
             command_list_direct,
-            instance_data_buffer.Get(),
+            instance_id_buffer.Get(),
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
             D3D12_RESOURCE_STATE_COPY_DEST
         );
 
         UpdateSubresources(
             command_list_direct.Get(),
-            instance_data_buffer.Get(),
-            instance_data_intermediate_resource.Get(),
+            instance_id_buffer.Get(),
+            instance_ids_intermediate_resource.Get(),
             0, 0, 1, &data_desc
         );
 
@@ -588,9 +613,9 @@ void FrustumCulling::update()
     text_output.resize(128);
     swprintf(
         text_output.data(), 
-        L"Frame time: %dms\nCull time: %dms\nNumber of cubes: %d\nCulled: %d\nVertices: %d", 
+        L"Frame time: %dms\nCull time: %dus\nNumber of cubes: %d\nCulled: %d\nVertices: %d", 
         static_cast<uint32_t>(elapsed_time_at_threshold * 1e3),
-        static_cast<uint32_t>(cull_time),
+        static_cast<uint32_t>(cull_time_at_threshold),
         n_instances,
         n_culled_objects,
         n_culled_objects * 36
@@ -608,6 +633,10 @@ void FrustumCulling::update()
     wait_for_fence(fence_value);
 
     update_count++;
+    if (update_count % 16 == 0)
+    {
+        cull_time_at_threshold = cull_time;
+    }
     if (update_count % 25 == 0)
     {
         elapsed_time_at_threshold = elapsed_time;
@@ -723,8 +752,7 @@ void FrustumCulling::load_scene_shader_assets()
         vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
-    // Instancing id buffer
-    
+    // Instancing ID SRV
     {
         // Instance vertex buffer
         ThrowIfFailed(device->CreateCommittedResource(
@@ -764,18 +792,31 @@ void FrustumCulling::load_scene_shader_assets()
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
-        instance_id_buffer_view.BufferLocation = instance_id_buffer->GetGPUVirtualAddress();
-        instance_id_buffer_view.SizeInBytes = sizeof(UINT) * n_instances;
-        instance_id_buffer_view.StrideInBytes = sizeof(UINT);
+        D3D12_BUFFER_SRV buffer_desc = {};
+        buffer_desc.FirstElement = 0;
+        buffer_desc.NumElements = n_instances;
+        buffer_desc.StructureByteStride = sizeof(UINT);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer = buffer_desc;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+        device->CreateShaderResourceView(
+            instance_id_buffer.Get(),
+            &srv_desc,
+            vs_srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+        );
     }
 
-    // Instance data buffer
+    // Instance data SRV
     {
         // Instance vertex buffer
         ThrowIfFailed(device->CreateCommittedResource(
             temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
             D3D12_HEAP_FLAG_NONE,
-            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(InstanceDataFormat) * n_instances)),
+            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(InstanceDataFormat)* n_instances)),
             D3D12_RESOURCE_STATE_COPY_DEST,
             nullptr,
             IID_PPV_ARGS(&instance_data_buffer)
@@ -809,9 +850,25 @@ void FrustumCulling::load_scene_shader_assets()
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
-        instance_data_buffer_view.BufferLocation = instance_data_buffer->GetGPUVirtualAddress();
-        instance_data_buffer_view.SizeInBytes = sizeof(InstanceDataFormat) * n_instances;
-        instance_data_buffer_view.StrideInBytes = sizeof(InstanceDataFormat);
+        D3D12_BUFFER_SRV buffer_desc = {};
+        buffer_desc.FirstElement = 0;
+        buffer_desc.NumElements = n_instances;
+        buffer_desc.StructureByteStride = sizeof(InstanceDataFormat);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer = buffer_desc;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+        CD3DX12_CPU_DESCRIPTOR_HANDLE cpu_handle(vs_srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
+        cpu_handle.Offset(device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+
+        device->CreateShaderResourceView(
+            instance_data_buffer.Get(),
+            &srv_desc,
+            cpu_handle
+        );
     }
 
     ComPtr<ID3DBlob> vs_blob;
@@ -833,18 +890,6 @@ void FrustumCulling::load_scene_shader_assets()
             "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
         },
-        {
-            "SV_InstanceID", 0, DXGI_FORMAT_R32_UINT, 1, D3D12_APPEND_ALIGNED_ELEMENT ,
-            D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1
-        },
-        {
-            "POSITION", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT ,
-            D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1
-        },
-        {
-            "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 2, D3D12_APPEND_ALIGNED_ELEMENT ,
-            D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1
-        }
     };
 
     D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
@@ -860,13 +905,18 @@ void FrustumCulling::load_scene_shader_assets()
         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-    CD3DX12_ROOT_PARAMETER1 root_parameters[2];
+    CD3DX12_ROOT_PARAMETER1 root_parameters[3];
     root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-    root_parameters[1].InitAsConstantBufferView(1);
+    root_parameters[1].InitAsShaderResourceView(0);
+    root_parameters[2].InitAsShaderResourceView(1);
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
     // TODO: Is this call correct, if the highest supported version is 1_0?
-    root_signature_desc.Init_1_1(2, root_parameters, 0, nullptr, root_signature_flags);
+    root_signature_desc.Init_1_1(
+        _countof(root_parameters), root_parameters, 
+        0, nullptr, 
+        root_signature_flags
+    );
 
     ComPtr<ID3DBlob> root_signature_blob;
     // TODO: What is the error blob=
@@ -1028,10 +1078,10 @@ void FrustumCulling::load_quad_shader_assets()
 
 void FrustumCulling::construct_scene()
 {
-    constexpr float xdim = 500.f;
-    constexpr float zdim = 500.f;
-    constexpr int cubes_per_row = 1000;
-    constexpr int cubes_per_column = 1000;
+    constexpr float xdim = 700.f;
+    constexpr float zdim = 700.f;
+    constexpr int cubes_per_row = 2000;
+    constexpr int cubes_per_column = 2000;
     constexpr float xdelta = xdim / cubes_per_row;
     constexpr float zdelta = zdim / cubes_per_column;
 
@@ -1051,7 +1101,7 @@ void FrustumCulling::construct_scene()
             instance_vertex_offsets[idx].displacement = XMFLOAT4(
                 xpos, ypos, zpos, 0.f
             );
-            instance_vertex_offsets[idx].color = XMFLOAT4(0.f, 1.f, 0.f, 1.f);
+            instance_vertex_offsets[idx].color = XMFLOAT4(0.2f, 1.f, 1.f, 1.f);
             instance_ids[idx] = idx;
 
             zpos += zdelta;
@@ -1090,7 +1140,7 @@ void FrustumCulling::construct_aabbs_avx2()
 
     for (int j = 0; j < n_instances / 8; ++j)
     {
-        AABBSIMD aabb;
+        AABB256 aabb;
         for (int k = 0; k < 8; ++k)
         {
             int i = j * 8 + k;
