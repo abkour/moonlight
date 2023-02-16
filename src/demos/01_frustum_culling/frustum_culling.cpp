@@ -122,16 +122,29 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     device                      = _pimpl_create_device(most_sutiable_adapter);
     command_queue               = _pimpl_create_command_queue(device);
     swap_chain                  = _pimpl_create_swap_chain(command_queue, window->width(), window->height());
-    rtv_descriptor_heap         = _pimpl_create_rtv_descriptor_heap(device, 3);
-    quad_rtv_descriptor_heap    = _pimpl_create_rtv_descriptor_heap(device, 2);
-    srv_descriptor_heap         = _pimpl_create_srv_descriptor_heap(device, 2);
-    dsv_descriptor_heap         = _pimpl_create_dsv_descriptor_heap(device, 2);
-    vs_srv_descriptor_heap      = _pimpl_create_srv_descriptor_heap(device, 2);
-    _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap, backbuffers, 3);
     command_allocator           = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
     command_list_direct         = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
     fence                       = _pimpl_create_fence(device);
     fence_event                 = _pimpl_create_fence_event();
+
+    rtv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 3
+    );
+    quad_rtv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2
+    );
+    dsv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 2
+    );
+    srv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2
+    );
+    vs_srv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2
+    );
+
+    _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap->get_underlying(), backbuffers, 3);
+
 
     scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
     viewport0 = CD3DX12_VIEWPORT(
@@ -144,8 +157,8 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     scene_texture = std::make_unique<RenderTexture>(DXGI_FORMAT_R8G8B8A8_UNORM);
     scene_texture->set_device(
         device.Get(),
-        quad_rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart(), 
-        srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+        quad_rtv_descriptor_heap->cpu_handle(), 
+        srv_descriptor_heap->cpu_handle()
     );
     scene_texture->set_clear_color(DirectX::XMFLOAT4(0.1f, 0.1f, 0.1f, 0.f));
     scene_texture->init(window->width(), window->height());
@@ -153,7 +166,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     load_assets();
     depth_buffer = _pimpl_create_dsv(
         device, 
-        dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart(), 
+        dsv_descriptor_heap->cpu_handle(), 
         window->width(), window->height()
     );
 
@@ -263,6 +276,63 @@ void FrustumCulling::on_mouse_move(LPARAM lparam)
     delete[] lpb;
 }
 
+void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list)
+{
+    uint8_t backbuffer_idx = swap_chain->GetCurrentBackBufferIndex();
+    auto backbuffer = backbuffers[backbuffer_idx];
+    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = dsv_descriptor_heap->cpu_handle();
+    UINT rtv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle = rtv_descriptor_heap->cpu_handle(backbuffer_idx);
+    // Transition SRV to RTV
+    scene_texture->transition_to_write_state(command_list);
+    auto rt_descriptor = scene_texture->get_rtv_descriptor();
+    scene_texture->clear(command_list);
+    //
+    // Record Scene
+    command_list->SetPipelineState(scene_pso.Get());
+    command_list->SetGraphicsRootSignature(scene_root_signature.Get());
+    command_list->SetGraphicsRootShaderResourceView(1, instance_id_buffer->gpu_virtual_address());
+    command_list->SetGraphicsRootShaderResourceView(2, instance_data_buffer->gpu_virtual_address());
+    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { vertex_buffer_view };
+    command_list->IASetVertexBuffers(0, _countof(vb_views), vb_views);
+    command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    command_list->RSSetViewports(1, &viewport0);
+    command_list->RSSetScissorRects(1, &scissor_rect);
+    command_list->OMSetRenderTargets(1, &rt_descriptor, FALSE, &dsv_handle);
+    command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
+    command_list->DrawInstanced(sizeof(vertices) / sizeof(VertexFormat), n_visible_instances, 0, 0);
+    // Transition RTV to SRV
+    scene_texture->transition_to_read_state(command_list);
+
+    //
+    // Render the scene texture to the first viewport
+    command_list->SetPipelineState(quad_pso.Get());
+    command_list->SetGraphicsRootSignature(quad_root_signature.Get());
+
+    ID3D12DescriptorHeap* heaps[] = { srv_descriptor_heap->get_underlying() };
+    command_list->SetDescriptorHeaps(1, heaps);
+    command_list->SetGraphicsRootDescriptorTable(
+        0, srv_descriptor_heap->gpu_handle()
+    );
+    command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    command_list->IASetVertexBuffers(0, 1, &quad_vertex_buffer_view);
+    command_list->RSSetScissorRects(1, &scissor_rect);
+    command_list->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, NULL);
+    command_list->DrawInstanced(sizeof(quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
+
+    //
+    // Render the glyphs
+    command_list->RSSetViewports(1, &viewport0);
+    ID3D12DescriptorHeap* font_heaps[] = { font_descriptor_heap->Heap() };
+    command_list->SetDescriptorHeaps(1, font_heaps);
+
+    XMFLOAT2 origin;
+    XMStoreFloat2(&origin, sprite_font->MeasureString(text_output.c_str()) / 2.f);
+    sprite_batch->Begin(command_list);
+    sprite_font->DrawString(sprite_batch.get(), text_output.c_str(), font_pos, Colors::White, 0.f, origin);
+    sprite_batch->End();
+}
+
 void FrustumCulling::render()
 {
     ThrowIfFailed(command_allocator->Reset());
@@ -270,11 +340,6 @@ void FrustumCulling::render()
 
     uint8_t backbuffer_idx = swap_chain->GetCurrentBackBufferIndex();
     auto backbuffer = backbuffers[backbuffer_idx];
-
-    CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
-    CD3DX12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle(rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
-    UINT rtv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
     // Clear
     {
         transition_resource(
@@ -287,63 +352,19 @@ void FrustumCulling::render()
         // Clear backbuffer
         const FLOAT clear_color[] = { 0.7f, 0.7f, 0.7f, 1.f };
         command_list_direct->ClearRenderTargetView(
-            backbuffer_rtv_handle.Offset(rtv_inc_size * backbuffer_idx),
+            rtv_descriptor_heap->cpu_handle(backbuffer_idx),
             clear_color,
             0,
             NULL
         );
 
-        command_list_direct->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, NULL);
+        command_list_direct->ClearDepthStencilView(
+            dsv_descriptor_heap->cpu_handle(), 
+            D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, NULL
+        );
     }
 
-    // Transition SRV to RTV
-    scene_texture->transition_to_write_state(command_list_direct.Get());
-    auto rt_descriptor = scene_texture->get_rtv_descriptor();
-    scene_texture->clear(command_list_direct.Get());
-    //
-    // Record Scene
-    command_list_direct->SetPipelineState(scene_pso.Get());
-    command_list_direct->SetGraphicsRootSignature(scene_root_signature.Get());
-    command_list_direct->SetGraphicsRootShaderResourceView(1, instance_id_buffer->gpu_virtual_address());
-    command_list_direct->SetGraphicsRootShaderResourceView(2, instance_data_buffer->gpu_virtual_address());
-    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { vertex_buffer_view };
-    command_list_direct->IASetVertexBuffers(0, _countof(vb_views), vb_views);
-    command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    command_list_direct->RSSetViewports(1, &viewport0);
-    command_list_direct->RSSetScissorRects(1, &scissor_rect);
-    command_list_direct->OMSetRenderTargets(1, &rt_descriptor, FALSE, &dsv_handle);
-    command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
-    command_list_direct->DrawInstanced(sizeof(vertices) / sizeof(VertexFormat), n_visible_instances, 0, 0);
-    // Transition RTV to SRV
-    scene_texture->transition_to_read_state(command_list_direct.Get());
-
-    //
-    // Render the scene texture to the first viewport
-    command_list_direct->SetPipelineState(quad_pso.Get());
-    command_list_direct->SetGraphicsRootSignature(quad_root_signature.Get());
-
-    ID3D12DescriptorHeap* heaps[] = { srv_descriptor_heap.Get() };
-    command_list_direct->SetDescriptorHeaps(1, heaps);
-    command_list_direct->SetGraphicsRootDescriptorTable(
-        0, srv_descriptor_heap->GetGPUDescriptorHandleForHeapStart()
-    );
-    command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    command_list_direct->IASetVertexBuffers(0, 1, &quad_vertex_buffer_view);
-    command_list_direct->RSSetScissorRects(1, &scissor_rect);
-    command_list_direct->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, NULL);
-    command_list_direct->DrawInstanced(sizeof(quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
-
-    //
-    // Render the glyphs
-    command_list_direct->RSSetViewports(1, &viewport0);
-    ID3D12DescriptorHeap* font_heaps[] = { font_descriptor_heap->Heap() };
-    command_list_direct->SetDescriptorHeaps(1, font_heaps);
-    
-    XMFLOAT2 origin;
-    XMStoreFloat2(&origin, sprite_font->MeasureString(text_output.c_str()) / 2.f);
-    sprite_batch->Begin(command_list_direct.Get());
-    sprite_font->DrawString(sprite_batch.get(), text_output.c_str(), font_pos, Colors::White, 0.f, origin);
-    sprite_batch->End();
+    record_command_list(command_list_direct.Get());
 
     // Present
     {
@@ -552,7 +573,7 @@ void FrustumCulling::initialize_font_rendering()
     //
     // Initialize descriptor heap for font
     {
-        font_descriptor_heap = std::make_unique<DescriptorHeap>(
+        font_descriptor_heap = std::make_unique<::DescriptorHeap>(
             device.Get(),
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
@@ -633,7 +654,7 @@ void FrustumCulling::load_scene_shader_assets()
         device->CreateShaderResourceView(
             instance_id_buffer->get_underlying(),
             &srv_desc,
-            vs_srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+            vs_srv_descriptor_heap->cpu_handle()
         );
     }
 
@@ -656,13 +677,10 @@ void FrustumCulling::load_scene_shader_assets()
         srv_desc.Format = DXGI_FORMAT_UNKNOWN;
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-        CD3DX12_CPU_DESCRIPTOR_HANDLE cpu_handle(vs_srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
-        cpu_handle.Offset(device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
-
         device->CreateShaderResourceView(
             instance_data_buffer->get_underlying(),
             &srv_desc,
-            cpu_handle
+            vs_srv_descriptor_heap->cpu_handle(1)
         );
     }
 

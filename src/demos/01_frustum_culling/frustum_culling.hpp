@@ -2,8 +2,9 @@
 #include "../../application.hpp"
 #include "../../camera.hpp"
 #include "../../simple_math.hpp"
-#include "../../dx12_resource.hpp"
-#include "../../render_texture.hpp"
+#include "../../core/descriptor_heap.hpp"
+#include "../../core/dx12_resource.hpp"
+#include "../../core/render_texture.hpp"
 #include "../../math/aabb.hpp"
 #include "../../math/primitive_tests.hpp"
 #include "../../utility/arena_allocator.hpp"
@@ -35,16 +36,20 @@ public:
 
 private:
 
+    void record_command_list(ID3D12GraphicsCommandList* command_list);
+    
+private:
+
     ArenaAllocator arena;
 
     Microsoft::WRL::ComPtr<ID3D12Device2> device;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue;
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_descriptor_heap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> quad_rtv_descriptor_heap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_descriptor_heap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> vs_srv_descriptor_heap;
+    std::unique_ptr<DescriptorHeap> rtv_descriptor_heap;
+    std::unique_ptr<DescriptorHeap> quad_rtv_descriptor_heap;
+    std::unique_ptr<DescriptorHeap> dsv_descriptor_heap;
+    std::unique_ptr<DescriptorHeap> srv_descriptor_heap;
+    std::unique_ptr<DescriptorHeap> vs_srv_descriptor_heap;
     Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> backbuffers[3];
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator;
@@ -109,10 +114,6 @@ private:
     std::size_t n_visible_instances;
     std::unique_ptr<InstanceDataFormat[]> instance_vertex_offsets;
     std::unique_ptr<UINT[]> instance_ids;
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertex_intermediate_resource;
-    Microsoft::WRL::ComPtr<ID3D12Resource> instance_ids_intermediate_resource;
-    Microsoft::WRL::ComPtr<ID3D12Resource> instance_data_intermediate_resource;
 
 private:
 

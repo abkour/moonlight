@@ -86,7 +86,7 @@ protected:
     virtual void _pimpl_create_backbuffers(
         Microsoft::WRL::ComPtr<ID3D12Device2> device,
         Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain,
-        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptor_heap,
+        ID3D12DescriptorHeap* descriptor_heap,
         Microsoft::WRL::ComPtr<ID3D12Resource>* backbuffers,
         uint8_t n_backbuffers
     );

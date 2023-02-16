@@ -1,7 +1,7 @@
 #pragma once
-#include "../ext/d3dx12.h"
-#include "helpers.h"
-#include "project_defines.hpp"
+#include "../../ext/d3dx12.h"
+#include "../helpers.h"
+#include "../project_defines.hpp"
 
 #include <d3d12.h>
 #include <dxgi1_6.h>

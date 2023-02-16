@@ -345,7 +345,7 @@ ComPtr<ID3D12Resource> IApplication::_pimpl_create_dsv(
 void IApplication::_pimpl_create_backbuffers(
     ComPtr<ID3D12Device2> device,
     ComPtr<IDXGISwapChain4> swap_chain,
-    ComPtr<ID3D12DescriptorHeap> descriptor_heap,
+    ID3D12DescriptorHeap* descriptor_heap,
     ComPtr<ID3D12Resource>* backbuffers,
     uint8_t n_backbuffers)
 {

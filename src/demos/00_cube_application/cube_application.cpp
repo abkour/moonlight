@@ -85,7 +85,7 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
     command_queue = _pimpl_create_command_queue(device);
     swap_chain = _pimpl_create_swap_chain(command_queue, window_width, window_height);
     rtv_descriptor_heap = _pimpl_create_rtv_descriptor_heap(device, 3);
-    _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap, backbuffers, 3);
+    _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap.Get(), backbuffers, 3);
     dsv_descriptor_heap = _pimpl_create_dsv_descriptor_heap(device, 1);
     srv_descriptor_heap = _pimpl_create_srv_descriptor_heap(device, 1);
     command_allocator = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);

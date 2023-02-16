@@ -10,10 +10,10 @@ add_executable (moonlight WIN32
 	"demos/00_cube_application/cube_application.cpp"
 	"demos/01_frustum_culling/frustum_culling.cpp"
 	"camera.cpp" 
-	"render_texture.cpp" 
-	"dx12_resource.cpp"  
+	"core/render_texture.cpp" 
+	"core/dx12_resource.cpp"  
 	"utility/arena_allocator.cpp"
-)
+ "core/descriptor_heap.cpp")
 
 if (MSVC)
 set_target_properties(${BUILD_TARGET} PROPERTIES LINK_FLAGS "/PROFILE")
