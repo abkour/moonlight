@@ -13,6 +13,12 @@ T* temp_address(T&& rval)
     return &rval;
 }
 
+struct InstanceDataFormat
+{
+    DirectX::XMFLOAT4 displacement;
+    DirectX::XMFLOAT4 color;
+};
+
 static struct ScenePipelineStateStream
 {
     CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
@@ -114,7 +120,6 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
         this
     );
 
-    APressed = DPressed = SPressed = WPressed = false;
     SetCursor(NULL);
     initialize_raw_input_devices();
 
@@ -211,48 +216,6 @@ void FrustumCulling::initialize_raw_input_devices()
     rids[0].hwndTarget = 0;
 
     ThrowIfFailed(RegisterRawInputDevices(rids, 1, sizeof(rids[0])));
-}
-
-void FrustumCulling::on_key_down(WPARAM wparam)
-{
-    switch (wparam)
-    {
-    case 'A':
-        APressed = true;
-        break;
-    case 'D':
-        DPressed = true;
-        break;
-    case 'S':
-        SPressed = true;
-        break;
-    case 'W':
-        WPressed = true;
-        break;
-    default:
-        break;
-    }
-}
-
-void FrustumCulling::on_key_up(WPARAM wparam)
-{
-    switch (wparam)
-    {
-    case 'A':
-        APressed = false;
-        break;
-    case 'D':
-        DPressed = false;
-        break;
-    case 'S':
-        SPressed = false;
-        break;
-    case 'W':
-        WPressed = false;
-        break;
-    default:
-        break;
-    }
 }
 
 void FrustumCulling::on_mouse_move(LPARAM lparam)
@@ -419,12 +382,7 @@ void FrustumCulling::update()
         far_clip_distance
     );
 
-    uint32_t keycode = 0;
-    keycode += (uint32_t)WPressed << 3;
-    keycode += (uint32_t)SPressed << 2;
-    keycode += (uint32_t)DPressed << 1;
-    keycode += (uint32_t)APressed;
-    camera.translate(keycode, elapsed_time);
+    camera.translate(keys, elapsed_time);
     mvp_matrix = XMMatrixMultiply(model_matrix, camera.view);
     mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
 
@@ -453,7 +411,7 @@ void FrustumCulling::update()
         }
     };
     
-    alignas(32) FrustumSIMD frustum_avx2;
+    FrustumSIMD frustum_avx2;
     float_set(frustum_avx2.normals[0].nx, frustum.near.normal.x, 8);
     float_set(frustum_avx2.normals[0].ny, frustum.near.normal.y, 8);
     float_set(frustum_avx2.normals[0].nz, frustum.near.normal.z, 8);
@@ -473,7 +431,7 @@ void FrustumCulling::update()
     float_set(frustum_avx2.normals[5].ny, frustum.top.normal.y, 8);
     float_set(frustum_avx2.normals[5].nz, frustum.top.normal.z, 8);
 
-    alignas(32) FrustumSIMD abs_frustum_avx2;
+    FrustumSIMD abs_frustum_avx2;
     float_set(abs_frustum_avx2.normals[0].nx, std::abs(frustum.near.normal.x), 8);
     float_set(abs_frustum_avx2.normals[0].ny, std::abs(frustum.near.normal.y), 8);
     float_set(abs_frustum_avx2.normals[0].nz, std::abs(frustum.near.normal.z), 8);
@@ -880,8 +838,8 @@ void FrustumCulling::construct_scene()
 {
     constexpr float xdim = 700.f;
     constexpr float zdim = 700.f;
-    constexpr int cubes_per_row = 2000;
-    constexpr int cubes_per_column = 2000;
+    constexpr int cubes_per_row = 300;
+    constexpr int cubes_per_column = 300;
     constexpr float xdelta = xdim / cubes_per_row;
     constexpr float zdelta = zdim / cubes_per_column;
 

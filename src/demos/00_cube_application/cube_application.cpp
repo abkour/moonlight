@@ -118,9 +118,6 @@ bool CubeApplication::is_application_initialized()
     return app_initialized;
 }
 
-void CubeApplication::on_key_down(WPARAM wparam)
-{}
-
 void CubeApplication::update()
 {
     static auto t0 = std::chrono::high_resolution_clock::now();

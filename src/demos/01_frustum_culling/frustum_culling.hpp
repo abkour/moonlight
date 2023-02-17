@@ -16,6 +16,8 @@
 namespace moonlight
 {
 
+struct InstanceDataFormat;
+
 class FrustumCulling : public IApplication
 {
 
@@ -27,8 +29,6 @@ public:
     bool is_application_initialized() override;
 
     void flush() override;
-    void on_key_down(WPARAM wparam) override;
-    void on_key_up(WPARAM wparam) override;
     void on_mouse_move(LPARAM lparam) override;
     void render() override;
     void resize() override;
@@ -37,49 +37,11 @@ public:
 private:
 
     void record_command_list(ID3D12GraphicsCommandList* command_list);
-    
-private:
-
-    ArenaAllocator arena;
-
-    Microsoft::WRL::ComPtr<ID3D12Device2> device;
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue;
-    Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain;
-    std::unique_ptr<DescriptorHeap> rtv_descriptor_heap;
-    std::unique_ptr<DescriptorHeap> quad_rtv_descriptor_heap;
-    std::unique_ptr<DescriptorHeap> dsv_descriptor_heap;
-    std::unique_ptr<DescriptorHeap> srv_descriptor_heap;
-    std::unique_ptr<DescriptorHeap> vs_srv_descriptor_heap;
-    Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
-    Microsoft::WRL::ComPtr<ID3D12Resource> backbuffers[3];
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator;
-    Microsoft::WRL::ComPtr<ID3D12CommandList> command_list_copy;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_direct;
-    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> scene_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> scene_pso;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> quad_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> quad_pso;
-    std::unique_ptr<DX12Resource> vertex_buffer;
-    std::unique_ptr<DX12Resource> quad_vertex_buffer;
-    std::unique_ptr<DX12Resource> instance_id_buffer;
-    std::unique_ptr<DX12Resource> instance_data_buffer;
-    D3D12_VERTEX_BUFFER_VIEW instance_data_buffer_view;
-
-    uint64_t fence_value;
-    HANDLE fence_event;
-    D3D12_VIEWPORT viewport0;
-    D3D12_RECT scissor_rect;
-    D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
-    D3D12_VERTEX_BUFFER_VIEW quad_vertex_buffer_view;
-
-    DirectX::XMMATRIX mvp_matrix;
-    bool app_initialized;
-
     void load_assets();
     void load_scene_shader_assets();
     void load_quad_shader_assets();
     void initialize_font_rendering();
+    void initialize_raw_input_devices();
     void construct_aabbs();
     void construct_scene();
 
@@ -94,20 +56,43 @@ private:
     void flush_command_queue();
     void wait_for_fence(uint64_t fence_value);
 
-    std::unique_ptr<RenderTexture> scene_texture;
+private:
 
-    bool APressed, DPressed, SPressed, WPressed;
+    bool app_initialized;
 
-    //std::vector<AABB> aabbs;
-    alignas(32) std::vector<AABB256> aabbs;
+    Microsoft::WRL::ComPtr<ID3D12Device2> device;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue;
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain;
+    Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> backbuffers[3];
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_direct;
+    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> scene_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> scene_pso;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> quad_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> quad_pso;
+    std::unique_ptr<DescriptorHeap> rtv_descriptor_heap;
+    std::unique_ptr<DescriptorHeap> quad_rtv_descriptor_heap;
+    std::unique_ptr<DescriptorHeap> dsv_descriptor_heap;
+    std::unique_ptr<DescriptorHeap> srv_descriptor_heap;
+    std::unique_ptr<DescriptorHeap> vs_srv_descriptor_heap;
+    std::unique_ptr<DX12Resource> vertex_buffer;
+    std::unique_ptr<DX12Resource> quad_vertex_buffer;
+    std::unique_ptr<DX12Resource> instance_id_buffer;
+    std::unique_ptr<DX12Resource> instance_data_buffer;
+
+    uint64_t fence_value;
+    HANDLE fence_event;
+    D3D12_VIEWPORT viewport0;
+    D3D12_RECT scissor_rect;
+    D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
+    D3D12_VERTEX_BUFFER_VIEW quad_vertex_buffer_view;
 
     Camera camera;
-
-    struct InstanceDataFormat
-    {
-        DirectX::XMFLOAT4 displacement;
-        DirectX::XMFLOAT4 color;
-    };
+    DirectX::XMMATRIX mvp_matrix;
+    std::unique_ptr<RenderTexture> scene_texture;
+    std::vector<AABB256> aabbs;
 
     // The buffer has to be 256-byte aligned to satisfy D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.
     std::size_t n_instances;
@@ -115,10 +100,6 @@ private:
     std::unique_ptr<InstanceDataFormat[]> instance_vertex_offsets;
     std::unique_ptr<UINT[]> instance_ids;
 
-private:
-
-    // Mouse/Keyboard controls
-    void initialize_raw_input_devices();
     float elapsed_time = 0.f;
 
 private:

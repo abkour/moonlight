@@ -15,8 +15,6 @@ public:
 
     void flush() override;
 
-    void on_key_down(WPARAM wparam) override;
-
     void update() override;
 
     void render() override;

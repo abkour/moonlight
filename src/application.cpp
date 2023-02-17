@@ -78,7 +78,7 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
                 app->window->flip_fullscreen();
                 break;
             default:
-                app->on_key_down(wParam);
+                app->keys.set(wParam);
                 break;
             }
         }
@@ -87,7 +87,7 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
             app->on_mouse_move(lParam);
             break;
         case WM_KEYUP:
-            app->on_key_up(wParam);
+            app->keys.reset(wParam);
             break;
         case WM_SYSCHAR:
             break;

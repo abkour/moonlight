@@ -1,8 +1,10 @@
 #pragma once
 #include "../ext/d3dx12.h"
+#include "core/key_state.hpp"
 #include "project_defines.hpp"
 #include "window.hpp"
 
+#include <bitset>
 #include <Windows.h>
 
 #include <d3d12.h>
@@ -29,8 +31,6 @@ public:
 
     virtual void flush() = 0;
 
-    virtual void on_key_down(WPARAM wparam) = 0;
-    virtual void on_key_up(WPARAM wparam) = 0;
     virtual void on_mouse_move(LPARAM lparam) = 0;
 
     virtual void update() = 0;
@@ -117,6 +117,7 @@ protected:
 protected:
 
     std::unique_ptr<Window> window;
+    KeyState keys;
 };
 
 }

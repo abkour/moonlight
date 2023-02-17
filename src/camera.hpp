@@ -1,4 +1,5 @@
 #pragma once
+#include "core/key_state.hpp"
 #include "simple_math.hpp"
 #include <Windows.h>
 #include <DirectXMath.h>
@@ -15,9 +16,7 @@ struct Camera
     );
 
     void rotate(float dx, float dy);
-    // The keycode is a 32-bit unsigned integer that contains a bitmask of the 
-    // 4 supported keystrokes (A, D, S, W) with the respective bits (0, 1, 2, 3)
-    void translate(uint32_t keycode, float delta_time);
+    void translate(KeyState keys, float delta_time);
     void translate(DirectX::XMVECTOR pos_offset);
 
     DirectX::XMFLOAT3 get_direction() const

@@ -52,7 +52,7 @@ void Camera::rotate(float dx, float dy)
     XMStoreFloat3(&eye_direction, eye_direction_xmv);
 }
 
-void Camera::translate(uint32_t keycode, float delta_time)
+void Camera::translate(KeyState keys, float delta_time)
 {
     XMVECTOR world_up = XMVectorSet(0, 1, 0, 0);
     XMVECTOR eye_position_xmv = XMLoadFloat3(&eye_position);
@@ -64,13 +64,13 @@ void Camera::translate(uint32_t keycode, float delta_time)
     const float ms_v = movement_speed * delta_time;
     XMVECTOR ms = XMVectorSet(ms_v, ms_v, ms_v, ms_v);
     
-    if(keycode & 0x08)  // 'W'
+    if(keys['W'])  // 'W'
         eye_position_xmv = XMVectorAdd(eye_position_xmv, XMVectorMultiply(eye_direction_xmv, ms));
-    if(keycode & 0x04)  // 'S'
+    if(keys['S'])  // 'S'
         eye_position_xmv = XMVectorSubtract(eye_position_xmv, XMVectorMultiply(eye_direction_xmv, ms));
-    if(keycode & 0x01)  // 'A'
+    if(keys['A'])  // 'A'
         eye_position_xmv = XMVectorAdd(eye_position_xmv, XMVectorMultiply(right, ms));
-    if(keycode & 0x02)  // 'D'
+    if(keys['D'])  // 'D'
         eye_position_xmv = XMVectorSubtract(eye_position_xmv, XMVectorMultiply(right, ms));
     
     view = XMMatrixLookAtLH(eye_position_xmv, eye_position_xmv + eye_direction_xmv, world_up);
