@@ -67,18 +67,6 @@ inline bool frustum_contains_aabb(const Plane* planes, const AABB& aabb, float* 
     return true;
 }
 
-struct alignas(32) PlaneSIMD
-{
-    float nx[8];
-    float ny[8];
-    float nz[8];
-};
-
-struct alignas(32) FrustumSIMD
-{
-    PlaneSIMD normals[6];
-};
-
 // Perform 8 AABB intersection tests against @frustum.
 // See description for avx2 version
 inline uint8_t frustum_contains_aabb_sse4(

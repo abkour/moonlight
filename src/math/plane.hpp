@@ -23,4 +23,11 @@ static int point_plane_intersection(const Plane& plane, const Vector3& p)
     return 0;
 }
 
+struct alignas(32) PlaneSIMD
+{
+    float nx[8];
+    float ny[8];
+    float nz[8];
+};
+
 }

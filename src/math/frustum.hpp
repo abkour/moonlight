@@ -124,4 +124,9 @@ inline bool frustum_contains_point(const Frustum& frustum, const Vector3& point)
     return true;
 }
 
+struct alignas(32) FrustumSIMD
+{
+    PlaneSIMD normals[6];
+};
+
 }
