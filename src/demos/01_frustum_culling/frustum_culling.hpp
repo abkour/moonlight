@@ -1,5 +1,6 @@
 #pragma once 
 #include "../common/scene.hpp"
+#include "../common/shader.hpp"
 #include "../../application.hpp"
 #include "../../camera.hpp"
 #include "../../simple_math.hpp"
@@ -42,7 +43,6 @@ private:
     void load_quad_shader_assets();
     void initialize_font_rendering();
     void initialize_raw_input_devices();
-    void construct_aabbs();
 
     void transition_resource(
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>,

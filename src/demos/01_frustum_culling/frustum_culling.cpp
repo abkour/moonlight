@@ -43,7 +43,7 @@ struct VertexFormat
     XMFLOAT2 t;
 };
 
-static float vertices[] = {
+static float interleaved_cube_vertices[] = {
     -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
      0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
      0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
@@ -87,7 +87,7 @@ static float vertices[] = {
     -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
 };
 
-static float quad_vertices[] =
+static float interleaved_quad_vertices[] =
 {
     -1.f, -1.f, 0.f,    0.f, 0.f,
     1.f, -1.f, 0.f,     1.f, 0.f,
@@ -259,7 +259,7 @@ void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list
     auto rt_descriptor = scene_texture->get_rtv_descriptor();
     scene_texture->clear(command_list);
     //
-    // Record Scene
+    // Render Scene to Texture
     command_list->SetPipelineState(scene_pso.Get());
     command_list->SetGraphicsRootSignature(scene_root_signature.Get());
     command_list->SetGraphicsRootShaderResourceView(1, instance_id_buffer->gpu_virtual_address());
@@ -271,7 +271,7 @@ void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list
     command_list->RSSetScissorRects(1, &scissor_rect);
     command_list->OMSetRenderTargets(1, &rt_descriptor, FALSE, &dsv_handle);
     command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
-    command_list->DrawInstanced(sizeof(vertices) / sizeof(VertexFormat), n_visible_instances, 0, 0);
+    command_list->DrawInstanced(sizeof(interleaved_cube_vertices) / sizeof(VertexFormat), n_visible_instances, 0, 0);
     // Transition RTV to SRV
     scene_texture->transition_to_read_state(command_list);
 
@@ -289,7 +289,7 @@ void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list
     command_list->IASetVertexBuffers(0, 1, &quad_vertex_buffer_view);
     command_list->RSSetScissorRects(1, &scissor_rect);
     command_list->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, NULL);
-    command_list->DrawInstanced(sizeof(quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
+    command_list->DrawInstanced(sizeof(interleaved_quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
 
     //
     // Render the glyphs
@@ -536,14 +536,26 @@ void FrustumCulling::load_assets()
     {
         instance_ids[i] = i;
     }
-    instance_vertex_offsets = construct_scene_of_cubes(
+    instance_vertex_offsets = std::make_unique<InstanceAttributes[]>(n_instances);
+    construct_scene_of_cubes(
+        instance_vertex_offsets.get(),
         scene_xdim, scene_ydim, 
         n_cubes_per_row, n_cubes_per_column
     );
     initialize_font_rendering();
     load_scene_shader_assets();
     load_quad_shader_assets();
-    construct_aabbs();
+    
+    const uint32_t n_vertices = sizeof(interleaved_cube_vertices) / sizeof(VertexFormat);
+    aabbs.resize(n_instances / 8);
+    construct_instanced_aabbs(
+        aabbs.data(), 
+        n_instances / 8,
+        interleaved_cube_vertices,
+        sizeof(interleaved_cube_vertices) / sizeof(VertexFormat),
+        sizeof(VertexFormat),
+        instance_vertex_offsets.get()
+    );
 }
 
 void FrustumCulling::initialize_font_rendering()
@@ -605,10 +617,12 @@ void FrustumCulling::load_scene_shader_assets()
     // Vertex buffer uploading
     {
         vertex_buffer = std::make_unique<DX12Resource>();
-        vertex_buffer->upload(device.Get(), command_list_direct.Get(), vertices, sizeof(vertices));
+        vertex_buffer->upload(device.Get(), command_list_direct.Get(), 
+            interleaved_cube_vertices, sizeof(interleaved_cube_vertices)
+        );
 
         vertex_buffer_view.BufferLocation = vertex_buffer->gpu_virtual_address();
-        vertex_buffer_view.SizeInBytes = sizeof(vertices);
+        vertex_buffer_view.SizeInBytes = sizeof(interleaved_cube_vertices);
         vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
@@ -673,17 +687,8 @@ void FrustumCulling::load_scene_shader_assets()
         ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
     }
 
-    D3D12_INPUT_ELEMENT_DESC input_layout[] =
-    {
-        {
-            "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
-        },
-        {
-            "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
-        },
-    };
+    D3D12_INPUT_ELEMENT_DESC input_layout[2];
+    construct_input_layout_v_t(input_layout);
 
     D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
     feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -762,11 +767,11 @@ void FrustumCulling::load_quad_shader_assets()
         quad_vertex_buffer = std::make_unique<DX12Resource>();
         quad_vertex_buffer->upload(
             device.Get(), command_list_direct.Get(), 
-            quad_vertices, sizeof(quad_vertices)
+            interleaved_quad_vertices, sizeof(interleaved_quad_vertices)
         );
 
         quad_vertex_buffer_view.BufferLocation = quad_vertex_buffer->gpu_virtual_address();
-        quad_vertex_buffer_view.SizeInBytes = sizeof(quad_vertices);
+        quad_vertex_buffer_view.SizeInBytes = sizeof(interleaved_quad_vertices);
         quad_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
@@ -778,18 +783,8 @@ void FrustumCulling::load_quad_shader_assets()
         ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
         ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
     }
-
-    D3D12_INPUT_ELEMENT_DESC input_layout[] =
-    {
-        {
-            "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
-        },
-        {
-            "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
-        }
-    };
+    D3D12_INPUT_ELEMENT_DESC input_layout[2];
+    construct_input_layout_v_t(input_layout);
 
     D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
     feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -854,43 +849,6 @@ void FrustumCulling::load_quad_shader_assets()
     };
 
     ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&quad_pso)));
-}
-
-void FrustumCulling::construct_aabbs()
-{
-    const uint32_t n_vertices = sizeof(vertices) / sizeof(VertexFormat);
-
-    // Prepare the data first, magical/phantastical numbers! (do you write that word with ph or f, not sure, probably f)
-    float intermediate_buffer[n_vertices * 3];
-    for (int i = 0; i < n_vertices; ++i)
-    {
-        intermediate_buffer[i * 3] = vertices[i * 5];
-        intermediate_buffer[i * 3 + 1] = vertices[i * 5 + 1];
-        intermediate_buffer[i * 3 + 2] = vertices[i * 5 + 2];
-    }
-
-    AABB os_aabb = construct_aabb_from_points(
-        reinterpret_cast<Vector3*>(intermediate_buffer),
-        n_vertices
-    );
-
-    aabbs.reserve(n_instances / 8);
-
-    for (int j = 0; j < n_instances / 8; ++j)
-    {
-        AABB256 aabb;
-        for (int k = 0; k < 8; ++k)
-        {
-            int i = j * 8 + k;
-            aabb.bmin_x[k] = os_aabb.bmin.x + instance_vertex_offsets[i].displacement.x;
-            aabb.bmin_y[k] = os_aabb.bmin.y + instance_vertex_offsets[i].displacement.y;
-            aabb.bmin_z[k] = os_aabb.bmin.z + instance_vertex_offsets[i].displacement.z;
-            aabb.bmax_x[k] = os_aabb.bmax.x + instance_vertex_offsets[i].displacement.x;
-            aabb.bmax_y[k] = os_aabb.bmax.y + instance_vertex_offsets[i].displacement.y;
-            aabb.bmax_z[k] = os_aabb.bmax.z + instance_vertex_offsets[i].displacement.z;
-        }
-        aabbs.emplace_back(aabb);
-    }
 }
 
 void FrustumCulling::transition_resource(

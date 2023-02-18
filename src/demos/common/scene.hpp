@@ -12,15 +12,13 @@ struct InstanceAttributes
     DirectX::XMFLOAT4 color;
 };
 
-inline std::unique_ptr<InstanceAttributes[]> construct_scene_of_cubes(
+inline void construct_scene_of_cubes(
+    InstanceAttributes* instance_array,
     const float xdim,
     const float zdim,
     const float cubes_per_row,
     const float cubes_per_column)
 {
-    std::unique_ptr<InstanceAttributes[]> instance_array =
-        std::make_unique<InstanceAttributes[]>(cubes_per_row * cubes_per_column);
-
     const float xdelta = xdim / cubes_per_row;
     const float zdelta = zdim / cubes_per_column;
     float xpos = -xdim / 2.f;
@@ -40,8 +38,6 @@ inline std::unique_ptr<InstanceAttributes[]> construct_scene_of_cubes(
 
         xpos += xdelta;
     }
-
-    return instance_array;
 }
 
 }

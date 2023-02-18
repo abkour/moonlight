@@ -67,16 +67,6 @@ inline bool frustum_contains_aabb(const Plane* planes, const AABB& aabb, float* 
     return true;
 }
 
-struct alignas(32) AABB256
-{
-    float bmin_x[8];
-    float bmax_x[8];
-    float bmin_y[8];
-    float bmax_y[8];
-    float bmin_z[8];
-    float bmax_z[8];
-};
-
 struct alignas(32) PlaneSIMD
 {
     float nx[8];
