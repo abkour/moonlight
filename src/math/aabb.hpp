@@ -64,16 +64,16 @@ struct alignas(32) AABB256
 
 inline void construct_instanced_aabbs(
     AABB256* aabbs, uint32_t n_aabbs256,
-    const float* cube_vertices,
-    const uint32_t n_cube_vertices,
-    const uint32_t cube_vertex_format_stride,
-    const InstanceAttributes* instance_data,
+    const float* inputvertices,
+    const uint32_t n_input_vertices,
+    const uint32_t input_vertex_format_stride,
+    const float* instance_data,
     const uint32_t instance_data_stride)
 {
     AABB os_aabb = construct_aabb_from_points(
-        cube_vertices,
-        n_cube_vertices,
-        cube_vertex_format_stride
+        inputvertices,
+        n_input_vertices,
+        input_vertex_format_stride
     );
 
     for (int j = 0; j < n_aabbs256; ++j)
@@ -81,7 +81,7 @@ inline void construct_instanced_aabbs(
         for (int k = 0; k < 8; ++k)
         {
             int i = j * 8 + k;
-            Vector3* displacement = (Vector3*)((uint8_t*)instance_data + (i * instance_data_stride));
+            const Vector3* displacement = (Vector3*)((uint8_t*)instance_data + (i * instance_data_stride));
             aabbs[j].bmin_x[k] = os_aabb.bmin.x + displacement->x;
             aabbs[j].bmin_y[k] = os_aabb.bmin.y + displacement->y;
             aabbs[j].bmin_z[k] = os_aabb.bmin.z + displacement->z;

@@ -554,7 +554,7 @@ void FrustumCulling::load_assets()
         interleaved_cube_vertices,
         sizeof(interleaved_cube_vertices) / sizeof(VertexFormat),
         sizeof(VertexFormat),
-        instance_vertex_offsets.get(),
+        reinterpret_cast<float*>(instance_vertex_offsets.get()),
         sizeof(InstanceAttributes)
     );
 }
