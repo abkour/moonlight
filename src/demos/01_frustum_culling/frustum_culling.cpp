@@ -411,6 +411,20 @@ void FrustumCulling::update()
         far_clip_distance
     );
 
+    Frustum abs_frustum;
+    std::memcpy(&abs_frustum, &frustum, sizeof(Frustum));
+
+    {
+        // Compute absolute value of each component in the frustum to initialize
+        // an "abs_frustum".
+        const int n_frustum_floats = sizeof(Frustum) / sizeof(float);
+        float* frustum_cast = (float*)&abs_frustum;
+        for (int i = 0; i < n_frustum_floats; ++i)
+        {
+            frustum_cast[i] = std::abs(frustum_cast[i]);
+        }
+    }
+
     auto float_set = [](float* arr, float val, int size) 
     {
         for (int i = 0; i < size; ++i)
@@ -419,45 +433,8 @@ void FrustumCulling::update()
         }
     };
     
-    FrustumSIMD frustum_avx2;
-    float_set(frustum_avx2.normals[0].nx, frustum.near.normal.x, 8);
-    float_set(frustum_avx2.normals[0].ny, frustum.near.normal.y, 8);
-    float_set(frustum_avx2.normals[0].nz, frustum.near.normal.z, 8);
-    float_set(frustum_avx2.normals[1].nx, frustum.far.normal.x, 8);
-    float_set(frustum_avx2.normals[1].ny, frustum.far.normal.y, 8);
-    float_set(frustum_avx2.normals[1].nz, frustum.far.normal.z, 8);
-    float_set(frustum_avx2.normals[2].nx, frustum.left.normal.x, 8);
-    float_set(frustum_avx2.normals[2].ny, frustum.left.normal.y, 8);
-    float_set(frustum_avx2.normals[2].nz, frustum.left.normal.z, 8);
-    float_set(frustum_avx2.normals[3].nx, frustum.right.normal.x, 8);
-    float_set(frustum_avx2.normals[3].ny, frustum.right.normal.y, 8);
-    float_set(frustum_avx2.normals[3].nz, frustum.right.normal.z, 8);
-    float_set(frustum_avx2.normals[4].nx, frustum.bottom.normal.x, 8);
-    float_set(frustum_avx2.normals[4].ny, frustum.bottom.normal.y, 8);
-    float_set(frustum_avx2.normals[4].nz, frustum.bottom.normal.z, 8);
-    float_set(frustum_avx2.normals[5].nx, frustum.top.normal.x, 8);
-    float_set(frustum_avx2.normals[5].ny, frustum.top.normal.y, 8);
-    float_set(frustum_avx2.normals[5].nz, frustum.top.normal.z, 8);
-
-    FrustumSIMD abs_frustum_avx2;
-    float_set(abs_frustum_avx2.normals[0].nx, std::abs(frustum.near.normal.x), 8);
-    float_set(abs_frustum_avx2.normals[0].ny, std::abs(frustum.near.normal.y), 8);
-    float_set(abs_frustum_avx2.normals[0].nz, std::abs(frustum.near.normal.z), 8);
-    float_set(abs_frustum_avx2.normals[1].nx, std::abs(frustum.far.normal.x), 8);
-    float_set(abs_frustum_avx2.normals[1].ny, std::abs(frustum.far.normal.y), 8);
-    float_set(abs_frustum_avx2.normals[1].nz, std::abs(frustum.far.normal.z), 8);
-    float_set(abs_frustum_avx2.normals[2].nx, std::abs(frustum.left.normal.x), 8);
-    float_set(abs_frustum_avx2.normals[2].ny, std::abs(frustum.left.normal.y), 8);
-    float_set(abs_frustum_avx2.normals[2].nz, std::abs(frustum.left.normal.z), 8);
-    float_set(abs_frustum_avx2.normals[3].nx, std::abs(frustum.right.normal.x), 8);
-    float_set(abs_frustum_avx2.normals[3].ny, std::abs(frustum.right.normal.y), 8);
-    float_set(abs_frustum_avx2.normals[3].nz, std::abs(frustum.right.normal.z), 8);
-    float_set(abs_frustum_avx2.normals[4].nx, std::abs(frustum.bottom.normal.x), 8);
-    float_set(abs_frustum_avx2.normals[4].ny, std::abs(frustum.bottom.normal.y), 8);
-    float_set(abs_frustum_avx2.normals[4].nz, std::abs(frustum.bottom.normal.z), 8);
-    float_set(abs_frustum_avx2.normals[5].nx, std::abs(frustum.top.normal.x), 8);
-    float_set(abs_frustum_avx2.normals[5].ny, std::abs(frustum.top.normal.y), 8);
-    float_set(abs_frustum_avx2.normals[5].nz, std::abs(frustum.top.normal.z), 8);
+    FrustumSIMD frustum_avx2 = construct_frustumSIMD_from_frustum(frustum);
+    FrustumSIMD abs_frustum_avx2 = construct_frustumSIMD_from_frustum(abs_frustum);
 
     alignas(32) float d_avx2[48];
     auto cull_t0 = std::chrono::high_resolution_clock::now();

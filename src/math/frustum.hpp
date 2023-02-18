@@ -129,4 +129,37 @@ struct alignas(32) FrustumSIMD
     PlaneSIMD normals[6];
 };
 
+inline FrustumSIMD construct_frustumSIMD_from_frustum(const Frustum& frustum)
+{
+    auto float_set = [](float* arr, float val, int size)
+    {
+        for (int i = 0; i < size; ++i)
+        {
+            arr[i] = val;
+        }
+    };
+
+    FrustumSIMD frustum_simd;
+    float_set(frustum_simd.normals[0].nx, frustum.near.normal.x, 8);
+    float_set(frustum_simd.normals[0].ny, frustum.near.normal.y, 8);
+    float_set(frustum_simd.normals[0].nz, frustum.near.normal.z, 8);
+    float_set(frustum_simd.normals[1].nx, frustum.far.normal.x, 8);
+    float_set(frustum_simd.normals[1].ny, frustum.far.normal.y, 8);
+    float_set(frustum_simd.normals[1].nz, frustum.far.normal.z, 8);
+    float_set(frustum_simd.normals[2].nx, frustum.left.normal.x, 8);
+    float_set(frustum_simd.normals[2].ny, frustum.left.normal.y, 8);
+    float_set(frustum_simd.normals[2].nz, frustum.left.normal.z, 8);
+    float_set(frustum_simd.normals[3].nx, frustum.right.normal.x, 8);
+    float_set(frustum_simd.normals[3].ny, frustum.right.normal.y, 8);
+    float_set(frustum_simd.normals[3].nz, frustum.right.normal.z, 8);
+    float_set(frustum_simd.normals[4].nx, frustum.bottom.normal.x, 8);
+    float_set(frustum_simd.normals[4].ny, frustum.bottom.normal.y, 8);
+    float_set(frustum_simd.normals[4].nz, frustum.bottom.normal.z, 8);
+    float_set(frustum_simd.normals[5].nx, frustum.top.normal.x, 8);
+    float_set(frustum_simd.normals[5].ny, frustum.top.normal.y, 8);
+    float_set(frustum_simd.normals[5].nz, frustum.top.normal.z, 8);
+
+    return frustum_simd;
+}
+
 }
