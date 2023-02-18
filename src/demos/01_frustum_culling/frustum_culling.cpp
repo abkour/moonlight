@@ -1,6 +1,7 @@
 #include "frustum_culling.hpp"
 
 #include <chrono>
+#include <numeric>  // for std::iota
 
 using namespace DirectX;
 using namespace Microsoft::WRL;
@@ -12,12 +13,6 @@ T* temp_address(T&& rval)
 {
     return &rval;
 }
-
-struct InstanceDataFormat
-{
-    DirectX::XMFLOAT4 displacement;
-    DirectX::XMFLOAT4 color;
-};
 
 static struct ScenePipelineStateStream
 {
@@ -218,6 +213,19 @@ void FrustumCulling::initialize_raw_input_devices()
     ThrowIfFailed(RegisterRawInputDevices(rids, 1, sizeof(rids[0])));
 }
 
+void FrustumCulling::on_key_event(const PackedKeyArguments key_state)
+{
+    switch (key_state.key_state)
+    {
+    case PackedKeyArguments::Released:
+        keyboard_state.reset(key_state.key);
+        break;
+    case PackedKeyArguments::Pressed:
+        keyboard_state.set(key_state.key);
+        break;
+    }
+}
+
 void FrustumCulling::on_mouse_move(LPARAM lparam)
 {
     UINT size;
@@ -382,7 +390,7 @@ void FrustumCulling::update()
         far_clip_distance
     );
 
-    camera.translate(keys, elapsed_time);
+    camera.translate(keyboard_state, elapsed_time);
     mvp_matrix = XMMatrixMultiply(model_matrix, camera.view);
     mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
 
@@ -517,7 +525,21 @@ void FrustumCulling::update()
 
 void FrustumCulling::load_assets()
 {
-    construct_scene();
+    const float scene_xdim = 700.f;
+    const float scene_ydim = 700.f;
+    const int n_cubes_per_row = 300;
+    const int n_cubes_per_column = 300;
+    n_instances = n_cubes_per_row * n_cubes_per_column;
+    
+    instance_ids = std::make_unique<UINT[]>(n_instances);
+    for (int i = 0; i < n_instances; ++i)
+    {
+        instance_ids[i] = i;
+    }
+    instance_vertex_offsets = construct_scene_of_cubes(
+        scene_xdim, scene_ydim, 
+        n_cubes_per_row, n_cubes_per_column
+    );
     initialize_font_rendering();
     load_scene_shader_assets();
     load_quad_shader_assets();
@@ -621,13 +643,13 @@ void FrustumCulling::load_scene_shader_assets()
         instance_data_buffer = std::make_unique<DX12Resource>();
         instance_data_buffer->upload(
             device.Get(), command_list_direct.Get(),
-            instance_vertex_offsets.get(), sizeof(InstanceDataFormat) * n_instances
+            instance_vertex_offsets.get(), sizeof(InstanceAttributes) * n_instances
         );
 
         D3D12_BUFFER_SRV buffer_desc = {};
         buffer_desc.FirstElement = 0;
         buffer_desc.NumElements = n_instances;
-        buffer_desc.StructureByteStride = sizeof(InstanceDataFormat);
+        buffer_desc.StructureByteStride = sizeof(InstanceAttributes);
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
@@ -832,40 +854,6 @@ void FrustumCulling::load_quad_shader_assets()
     };
 
     ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&quad_pso)));
-}
-
-void FrustumCulling::construct_scene()
-{
-    constexpr float xdim = 700.f;
-    constexpr float zdim = 700.f;
-    constexpr int cubes_per_row = 300;
-    constexpr int cubes_per_column = 300;
-    constexpr float xdelta = xdim / cubes_per_row;
-    constexpr float zdelta = zdim / cubes_per_column;
-
-    n_instances = cubes_per_row * cubes_per_column;
-    instance_vertex_offsets = std::make_unique<InstanceDataFormat[]>(n_instances);
-    instance_ids = std::make_unique<UINT[]>(n_instances);
-
-    constexpr float ypos = 0.f;
-    float xpos = -xdim / 2.f;
-    for (int x = 0; x < cubes_per_column; ++x)
-    {
-        float zpos = -zdim / 2.f;
-        for (int z = 0; z < cubes_per_row; ++z)
-        {
-            int idx = x * cubes_per_column + z;
-            instance_vertex_offsets[idx].displacement = XMFLOAT4(
-                xpos, ypos, zpos, 0.f
-            );
-            instance_vertex_offsets[idx].color = XMFLOAT4(0.2f, 1.f, 1.f, 1.f);
-            instance_ids[idx] = idx;
-
-            zpos += zdelta;
-        }
-
-        xpos += xdelta;
-    }
 }
 
 void FrustumCulling::construct_aabbs()

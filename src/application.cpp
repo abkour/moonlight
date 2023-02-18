@@ -78,7 +78,13 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
                 app->window->flip_fullscreen();
                 break;
             default:
-                app->keys.set(wParam);
+            {
+                KeyCode key = (KeyCode)wParam;
+                PackedKeyArguments key_state(
+                    key, KeyCode::Reserved, PackedKeyArguments::KeyState::Pressed
+                );
+                app->on_key_event(key_state);
+            }
                 break;
             }
         }
@@ -87,7 +93,13 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
             app->on_mouse_move(lParam);
             break;
         case WM_KEYUP:
-            app->keys.reset(wParam);
+        {
+            KeyCode key = (KeyCode)wParam;
+            PackedKeyArguments key_state(
+                key, KeyCode::Reserved, PackedKeyArguments::KeyState::Released
+            );
+            app->on_key_event(key_state);
+        }
             break;
         case WM_SYSCHAR:
             break;

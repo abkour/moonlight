@@ -1,4 +1,5 @@
 #pragma once 
+#include "../common/scene.hpp"
 #include "../../application.hpp"
 #include "../../camera.hpp"
 #include "../../simple_math.hpp"
@@ -16,20 +17,19 @@
 namespace moonlight
 {
 
-struct InstanceDataFormat;
-
 class FrustumCulling : public IApplication
 {
 
 public:
 
-    FrustumCulling(HINSTANCE hinstance);
+    FrustumCulling(HINSTANCE);
     ~FrustumCulling();
 
     bool is_application_initialized() override;
 
     void flush() override;
-    void on_mouse_move(LPARAM lparam) override;
+    void on_key_event(const PackedKeyArguments) override;
+    void on_mouse_move(LPARAM) override;
     void render() override;
     void resize() override;
     void update() override;
@@ -43,11 +43,10 @@ private:
     void initialize_font_rendering();
     void initialize_raw_input_devices();
     void construct_aabbs();
-    void construct_scene();
 
     void transition_resource(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list,
-        Microsoft::WRL::ComPtr<ID3D12Resource> resource,
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>,
+        Microsoft::WRL::ComPtr<ID3D12Resource>,
         D3D12_RESOURCE_STATES before_state,
         D3D12_RESOURCE_STATES after_state
     );
@@ -97,10 +96,11 @@ private:
     // The buffer has to be 256-byte aligned to satisfy D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.
     std::size_t n_instances;
     std::size_t n_visible_instances;
-    std::unique_ptr<InstanceDataFormat[]> instance_vertex_offsets;
+    std::unique_ptr<InstanceAttributes[]> instance_vertex_offsets;
     std::unique_ptr<UINT[]> instance_ids;
 
     float elapsed_time = 0.f;
+    KeyState keyboard_state;
 
 private:
 
