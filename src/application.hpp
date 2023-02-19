@@ -58,7 +58,7 @@ protected:
     );
 
     virtual Microsoft::WRL::ComPtr<IDXGISwapChain4> _pimpl_create_swap_chain(
-        Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue,
+        ID3D12CommandQueue* command_queue,
         const uint16_t window_width,
         const uint16_t window_height
     );

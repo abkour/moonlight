@@ -13,7 +13,7 @@ add_executable (moonlight WIN32
 	"core/render_texture.cpp" 
 	"core/dx12_resource.cpp"  
 	"utility/arena_allocator.cpp"
- "core/descriptor_heap.cpp" "utility/glyph_renderer.cpp")
+ "core/descriptor_heap.cpp" "utility/glyph_renderer.cpp" "core/command_queue.cpp")
 
 if (MSVC)
 set_target_properties(${BUILD_TARGET} PROPERTIES LINK_FLAGS "/PROFILE")

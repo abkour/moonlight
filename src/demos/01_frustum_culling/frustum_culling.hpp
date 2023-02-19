@@ -4,6 +4,7 @@
 #include "../../application.hpp"
 #include "../../camera.hpp"
 #include "../../simple_math.hpp"
+#include "../../core/command_queue.hpp"
 #include "../../core/descriptor_heap.hpp"
 #include "../../core/dx12_resource.hpp"
 #include "../../core/render_texture.hpp"
@@ -51,16 +52,11 @@ private:
         D3D12_RESOURCE_STATES after_state
     );
 
-    void command_queue_signal(uint64_t fence_value);
-    void flush_command_queue();
-    void wait_for_fence(uint64_t fence_value);
-
 private:
 
     bool app_initialized;
 
     Microsoft::WRL::ComPtr<ID3D12Device2> device;
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue;
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain;
     Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> backbuffers[3];
@@ -71,6 +67,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> scene_pso;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> quad_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> quad_pso;
+    std::unique_ptr<CommandQueue> command_queue;
     std::unique_ptr<DescriptorHeap> rtv_descriptor_heap;
     std::unique_ptr<DescriptorHeap> quad_rtv_descriptor_heap;
     std::unique_ptr<DescriptorHeap> dsv_descriptor_heap;

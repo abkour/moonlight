@@ -120,8 +120,8 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
 
     ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
     device                      = _pimpl_create_device(most_sutiable_adapter);
-    command_queue               = _pimpl_create_command_queue(device);
-    swap_chain                  = _pimpl_create_swap_chain(command_queue, window->width(), window->height());
+    command_queue               = std::make_unique<CommandQueue>(device.Get());
+    swap_chain                  = _pimpl_create_swap_chain(command_queue->get_underlying(), window->width(), window->height());
     command_allocator           = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
     command_list_direct         = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
     fence                       = _pimpl_create_fence(device);
@@ -144,7 +144,6 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     );
 
     _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap->get_underlying(), backbuffers, 3);
-
 
     scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
     viewport0 = CD3DX12_VIEWPORT(
@@ -173,7 +172,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     std::wstring font_filename = std::wstring(ROOT_DIRECTORY_WIDE) + L"/rsc/myfile.spriteFont";
     glyph_renderer = std::make_unique<GlyphRenderer>(
         device.Get(),
-        command_queue.Get(),
+        command_queue->get_underlying(),
         viewport0,
         font_filename.c_str()
     );
@@ -183,13 +182,13 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     command_list_direct->Close();
 
     // Execute eall command now
-    ID3D12CommandList* const command_lists[] =
+    ID3D12CommandList* command_lists[] =
     {
         command_list_direct.Get()
     };
-    command_queue->ExecuteCommandLists(1, command_lists);
-    command_queue_signal(++fence_value);
-    wait_for_fence(fence_value);
+    command_queue->execute_command_list(command_lists, 1);
+    command_queue->signal();
+    command_queue->wait_for_fence();
     
     app_initialized = true;
 }
@@ -205,7 +204,7 @@ bool FrustumCulling::is_application_initialized()
 
 void FrustumCulling::flush()
 {
-    flush_command_queue();
+    command_queue->flush();
 }
 
 void FrustumCulling::initialize_raw_input_devices()
@@ -299,7 +298,7 @@ void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list
 
     //
     // Render the glyphs
-    glyph_renderer->render_text(command_list, command_queue.Get(), text_output.c_str(), font_pos);
+    glyph_renderer->render_text(command_list, command_queue->get_underlying(), text_output.c_str(), font_pos);
 }
 
 void FrustumCulling::render()
@@ -345,16 +344,15 @@ void FrustumCulling::render()
         );
 
         command_list_direct->Close();
-        ID3D12CommandList* const command_lists[] =
+        ID3D12CommandList* command_lists[] =
         {
             command_list_direct.Get()
         };
 
-        command_queue->ExecuteCommandLists(1, command_lists);
-
-        command_queue_signal(++fence_value);
+        command_queue->execute_command_list(command_lists, 1);
+        command_queue->signal();
         swap_chain->Present(1, 0);
-        wait_for_fence(fence_value);
+        command_queue->wait_for_fence();
     }
 }
 
@@ -477,13 +475,13 @@ void FrustumCulling::update()
     command_list_direct->Close();
 
     // Execute eall command now
-    ID3D12CommandList* const command_lists[] =
+    ID3D12CommandList* command_lists[] =
     {
         command_list_direct.Get()
     };
-    command_queue->ExecuteCommandLists(1, command_lists);
-    command_queue_signal(++fence_value);
-    wait_for_fence(fence_value);
+    command_queue->execute_command_list(command_lists, 1);
+    command_queue->signal();
+    command_queue->wait_for_fence();
 
     update_count++;
     if (update_count % 16 == 0)
@@ -783,27 +781,6 @@ void FrustumCulling::transition_resource(
     );
 
     command_list->ResourceBarrier(1, &barrier);
-}
-
-void FrustumCulling::command_queue_signal(uint64_t fence_value)
-{
-    ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
-}
-
-void FrustumCulling::flush_command_queue()
-{
-    ++fence_value;
-    command_queue_signal(fence_value);
-    wait_for_fence(fence_value);
-}
-
-void FrustumCulling::wait_for_fence(uint64_t fence_value)
-{
-    if (fence->GetCompletedValue() < fence_value)
-    {
-        ThrowIfFailed(fence->SetEventOnCompletion(fence_value, fence_event));
-        WaitForSingleObject(fence_event, INFINITE);
-    }
 }
 
 }

@@ -83,7 +83,7 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
     ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
     device = _pimpl_create_device(most_sutiable_adapter);
     command_queue = _pimpl_create_command_queue(device);
-    swap_chain = _pimpl_create_swap_chain(command_queue, window_width, window_height);
+    swap_chain = _pimpl_create_swap_chain(command_queue.Get(), window_width, window_height);
     rtv_descriptor_heap = _pimpl_create_rtv_descriptor_heap(device, 3);
     _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap.Get(), backbuffers, 3);
     dsv_descriptor_heap = _pimpl_create_dsv_descriptor_heap(device, 1);

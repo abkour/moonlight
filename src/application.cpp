@@ -216,7 +216,7 @@ ComPtr<ID3D12CommandQueue> IApplication::_pimpl_create_command_queue(
 }
 
 ComPtr<IDXGISwapChain4> IApplication::_pimpl_create_swap_chain(
-    ComPtr<ID3D12CommandQueue> command_queue,
+    ID3D12CommandQueue* command_queue,
     const uint16_t window_width,
     const uint16_t window_height)
 {
@@ -243,7 +243,7 @@ ComPtr<IDXGISwapChain4> IApplication::_pimpl_create_swap_chain(
 
     ComPtr<IDXGISwapChain1> swap_chain1;
     factory4->CreateSwapChainForHwnd(
-        command_queue.Get(),
+        command_queue,
         window->handle,
         &swap_chain_desc,
         NULL,
