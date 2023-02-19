@@ -100,7 +100,6 @@ static float interleaved_quad_vertices[] =
 FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     : IApplication(hinstance)
     , app_initialized(false)
-    , fence_value(0)
     , camera(XMFLOAT3(0.f, 0.f, -10.f), XMFLOAT3(0.f, 0.f, 1.f), 500.f)
 {
     text_output.resize(256);
@@ -121,15 +120,9 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
     device                      = _pimpl_create_device(most_sutiable_adapter);
     command_queue               = std::make_unique<CommandQueue>(device.Get());
-    swap_chain                  = _pimpl_create_swap_chain(command_queue->get_underlying(), window->width(), window->height());
     command_allocator           = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
     command_list_direct         = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    fence                       = _pimpl_create_fence(device);
-    fence_event                 = _pimpl_create_fence_event();
 
-    rtv_descriptor_heap = std::make_unique<DescriptorHeap>(
-        device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 3
-    );
     quad_rtv_descriptor_heap = std::make_unique<DescriptorHeap>(
         device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2
     );
@@ -143,7 +136,13 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
         device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2
     );
 
-    _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap->get_underlying(), backbuffers, 3);
+    swap_chain = std::make_unique<SwapChain>(
+        device.Get(),
+        command_queue->get_underlying(),
+        window->width(),
+        window->height(),
+        window->handle
+    );
 
     scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
     viewport0 = CD3DX12_VIEWPORT(
@@ -254,11 +253,11 @@ void FrustumCulling::on_mouse_move(LPARAM lparam)
 
 void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list)
 {
-    uint8_t backbuffer_idx = swap_chain->GetCurrentBackBufferIndex();
-    auto backbuffer = backbuffers[backbuffer_idx];
+    uint8_t backbuffer_idx = swap_chain->current_backbuffer_index();
     D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = dsv_descriptor_heap->cpu_handle();
     UINT rtv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-    D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle = rtv_descriptor_heap->cpu_handle(backbuffer_idx);
+    D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle = 
+        swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
     // Transition SRV to RTV
     scene_texture->transition_to_write_state(command_list);
     auto rt_descriptor = scene_texture->get_rtv_descriptor();
@@ -306,21 +305,16 @@ void FrustumCulling::render()
     ThrowIfFailed(command_allocator->Reset());
     ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
 
-    uint8_t backbuffer_idx = swap_chain->GetCurrentBackBufferIndex();
-    auto backbuffer = backbuffers[backbuffer_idx];
+    uint8_t backbuffer_idx = swap_chain->current_backbuffer_index();
+
     // Clear
     {
-        transition_resource(
-            command_list_direct,
-            backbuffer,
-            D3D12_RESOURCE_STATE_PRESENT,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
+        swap_chain->transition_to_rtv(command_list_direct.Get());
 
         // Clear backbuffer
         const FLOAT clear_color[] = { 0.7f, 0.7f, 0.7f, 1.f };
         command_list_direct->ClearRenderTargetView(
-            rtv_descriptor_heap->cpu_handle(backbuffer_idx),
+            swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx),
             clear_color,
             0,
             NULL
@@ -336,12 +330,7 @@ void FrustumCulling::render()
 
     // Present
     {
-        transition_resource(
-            command_list_direct,
-            backbuffer,
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_PRESENT
-        );
+        swap_chain->transition_to_present(command_list_direct.Get());
 
         command_list_direct->Close();
         ID3D12CommandList* command_lists[] =
@@ -351,7 +340,7 @@ void FrustumCulling::render()
 
         command_queue->execute_command_list(command_lists, 1);
         command_queue->signal();
-        swap_chain->Present(1, 0);
+        swap_chain->present();
         command_queue->wait_for_fence();
     }
 }
@@ -766,21 +755,6 @@ void FrustumCulling::load_quad_shader_assets()
     };
 
     ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&quad_pso)));
-}
-
-void FrustumCulling::transition_resource(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list,
-    Microsoft::WRL::ComPtr<ID3D12Resource> resource,
-    D3D12_RESOURCE_STATES before_state,
-    D3D12_RESOURCE_STATES after_state)
-{
-    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        resource.Get(),
-        before_state,
-        after_state
-    );
-
-    command_list->ResourceBarrier(1, &barrier);
 }
 
 }

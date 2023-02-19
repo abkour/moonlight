@@ -8,6 +8,7 @@
 #include "../../core/descriptor_heap.hpp"
 #include "../../core/dx12_resource.hpp"
 #include "../../core/render_texture.hpp"
+#include "../../core/swap_chain.hpp"
 #include "../../math/aabb.hpp"
 #include "../../math/primitive_tests.hpp"
 #include "../../utility/arena_allocator.hpp"
@@ -45,41 +46,30 @@ private:
     void load_quad_shader_assets();
     void initialize_raw_input_devices();
 
-    void transition_resource(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>,
-        Microsoft::WRL::ComPtr<ID3D12Resource>,
-        D3D12_RESOURCE_STATES before_state,
-        D3D12_RESOURCE_STATES after_state
-    );
-
 private:
 
     bool app_initialized;
 
-    Microsoft::WRL::ComPtr<ID3D12Device2> device;
-    Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain;
-    Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
-    Microsoft::WRL::ComPtr<ID3D12Resource> backbuffers[3];
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator;
+    Microsoft::WRL::ComPtr<ID3D12Device2>             device;
+    Microsoft::WRL::ComPtr<ID3D12Resource>            depth_buffer;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    command_allocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_direct;
-    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> scene_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> scene_pso;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> quad_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> quad_pso;
-    std::unique_ptr<CommandQueue> command_queue;
-    std::unique_ptr<DescriptorHeap> rtv_descriptor_heap;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature>       scene_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>       scene_pso;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature>       quad_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>       quad_pso;
+
+    std::unique_ptr<SwapChain>      swap_chain;
+    std::unique_ptr<CommandQueue>   command_queue;
     std::unique_ptr<DescriptorHeap> quad_rtv_descriptor_heap;
     std::unique_ptr<DescriptorHeap> dsv_descriptor_heap;
     std::unique_ptr<DescriptorHeap> srv_descriptor_heap;
     std::unique_ptr<DescriptorHeap> vs_srv_descriptor_heap;
-    std::unique_ptr<DX12Resource> vertex_buffer;
-    std::unique_ptr<DX12Resource> quad_vertex_buffer;
-    std::unique_ptr<DX12Resource> instance_id_buffer;
-    std::unique_ptr<DX12Resource> instance_data_buffer;
+    std::unique_ptr<DX12Resource>   vertex_buffer;
+    std::unique_ptr<DX12Resource>   quad_vertex_buffer;
+    std::unique_ptr<DX12Resource>   instance_id_buffer;
+    std::unique_ptr<DX12Resource>   instance_data_buffer;
 
-    uint64_t fence_value;
-    HANDLE fence_event;
     D3D12_VIEWPORT viewport0;
     D3D12_RECT scissor_rect;
     D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
