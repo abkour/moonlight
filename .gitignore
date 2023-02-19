@@ -5,6 +5,8 @@
 
 build/
 ext/
+rsc/
+template/
 moonlight/
 x64/
 
