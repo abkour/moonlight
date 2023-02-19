@@ -5,6 +5,12 @@
 namespace moonlight
 {
 
+template<typename T>
+T* temp_address(T&& rval)
+{
+    return &rval;
+}
+
 inline void transition_resource(
     ID3D12GraphicsCommandList* command_list,
     ID3D12Resource* resource,

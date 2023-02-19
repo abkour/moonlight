@@ -1,18 +1,11 @@
 #include "frustum_culling.hpp"
 
 #include <chrono>
-#include <numeric>  // for std::iota
 
 using namespace DirectX;
 using namespace Microsoft::WRL;
 
 namespace moonlight {
-
-template<typename T>
-T* temp_address(T&& rval)
-{
-    return &rval;
-}
 
 static struct ScenePipelineStateStream
 {

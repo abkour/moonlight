@@ -5,12 +5,6 @@ using namespace Microsoft::WRL;
 namespace moonlight
 {
 
-template<typename T>
-T* temp_address(T&& rvalue)
-{
-    return &rvalue;
-}
-
 RenderTexture::RenderTexture(DXGI_FORMAT format)
     : format(format)
     , resource_state(D3D12_RESOURCE_STATE_COMMON)
