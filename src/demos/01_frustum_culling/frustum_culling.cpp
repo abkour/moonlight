@@ -170,6 +170,16 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
         window->width(), window->height()
     );
 
+    std::wstring font_filename = std::wstring(ROOT_DIRECTORY_WIDE) + L"/rsc/myfile.spriteFont";
+    glyph_renderer = std::make_unique<GlyphRenderer>(
+        device.Get(),
+        command_queue.Get(),
+        viewport0,
+        font_filename.c_str()
+    );
+    font_pos.x = static_cast<float>(window->width()) * 0.9;
+    font_pos.y = static_cast<float>(window->height()) * 0.5;
+
     command_list_direct->Close();
 
     // Execute eall command now
@@ -186,10 +196,6 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
 
 FrustumCulling::~FrustumCulling()
 {
-    m_graphicsMemory.reset();
-    sprite_batch.reset();
-    sprite_font.reset();
-    font_descriptor_heap.reset();
 }
 
 bool FrustumCulling::is_application_initialized()
@@ -293,15 +299,7 @@ void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list
 
     //
     // Render the glyphs
-    command_list->RSSetViewports(1, &viewport0);
-    ID3D12DescriptorHeap* font_heaps[] = { font_descriptor_heap->Heap() };
-    command_list->SetDescriptorHeaps(1, font_heaps);
-
-    XMFLOAT2 origin;
-    XMStoreFloat2(&origin, sprite_font->MeasureString(text_output.c_str()) / 2.f);
-    sprite_batch->Begin(command_list);
-    sprite_font->DrawString(sprite_batch.get(), text_output.c_str(), font_pos, Colors::White, 0.f, origin);
-    sprite_batch->End();
+    glyph_renderer->render_text(command_list, command_queue.Get(), text_output.c_str(), font_pos);
 }
 
 void FrustumCulling::render()
@@ -357,8 +355,6 @@ void FrustumCulling::render()
         command_queue_signal(++fence_value);
         swap_chain->Present(1, 0);
         wait_for_fence(fence_value);
-
-        m_graphicsMemory->Commit(command_queue.Get());
     }
 }
 
@@ -519,7 +515,6 @@ void FrustumCulling::load_assets()
         scene_xdim, scene_ydim, 
         n_cubes_per_row, n_cubes_per_column
     );
-    initialize_font_rendering();
     load_scene_shader_assets();
     load_quad_shader_assets();
     
@@ -534,60 +529,6 @@ void FrustumCulling::load_assets()
         reinterpret_cast<float*>(instance_vertex_offsets.get()),
         sizeof(InstanceAttributes)
     );
-}
-
-void FrustumCulling::initialize_font_rendering()
-{
-    m_graphicsMemory = std::make_unique<GraphicsMemory>(device.Get());
-    
-    //
-    // Initialize descriptor heap for font
-    {
-        font_descriptor_heap = std::make_unique<::DescriptorHeap>(
-            device.Get(),
-            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-            Descriptors::Count
-        );
-    }
-
-    //
-    // Set up the SpriteBatch object
-    {
-        ResourceUploadBatch resource_upload(device.Get());
-        resource_upload.Begin();
-
-        RenderTargetState rt_state(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT);
-        SpriteBatchPipelineStateDescription pps(rt_state);
-
-        sprite_batch = std::make_unique<SpriteBatch>(device.Get(), resource_upload, pps);;
-
-        auto upload_resource_finished = resource_upload.End(command_queue.Get());
-        upload_resource_finished.wait();
-
-        sprite_batch->SetViewport(viewport0);
-        font_pos.x = static_cast<float>(window->width()) * 0.9;
-        font_pos.y = static_cast<float>(window->height()) * 0.5;
-    }
-
-    //
-    // Set up the SpriteFont object
-    {
-        ResourceUploadBatch resource_upload(device.Get());
-        resource_upload.Begin();
-
-        std::wstring filename = std::wstring(ROOT_DIRECTORY_WIDE) + L"/rsc/myfile.spriteFont";
-        sprite_font = std::make_unique<SpriteFont>(
-            device.Get(),
-            resource_upload,
-            filename.c_str(),
-            font_descriptor_heap->GetCpuHandle(Descriptors::CourierFont),
-            font_descriptor_heap->GetGpuHandle(Descriptors::CourierFont)
-        );
-
-        auto upload_resource_finished = resource_upload.End(command_queue.Get());
-        upload_resource_finished.wait();
-    }
 }
 
 void FrustumCulling::load_scene_shader_assets()
