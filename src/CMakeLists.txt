@@ -7,13 +7,18 @@ add_executable (moonlight WIN32
 	"application.cpp"
 	"moonlight.cpp" 
 	"window.cpp" 
+	"camera.cpp" 
 	"demos/00_cube_application/cube_application.cpp"
 	"demos/01_frustum_culling/frustum_culling.cpp"
-	"camera.cpp" 
+	"demos/02_environment_mapping/environment_mapping.cpp"
 	"core/render_texture.cpp" 
 	"core/dx12_resource.cpp"  
+	"core/command_queue.cpp" 
+	"core/swap_chain.cpp"
+	"core/descriptor_heap.cpp" 
 	"utility/arena_allocator.cpp"
- "core/descriptor_heap.cpp" "utility/glyph_renderer.cpp" "core/command_queue.cpp" "core/swap_chain.cpp")
+	"utility/glyph_renderer.cpp" 
+)
 
 if (MSVC)
 set_target_properties(${BUILD_TARGET} PROPERTIES LINK_FLAGS "/PROFILE")
