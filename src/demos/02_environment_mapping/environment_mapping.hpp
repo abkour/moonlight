@@ -21,6 +21,21 @@
 namespace moonlight
 {
 
+struct CubeTexture
+{
+    CubeTexture()
+        : texture(nullptr)
+    {}
+    ~CubeTexture()
+    {
+        if (texture)
+        {
+            texture->Release();
+        }
+    }
+    ID3D12Resource* texture;
+};
+
 class EnvironmentMapping : public IApplication
 {
 
@@ -43,6 +58,8 @@ private:
     void record_command_list(ID3D12GraphicsCommandList* command_list);
     void load_assets();
     void load_scene_shader_assets();
+    void load_textures(const wchar_t* filename);
+    void load_cubemap(const wchar_t* filename);
     void initialize_raw_input_devices();
 
 private:
@@ -55,10 +72,13 @@ private:
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_direct;
     Microsoft::WRL::ComPtr<ID3D12RootSignature>       scene_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState>       scene_pso;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>       scene_pso_env;
+    Microsoft::WRL::ComPtr<ID3D12Resource>            cube_texture;
 
     std::unique_ptr<SwapChain>      swap_chain;
     std::unique_ptr<CommandQueue>   command_queue;
     std::unique_ptr<DescriptorHeap> dsv_descriptor_heap;
+    std::unique_ptr<DescriptorHeap> srv_descriptor_heap;
     std::unique_ptr<DX12Resource>   vertex_buffer;
     D3D12_VERTEX_BUFFER_VIEW        vertex_buffer_view;
 
@@ -66,7 +86,10 @@ private:
     D3D12_RECT     scissor_rect;
 
     Camera camera;
+    DirectX::XMMATRIX model_matrix;
     DirectX::XMMATRIX mvp_matrix;
+    DirectX::XMMATRIX mvp_matrix_2;
+    DirectX::XMMATRIX normalized_mvp_matrix_2;
 
     float elapsed_time = 0.f;
     KeyState keyboard_state;
