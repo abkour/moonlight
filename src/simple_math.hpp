@@ -15,6 +15,7 @@
 #pragma once
 #include <cmath>
 #include <numbers>
+#include <ostream>
 
 namespace moonlight
 {
@@ -152,6 +153,11 @@ struct Vector3
     };
 };
 
+inline Vector3 operator*(const float t, const Vector3& v)
+{
+    return { v.x * t, v.y * t, v.z * t };
+}
+
 inline float dot(const Vector3& v0, const Vector3& v1)
 {
     return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
@@ -204,6 +210,11 @@ inline bool cwise_less_or_equal(const Vector3& v0, const Vector3& v1)
 inline float radians(float x_in_degrees)
 {
     return (x_in_degrees * std::numbers::pi_v<float>) / 180.f;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const Vector3& vec)
+{
+    return os << vec.x << ", " << vec.y << ", " << vec.z;
 }
 
 }
