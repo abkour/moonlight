@@ -6,13 +6,13 @@ namespace moonlight
 
 struct Plane
 {
-    Vector3 normal;
-    Vector3 point;
+    Vector3<float> normal;
+    Vector3<float> point;
 };
 
-static int point_plane_intersection(const Plane& plane, const Vector3& p)
+static int point_plane_intersection(const Plane& plane, const Vector3<float>& p)
 {
-    Vector3 X = normalize(p - plane.point);
+    Vector3<float> X = normalize(p - plane.point);
     float result = dot(plane.normal, X);
     
     if (result > 0.f)

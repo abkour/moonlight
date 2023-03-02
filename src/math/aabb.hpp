@@ -7,7 +7,7 @@ namespace moonlight
 
 struct AABB
 {
-    Vector3 bmin, bmax;
+    Vector3<float> bmin, bmax;
 };
 
 inline AABB construct_aabb_from_points(
@@ -23,7 +23,8 @@ inline AABB construct_aabb_from_points(
 
     for (std::size_t i = 0; i < n_points; ++i)
     {
-        Vector3* point_vertex = (Vector3*)((uint8_t*)points + (i * stride));
+        Vector3<float>* point_vertex = 
+            (Vector3<float>*)((uint8_t*)points + (i * stride));
         if (point_vertex->x < aabb.bmin.x) aabb.bmin.x = point_vertex->x;
         if (point_vertex->y < aabb.bmin.y) aabb.bmin.y = point_vertex->y;
         if (point_vertex->z < aabb.bmin.z) aabb.bmin.z = point_vertex->z;
@@ -48,7 +49,7 @@ inline bool is_degenerate(const AABB& x)
 
 inline float volume(const AABB& x)
 {
-    Vector3 diff = x.bmax - x.bmin;
+    Vector3<float> diff = x.bmax - x.bmin;
     return diff.x * diff.y * diff.z;
 }
 
@@ -81,7 +82,8 @@ inline void construct_instanced_aabbs(
         for (int k = 0; k < 8; ++k)
         {
             int i = j * 8 + k;
-            const Vector3* displacement = (Vector3*)((uint8_t*)instance_data + (i * instance_data_stride));
+            const Vector3<float>* displacement = 
+                (Vector3<float>*)((uint8_t*)instance_data + (i * instance_data_stride));
             aabbs[j].bmin_x[k] = os_aabb.bmin.x + displacement->x;
             aabbs[j].bmin_y[k] = os_aabb.bmin.y + displacement->y;
             aabbs[j].bmin_z[k] = os_aabb.bmin.z + displacement->z;

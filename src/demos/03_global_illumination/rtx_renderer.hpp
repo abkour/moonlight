@@ -1,4 +1,6 @@
 #pragma once
+#include "ray.hpp"
+#include "ray_camera.hpp"
 #include "../common/scene.hpp"
 #include "../common/shader.hpp"
 #include "../../application.hpp"
@@ -9,6 +11,7 @@
 #include "../../core/dx12_resource.hpp"
 #include "../../core/render_texture.hpp"
 #include "../../core/swap_chain.hpp"
+#include "../../core/texture2D.hpp"
 #include "../../math/aabb.hpp"
 #include "../../math/primitive_tests.hpp"
 #include "../../utility/arena_allocator.hpp"
@@ -58,6 +61,10 @@ private:
 
 private:
 
+    void generate_image();
+
+private:
+
     bool app_initialized;
 
     Microsoft::WRL::ComPtr<ID3D12Device2>             device;
@@ -65,6 +72,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_direct;
     Microsoft::WRL::ComPtr<ID3D12RootSignature>       scene_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState>       scene_pso;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>       quad_pso;
 
     std::unique_ptr<SwapChain>      swap_chain;
     std::unique_ptr<CommandQueue>   command_queue;
@@ -76,6 +84,10 @@ private:
 
     float elapsed_time = 0.f;
     KeyState keyboard_state;
+
+    RayCamera ray_camera;
+    std::unique_ptr<DescriptorHeap> srv_descriptor_heap;
+    std::unique_ptr<Texture2D> scene_texture;
 };
 
 }

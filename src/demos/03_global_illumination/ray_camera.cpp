@@ -4,7 +4,10 @@ using namespace DirectX;
 
 namespace moonlight {
 
-Camera::Camera(const XMFLOAT2 resolution)
+using Vector2s = Vector2<uint16_t>;
+using Vector3f = Vector3<float>;
+
+RayCamera::RayCamera(const Vector2s resolution)
     : resolution(resolution)
     , eyepos(0)
     , shiftx(0)
@@ -12,15 +15,15 @@ Camera::Camera(const XMFLOAT2 resolution)
     , topLeftPixel(0)
 {}
 
-void Camera::initializeVariables(const Vector3& pos, const Vector3& dir, 
+void RayCamera::initializeVariables(const Vector3f& pos, const Vector3f& dir,
     const float fov, const unsigned nSamples) 
 {
     eyepos = pos;
-    const Vector3 T(dir - pos);
-    const Vector3 up(0.f, 1.f, 0.f);
-    const Vector3 right_norm(normalize(cross(up, T)));
-    const Vector3 t_norm(normalize(T));
-    const Vector3 up_norm(cross(t_norm, right_norm));
+    const Vector3f T(dir - pos);
+    const Vector3f up(0.f, 1.f, 0.f);
+    const Vector3f right_norm(normalize(cross(up, T)));
+    const Vector3f t_norm(normalize(T));
+    const Vector3f up_norm(cross(t_norm, right_norm));
     const float aspect_ratio = ((float)resolution.x - 1) / ((float)resolution.y - 1);
     const float gx = std::tan(radians(fov / 2.f));
     const float gy = gx * (((float)resolution.y - 1) / ((float)resolution.x - 1));
@@ -30,21 +33,21 @@ void Camera::initializeVariables(const Vector3& pos, const Vector3& dir,
     topLeftPixel = t_norm - (right_norm * gx) - (up_norm * gy);
 }
 
-Ray Camera::getRay(const XMFLOAT2& pixelLocation) {
-    Vector3 origin = eyepos;
-    Vector3 direction = topLeftPixel + (shiftx * (pixelLocation.x - 1.f)) + (shifty * (pixelLocation.y - 1.f));
+Ray RayCamera::getRay(const Vector2s& pixelLocation) {
+    Vector3f origin = eyepos;
+    Vector3f direction = topLeftPixel + (shiftx * (pixelLocation.x - 1.f)) + (shifty * (pixelLocation.y - 1.f));
     return Ray(origin, normalize(direction));
 }
 
-void Camera::setResolution(XMFLOAT2 newResolution) {
+void RayCamera::setResolution(Vector2s newResolution) {
     resolution = newResolution;
 }
 
-unsigned Camera::resx() const {
+unsigned RayCamera::resx() const {
     return resolution.x;
 }
 
-unsigned Camera::resy() const {
+unsigned RayCamera::resy() const {
     return resolution.y;
 }
 

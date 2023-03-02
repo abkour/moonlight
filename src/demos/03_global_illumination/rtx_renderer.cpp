@@ -10,52 +10,19 @@ namespace moonlight {
 
 struct VertexFormat
 {
-    XMFLOAT3 Position;
-    XMFLOAT3 Normal;
+    XMFLOAT2 Position;
+    XMFLOAT2 TexCoord;
 };
 
-static float interleaved_cube_vn[] = {
-    -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-     0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-     0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-     0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-    -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-    -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+static float quad_vertices[] =
+{
+    -1.f, -1.f, 0.f, 0.f,
+    1.f, -1.f, 1.f, 0.f,
+    1.f, 1.f, 1.f, 1.f,
 
-    -0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-     0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-     0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-     0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-    -0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-    -0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-
-    -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-    -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-    -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-    -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-    -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-    -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-
-     0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-     0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-     0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-     0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-     0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-     0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-
-    -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-     0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-     0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-     0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-    -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-    -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-
-    -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-     0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-     0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-     0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-    -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-    -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
+    -1.f, -1.f, 0.f, 0.f,
+    1.f, 1.f, 1.f, 1.f,
+    -1.f, 1.f, 0.f, 1.f
 };
 
 static struct ScenePipelineStateStream
@@ -81,7 +48,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         800,
         &RTX_Renderer::WindowMessagingProcess,
         this
-        );
+    );
 
     SetCursor(NULL);
     initialize_raw_input_devices();
@@ -98,7 +65,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         window->width(),
         window->height(),
         window->handle
-        );
+    );
 
     scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
     viewport = CD3DX12_VIEWPORT(
@@ -106,6 +73,18 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         0.f,
         static_cast<float>(window->width()),
         static_cast<float>(window->height())
+    );
+
+    srv_descriptor_heap = 
+        std::make_unique<DescriptorHeap>(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+
+    generate_image();
+
+    transition_resource(
+        command_list_direct.Get(),
+        scene_texture->get_underlying(),
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
     );
 
     load_assets();
@@ -125,6 +104,73 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
 
 RTX_Renderer::~RTX_Renderer()
 {
+}
+
+static bool ray_hit_sphere(const Ray& ray, const Vector3<float>& center, const float r)
+{
+    Vector3<float> oc = ray.o - center;
+    auto a = dot(ray.d, ray.d);
+    auto b = 2.0 * dot(oc, ray.d);
+    auto c = dot(oc, oc) - r * r;
+    auto discriminant = b * b - 4 * a * c;
+    return (discriminant > 0);
+}
+
+void RTX_Renderer::generate_image()
+{
+    const Vector3<float> center(0.f, 0.f, 0.f);
+    const float radius = 0.2f;
+
+    struct u8_four
+    {
+        u8_four(unsigned char aa, unsigned char bb, unsigned char cc, unsigned char dd)
+            : a(aa), b(bb), c(cc), d(dd)
+        {}
+
+        unsigned char a, b, c, d;
+    };
+
+    alignas(D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT) std::vector<u8_four> image;
+    image.reserve(window->width() * window->height());
+    for (uint16_t i = 0; i < window->width(); i++)
+    {
+        for (uint16_t j = 0; j < window->height(); ++j)
+        {
+            Vector2<uint16_t> pixel_location(i, j);
+            auto ray = ray_camera.getRay(pixel_location);
+            if (ray_hit_sphere(ray, center, radius))
+            {
+                image.emplace_back(255, 0, 0, 255);
+            }
+            else 
+            {
+                image.emplace_back(127, 255, 255, 255);
+            }
+        }
+    }
+
+    scene_texture = std::make_unique<Texture2D>(
+        device.Get(),
+        command_list_direct.Get(),
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        image.data(),
+        window->width(),
+        window->height(),
+        sizeof(UINT)
+    );
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.TextureCube.MostDetailedMip = 0;
+    srv_desc.TextureCube.MipLevels = 1;
+    srv_desc.TextureCube.ResourceMinLODClamp = 0.f;
+    srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    
+    device->CreateShaderResourceView(scene_texture->get_underlying(),
+        &srv_desc,
+        srv_descriptor_heap->cpu_handle()
+    );
 }
 
 bool RTX_Renderer::is_application_initialized()
@@ -177,13 +223,20 @@ void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
     command_list->SetPipelineState(scene_pso.Get());
     command_list->SetGraphicsRootSignature(scene_root_signature.Get());
 
+    ID3D12DescriptorHeap* heaps[] = { srv_descriptor_heap->get_underlying() };
+    command_list_direct->SetDescriptorHeaps(1, heaps);
+    command_list_direct->SetGraphicsRootDescriptorTable(
+        0,
+        srv_descriptor_heap->gpu_handle()
+    );
+
     D3D12_VERTEX_BUFFER_VIEW vb_views[] = { vertex_buffer_view };
     command_list->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list->RSSetViewports(1, &viewport);
     command_list->RSSetScissorRects(1, &scissor_rect);
     command_list->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, nullptr);
-    command_list->DrawInstanced(sizeof(interleaved_cube_vn) / sizeof(VertexFormat), 1, 0, 0);
+    command_list->DrawInstanced(sizeof(quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
 }
 
 void RTX_Renderer::render()
@@ -245,26 +298,35 @@ void RTX_Renderer::load_scene_shader_assets()
     {
         vertex_buffer = std::make_unique<DX12Resource>();
         vertex_buffer->upload(device.Get(), command_list_direct.Get(),
-            (float*)interleaved_cube_vn,
-            sizeof(interleaved_cube_vn)
+            (float*)quad_vertices,
+            sizeof(quad_vertices)
         );
 
         vertex_buffer_view.BufferLocation = vertex_buffer->gpu_virtual_address();
-        vertex_buffer_view.SizeInBytes = sizeof(interleaved_cube_vn);
+        vertex_buffer_view.SizeInBytes = sizeof(quad_vertices);
         vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
     ComPtr<ID3DBlob> vs_blob;
     ComPtr<ID3DBlob> ps_blob;
     {
-        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/03_global_illumination/shaders/test_vs.cso";
-        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/03_global_illumination/shaders/test_ps.cso";
+        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/03_global_illumination/shaders/quad_vs.cso";
+        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/03_global_illumination/shaders/quad_ps.cso";
         ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
         ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
     }
 
-    D3D12_INPUT_ELEMENT_DESC input_layout[2];
-    construct_input_layout_v_n(input_layout);
+    D3D12_INPUT_ELEMENT_DESC input_layout[2] =
+    {
+        { 
+            "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
+        },
+        {  
+            "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
+        }
+    };
 
     D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
     feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -279,11 +341,19 @@ void RTX_Renderer::load_scene_shader_assets()
         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
+    CD3DX12_DESCRIPTOR_RANGE1 srv_range{ D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0 };
+    CD3DX12_ROOT_PARAMETER1 root_parameters[1];
+    // Three float4x4
+    root_parameters[0].InitAsDescriptorTable(1, &srv_range, D3D12_SHADER_VISIBILITY_PIXEL);
+
+    CD3DX12_STATIC_SAMPLER_DESC samplers[1];
+    samplers[0].Init(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT);
+
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
     // TODO: Is this call correct, if the highest supported version is 1_0?
     root_signature_desc.Init_1_1(
-        0, nullptr,
-        0, nullptr,
+        1, root_parameters,
+        1, samplers,
         root_signature_flags
     );
 

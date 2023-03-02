@@ -25,8 +25,8 @@ struct Frustum
 
 // Again, unoptimized. This is proof-of-work, don't copy.
 static Frustum construct_frustum(
-    Vector3 eye_position,
-    Vector3 eye_direction, // requires normalized
+    Vector3<float> eye_position,
+    Vector3<float> eye_direction, // requires normalized
     float vfov,
     float aspect_ratio,
     float near_distance,
@@ -38,10 +38,10 @@ static Frustum construct_frustum(
     float far_hh = near_hh * (far_distance - near_distance); 
     float far_hw = near_hw * (far_distance - near_distance);
 
-    Vector3 world_up(0.f, 1.f, 0.f);
-    Vector3 right = cross(world_up, eye_direction);
+    Vector3<float> world_up(0.f, 1.f, 0.f);
+    Vector3<float> right = cross(world_up, eye_direction);
     right = normalize(right);
-    Vector3 up = cross(eye_direction, right);
+    Vector3<float> up = cross(eye_direction, right);
     up = normalize(up);
 
     Frustum frustum;
@@ -63,13 +63,13 @@ static Frustum construct_frustum(
             |               |
             ooo----m01----c11
     */
-    Vector3 c = eye_position + eye_direction * near_distance;
-    Vector3 m00 = c + invert(right) * near_hw;
-    Vector3 m11 = c + right * near_hw;
-    Vector3 m10 = c + up * near_hh;
-    Vector3 m01 = c + invert(up) * near_hh;
-    Vector3 c00 = m00 + up * near_hh;
-    Vector3 c11 = m01 + right * near_hw;
+    Vector3<float> c = eye_position + eye_direction * near_distance;
+    Vector3<float> m00 = c + invert(right) * near_hw;
+    Vector3<float> m11 = c + right * near_hw;
+    Vector3<float> m10 = c + up * near_hh;
+    Vector3<float> m01 = c + invert(up) * near_hh;
+    Vector3<float> c00 = m00 + up * near_hh;
+    Vector3<float> c11 = m01 + right * near_hw;
 
     frustum.far.normal = eye_direction;
     frustum.near.normal = invert(eye_direction);
@@ -94,7 +94,7 @@ static Frustum construct_frustum(
 }
 
 // I wouldn't use this in actual code. This is only for proof-of-concept
-inline bool frustum_contains_point(const Frustum& frustum, const Vector3& point)
+inline bool frustum_contains_point(const Frustum& frustum, const Vector3<float>& point)
 {
     if (point_plane_intersection(frustum.near, point) == 1)
     {

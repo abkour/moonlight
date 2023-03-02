@@ -2,7 +2,7 @@
 
 namespace moonlight {
 
-Ray::Ray(const Vector3& origin, const Vector3& direction)
+Ray::Ray(const Vector3<float>& origin, const Vector3<float>& direction)
     : o(origin)
     , d(direction)
 {
@@ -24,7 +24,7 @@ Ray& Ray::operator=(const Ray& other) {
     return *this;
 }
 
-Vector3 Ray::operator()(const float t) {
+Vector3<float> Ray::operator()(const float t) {
     return o + (t * d);
 }
 

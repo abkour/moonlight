@@ -5,31 +5,34 @@
 namespace moonlight
 {
 
-struct Camera {
+struct RayCamera {
 
-    Camera() = default;
+    RayCamera() = default;
 
     // Initialize the virtual camera
-    Camera(const DirectX::XMFLOAT2 resolution);
+    RayCamera(const Vector2<uint16_t> resolution);
 
     // Compute the top-left pixel location of the virtual camera in addition to 
     // the shifting vectors used to shift the top-left pixel.
     // Needs to be called every time either of the three arguments change.
-    void initializeVariables(const Vector3& pos, const Vector3& dir, const float fov, const unsigned nSamples);
+    void initializeVariables(
+        const Vector3<float>& pos, const Vector3<float>& dir, 
+        const float fov, const unsigned nSamples
+    );
 
     // Compute a ray originating from the eye position towards the pixelLocation
     // in world space.
-    Ray getRay(const DirectX::XMFLOAT2& pixelLocation);
+    Ray getRay(const Vector2<uint16_t>& pixelLocation);
 
-    void setResolution(DirectX::XMFLOAT2 newResolution);
+    void setResolution(Vector2<uint16_t> newResolution);
     unsigned resx() const;
     unsigned resy() const;
 
 protected:
 
-    DirectX::XMFLOAT2 resolution;
-    Vector3 eyepos;
-    Vector3 shiftx, shifty, topLeftPixel;
+    Vector2<uint16_t> resolution;
+    Vector3<float> eyepos;
+    Vector3<float> shiftx, shifty, topLeftPixel;
 };
 
 }

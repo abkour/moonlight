@@ -379,8 +379,8 @@ void FrustumCulling::update()
     XMFLOAT3 camera_direction = camera.get_direction();
     
     Frustum frustum = construct_frustum(
-        *reinterpret_cast<Vector3*>(&camera_position),
-        *reinterpret_cast<Vector3*>(&camera_direction),
+        *reinterpret_cast<Vector3<float>*>(&camera_position),
+        *reinterpret_cast<Vector3<float>*>(&camera_direction),
         XMConvertToRadians(45.f),
         aspect_ratio,
         near_clip_distance,

@@ -11,19 +11,19 @@ struct Ray {
     Ray() = default;
     // Constructs a ray with origin \origin and direction \direction. Must make sure that the 
     // direction vector is normalized
-    Ray(const Vector3& origin, const Vector3& direction);
+    Ray(const Vector3<float>& origin, const Vector3<float>& direction);
     // Copy construct ray
     Ray(const Ray& other);
     // Copy assign ray
     Ray& operator=(const Ray& other);
 
     // Compute point the ray travelled to at time point \t. 
-    Vector3 operator()(const float t);
+    Vector3<float> operator()(const float t);
 
     // origin refers to the ray origin in world space and direction refers to the direction
     // the ray travels in. The direction vector has to be normalized
-    Vector3 o, d;
-    Vector3 invd;	// Inverse direction is used for some intersection algorithms for performance
+    Vector3<float> o, d;
+    Vector3<float> invd;	// Inverse direction is used for some intersection algorithms for performance
 };
 
 // Print out the parameters of the ray
