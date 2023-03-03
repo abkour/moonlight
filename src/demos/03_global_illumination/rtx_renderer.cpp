@@ -80,13 +80,6 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
 
     generate_image();
 
-    transition_resource(
-        command_list_direct.Get(),
-        scene_texture->get_underlying(),
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-    );
-
     load_assets();
 
     command_list_direct->Close();
@@ -142,7 +135,7 @@ void RTX_Renderer::generate_image()
     );
 
     ray_camera->initializeVariables(
-        Vector3<float>(0.f, 0.f, -2),
+        Vector3<float>(0.f, 0.f, -5),
         Vector3<float>(0.f, 0.f, 1),
         45,
         1
@@ -165,7 +158,7 @@ void RTX_Renderer::generate_image()
             }
         }
     }
-    
+
     scene_texture = std::make_unique<Texture2D>(
         device.Get(),
         command_list_direct.Get(),
@@ -174,6 +167,13 @@ void RTX_Renderer::generate_image()
         window->width(),
         window->height(),
         sizeof(u8_four)
+    );
+
+    transition_resource(
+        command_list_direct.Get(),
+        scene_texture->get_underlying(),
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
     );
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};

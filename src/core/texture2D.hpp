@@ -24,6 +24,12 @@ public:
         void* data, unsigned width, unsigned height, unsigned format_size
     );
 
+    void update(
+        ID3D12GraphicsCommandList* command_list,
+        DXGI_FORMAT format,
+        void* data, unsigned width, unsigned height, unsigned format_size
+    );
+
     ID3D12Resource* get_underlying();
 
 private:
