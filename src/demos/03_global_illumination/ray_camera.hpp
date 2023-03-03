@@ -16,8 +16,10 @@ struct RayCamera {
     // the shifting vectors used to shift the top-left pixel.
     // Needs to be called every time either of the three arguments change.
     void initializeVariables(
-        const Vector3<float>& pos, const Vector3<float>& dir, 
-        const float fov, const unsigned nSamples
+        const Vector3<float>& pos, 
+        const Vector3<float>& dir, 
+        const float fov_in_degrees, 
+        const unsigned nSamples
     );
 
     // Compute a ray originating from the eye position towards the pixelLocation

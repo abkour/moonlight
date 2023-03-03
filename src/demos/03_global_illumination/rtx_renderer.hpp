@@ -85,7 +85,7 @@ private:
     float elapsed_time = 0.f;
     KeyState keyboard_state;
 
-    RayCamera ray_camera;
+    std::unique_ptr<RayCamera> ray_camera;
     std::unique_ptr<DescriptorHeap> srv_descriptor_heap;
     std::unique_ptr<Texture2D> scene_texture;
 };

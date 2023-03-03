@@ -109,46 +109,63 @@ RTX_Renderer::~RTX_Renderer()
 static bool ray_hit_sphere(const Ray& ray, const Vector3<float>& center, const float r)
 {
     Vector3<float> oc = ray.o - center;
-    auto a = dot(ray.d, ray.d);
-    auto b = 2.0 * dot(oc, ray.d);
-    auto c = dot(oc, oc) - r * r;
-    auto discriminant = b * b - 4 * a * c;
+    float a = dot(ray.d, ray.d);
+    float b = 2.0 * dot(oc, ray.d);
+    float c = dot(oc, oc) - r * r;
+    float discriminant = b * b - 4 * a * c;
     return (discriminant > 0);
+}
+
+static bool ray_hit_circle(const Ray& ray, const float r)
+{
+    float tz = -ray.o.z / ray.d.z;
+    Vector3<float> P = ray.o + tz * ray.d;
+    return length(P) <= r;
 }
 
 void RTX_Renderer::generate_image()
 {
     const Vector3<float> center(0.f, 0.f, 0.f);
-    const float radius = 0.2f;
+    const float radius = 0.25f;
 
     struct u8_four
     {
         u8_four(unsigned char aa, unsigned char bb, unsigned char cc, unsigned char dd)
-            : a(aa), b(bb), c(cc), d(dd)
+            : r(aa), g(bb), b(cc), a(dd)
         {}
 
-        unsigned char a, b, c, d;
+        unsigned char r, g, b, a;
     };
 
-    alignas(D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT) std::vector<u8_four> image;
+    ray_camera = std::make_unique<RayCamera>(
+        Vector2<uint16_t>(window->width(), window->height())
+    );
+
+    ray_camera->initializeVariables(
+        Vector3<float>(0.f, 0.f, -2),
+        Vector3<float>(0.f, 0.f, 1),
+        45,
+        1
+    );
+
+    std::vector<u8_four> image;
     image.reserve(window->width() * window->height());
-    for (uint16_t i = 0; i < window->width(); i++)
+    for (uint16_t y = 0; y < window->height(); ++y)
     {
-        for (uint16_t j = 0; j < window->height(); ++j)
+        for (uint16_t x = 0; x < window->width(); ++x)
         {
-            Vector2<uint16_t> pixel_location(i, j);
-            auto ray = ray_camera.getRay(pixel_location);
+            auto ray = ray_camera->getRay({ x, y });
             if (ray_hit_sphere(ray, center, radius))
             {
                 image.emplace_back(255, 0, 0, 255);
             }
-            else 
+            else
             {
                 image.emplace_back(127, 255, 255, 255);
             }
         }
     }
-
+    
     scene_texture = std::make_unique<Texture2D>(
         device.Get(),
         command_list_direct.Get(),
@@ -156,7 +173,7 @@ void RTX_Renderer::generate_image()
         image.data(),
         window->width(),
         window->height(),
-        sizeof(UINT)
+        sizeof(u8_four)
     );
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};

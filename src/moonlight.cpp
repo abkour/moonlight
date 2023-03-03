@@ -12,11 +12,13 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 {
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-    try {
+    try 
+    {
         moonlight::RTX_Renderer application(hInstance);
         application.run();
     } 
-    catch (...) {
+    catch (...) 
+    {
         OutputDebugStringA("[Moonlight] Unexpected exception somewhere!");
     }
     

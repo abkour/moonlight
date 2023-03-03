@@ -33,7 +33,7 @@ Texture2D::Texture2D(
     {
         UINT8* data_u8 = reinterpret_cast<UINT8*>(data);
         UINT8* scanline = m_data_begin + placed_texture2D.Offset + y * pitched_desc.RowPitch;
-        memcpy(scanline, &(data_u8[y * width]), format_size * width);
+        memcpy(scanline, &(data_u8[y * width * format_size]), format_size * width);
     }
 
     D3D12_RESOURCE_DESC rsc_desc = {};
