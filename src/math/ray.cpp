@@ -28,7 +28,7 @@ Vector3<float> Ray::operator()(const float t) {
     return o + (t * d);
 }
 
-IntersectionParams ray_hit_triangle(const Ray& ray, const Vector3<float>& tris)
+IntersectionParams ray_hit_triangle(const Ray& ray, const Vector3<float>* tris)
 {
     using Vector3f = Vector3<float>;
 

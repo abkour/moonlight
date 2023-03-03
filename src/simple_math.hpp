@@ -406,6 +406,26 @@ bool cwise_less_or_equal(const Vector3<T>& v0, const Vector3<T>& v1)
 }
 
 template<typename T>
+Vector3<T> cwise_min(const Vector3<T>& v0, const Vector3<T>& v1)
+{
+    return {
+        v0.x < v1.x ? v0.x : v1.x,
+        v0.y < v1.y ? v0.y : v1.y,
+        v0.z < v1.z ? v0.z : v1.z
+    };
+}
+
+template<typename T>
+Vector3<T> cwise_max(const Vector3<T>& v0, const Vector3<T>& v1)
+{
+    return {
+        v0.x > v1.x ? v0.x : v1.x,
+        v0.y > v1.y ? v0.y : v1.y,
+        v0.z > v1.z ? v0.z : v1.z
+    };
+}
+
+template<typename T>
 T radians(T x_in_degrees)
 {
     return (x_in_degrees * std::numbers::pi_v<T>) / static_cast<T>(180);

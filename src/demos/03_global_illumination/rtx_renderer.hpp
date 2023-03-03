@@ -1,5 +1,4 @@
 #pragma once
-#include "ray.hpp"
 #include "ray_camera.hpp"
 #include "../common/scene.hpp"
 #include "../common/shader.hpp"
