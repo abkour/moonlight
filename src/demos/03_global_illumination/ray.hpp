@@ -1,4 +1,5 @@
 #pragma once
+#include "intersect.hpp"
 #include "../../simple_math.hpp"
 #include <ostream>
 
@@ -28,5 +29,7 @@ struct Ray {
 
 // Print out the parameters of the ray
 std::ostream& operator<<(std::ostream& os, const Ray& ray);
+
+IntersectionParams ray_hit_triangle(const Ray& ray, const Vector3<float>& tris);
 
 }
