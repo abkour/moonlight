@@ -1,4 +1,5 @@
 #include "bvh.hpp"
+#include <fstream>
 #include <Windows.h>
 
 namespace moonlight
@@ -8,6 +9,8 @@ void BVH::build_bvh(
     const Vector3<float>* tris,
     uint32_t n_triangles)
 {
+    n_nodes = n_triangles * 2 - 1;
+
     std::unique_ptr<Vector3<float>[]> tri_centroids =
         std::make_unique<Vector3<float>[]>(n_triangles);
 
@@ -161,6 +164,32 @@ void BVH::intersect(
         this->intersect(ray, tris, intersect, node.left_first);
         this->intersect(ray, tris, intersect, node.left_first + 1);
     }
+}
+
+void BVH::deserialize(const char* filename)
+{
+    std::ifstream file(filename, std::ios::binary);
+
+    file.read((char*)&n_nodes, sizeof(unsigned));
+    const unsigned n_triangles = (n_nodes + 1) / 2;
+    
+    tri_idx = std::make_unique<unsigned[]>(n_triangles);
+    m_bvh_nodes = std::make_unique<BVHNode[]>(n_nodes);
+
+    file.read((char*)tri_idx.get(), sizeof(unsigned) * n_triangles);
+    file.read((char*)m_bvh_nodes.get(), sizeof(BVHNode) * n_nodes);
+    file.read((char*)&nodes_used, sizeof(unsigned));
+}
+
+void BVH::serialize(const char* filename)
+{
+    const unsigned n_triangles = (n_nodes + 1) / 2;
+
+    std::ofstream file(filename, std::ios::binary);
+    file.write((char*)&n_nodes, sizeof(unsigned));
+    file.write((char*)tri_idx.get(), sizeof(unsigned) * n_triangles);
+    file.write((char*)m_bvh_nodes.get(), sizeof(BVHNode) * n_nodes);
+    file.write((char*)&nodes_used, sizeof(unsigned));
 }
 
 }
