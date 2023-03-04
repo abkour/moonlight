@@ -3,6 +3,7 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+asset/
 build/
 ext/
 rsc/
@@ -11,7 +12,7 @@ moonlight/
 x64/
 
 *.sln
-.cso
+*.cso
 
 # User-specific files
 *.rsuser
