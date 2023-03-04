@@ -194,6 +194,44 @@ inline uint8_t frustum_contains_aabb_avx2(
 }
 
 inline bool ray_intersects_aabb(
+    const AABB* aabb,
+    const Ray* ray)
+{
+    float near_t = std::numeric_limits<float>::min();
+    float far_t = std::numeric_limits<float>::max();
+
+    for (int i = 0; i < 3; i++)
+    {
+        float origin = ray->o[i];
+        float minVal = aabb->bmin[i];
+        float maxVal = aabb->bmax[i];
+
+        // If the ray is parallel to the bounding box, return early.
+        if (ray->d[i] == 0)
+        {
+            //xx++;
+            if (origin < minVal || origin > maxVal)
+                return false;
+        } else
+        {
+            float t1 = (minVal - origin) * ray->invd[i];
+            float t2 = (maxVal - origin) * ray->invd[i];
+
+            if (t1 > t2)
+                std::swap(t1, t2);
+
+            near_t = std::max(t1, near_t);
+            far_t = std::min(t2, far_t);
+
+            if (!(near_t <= far_t))
+                return false;
+        }
+    }
+
+    return true;
+}
+
+inline bool ray_intersects_aabb(
     const AABB* aabb, 
     const Ray* ray, 
     float& near_t, 

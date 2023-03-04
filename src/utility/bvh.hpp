@@ -27,7 +27,7 @@ public:
     );
 
     void intersect(
-        const Ray& ray, 
+        Ray& ray, 
         const Vector3<float>* tris, 
         IntersectionParams& intersect, 
         const unsigned node_idx = 0
@@ -44,21 +44,19 @@ private:
 
     void update_node_bounds(
         uint32_t node_idx,
-        Triangle* tris
+        const Triangle* tris
     );
 
     void sub_divide(
         uint32_t node_idx, 
-        Triangle* tris,
-        Vector3<float>* tri_centroids
+        const Triangle* tris,
+        const Vector3<float>* tri_centroids
     );
 
 private:
 
     std::unique_ptr<uint32_t[]> tri_idx;
     std::unique_ptr<BVHNode[]> m_bvh_nodes;
-
-    unsigned root_nodeidx = 0;
     unsigned nodes_used = 1;
 };
 

@@ -1,4 +1,5 @@
 #include "bvh.hpp"
+#include <Windows.h>
 
 namespace moonlight
 {
@@ -24,6 +25,7 @@ void BVH::build_bvh(
             (tris[i * 3] + tris[i * 3 + 1] + tris[i * 3 + 2]) * 0.3333333f;
     }
 
+    const unsigned root_nodeidx = 0;
     BVHNode& root = m_bvh_nodes[root_nodeidx];
     root.left_first = 0;
     root.tri_count = n_triangles;
@@ -34,7 +36,7 @@ void BVH::build_bvh(
 
 void BVH::update_node_bounds(
     uint32_t node_idx, 
-    Triangle* tris)
+    const Triangle* tris)
 {
     BVHNode& node = m_bvh_nodes[node_idx];
     Vector3<float> bmin(std::numeric_limits<float>::max());
@@ -55,8 +57,8 @@ void BVH::update_node_bounds(
 
 void BVH::sub_divide(
     uint32_t node_idx,
-    Triangle* tris,
-    Vector3<float>* tri_centroids)
+    const Triangle* tris,
+    const Vector3<float>* tri_centroids)
 {
     BVHNode& node = m_bvh_nodes[node_idx];
     if (node.tri_count <= 2) return;
@@ -71,13 +73,15 @@ void BVH::sub_divide(
     // Sort the primitives, such that primitives belonging to
     // group A are all in consecutive order.
     int i = node.left_first;
-    int j = i + node.tri_count - 1;
+    int j = node.left_first + node.tri_count - 1;
     while (i <= j)
     {
-        if (tri_centroids[tri_idx[i]][axis] < split_pos)
+        auto& centroid = tri_centroids[tri_idx[i]];
+        if (centroid[axis] < split_pos)
         {
             ++i;
-        } else
+        } 
+        else
         {
             std::swap(tri_idx[i], tri_idx[j--]);
         }
@@ -106,28 +110,48 @@ void BVH::sub_divide(
 }
 
 
+static bool IntersectAABB(const Ray& ray, const Vector3<float> bmin, const Vector3<float> bmax)
+{
+    float tx1 = (bmin.x - ray.o.x) / ray.d.x;
+    float tx2 = (bmax.x - ray.o.x) / ray.d.x;
+    float tmin = std::min(tx1, tx2);
+    float tmax = std::max(tx1, tx2);
+    float ty1 = (bmin.y - ray.o.y) / ray.d.y;
+    float ty2 = (bmax.y - ray.o.y) / ray.d.y;
+    tmin = std::max(tmin, std::min(ty1, ty2));
+    tmax = std::min(tmax, std::max(ty1, ty2));
+    float tz1 = (bmin.z - ray.o.z) / ray.d.z;
+    float tz2 = (bmax.z - ray.o.z) / ray.d.z;
+    tmin = std::max(tmin, std::min(tz1, tz2));
+    tmax = std::min(tmax, std::max(tz1, tz2));
+    return tmax >= tmin && tmin < ray.t && tmax > 0;
+}
+
 void BVH::intersect(
-    const Ray& ray, 
+    Ray& ray, 
     const Vector3<float>* tris,
     IntersectionParams& intersect,
     const unsigned node_idx)
 {
-    BVHNode& node = m_bvh_nodes[node_idx];
-    float near_t = 0.f;
-    float far_t  = 0.f;
-    if (!ray_intersects_aabb(reinterpret_cast<AABB*>(&node.aabbmin), &ray, near_t, far_t))
+    const BVHNode& node = m_bvh_nodes[node_idx];
+    /*if (!ray_intersects_aabb((AABB*)(&node.aabbmin), &ray))
+    {
+        return;
+    }*/
+    if (!IntersectAABB(ray, node.aabbmin, node.aabbmax))
     {
         return;
     }
 
     if (node.is_leaf())
     {
-        IntersectionParams new_intersect;
         for (unsigned i = 0; i < node.tri_count; ++i)
         {
-            new_intersect = ray_hit_triangle(ray, &tris[tri_idx[node.left_first + i]]);
-            if (new_intersect.t < intersect.t)
+            IntersectionParams new_intersect 
+                = ray_hit_triangle(ray, &tris[tri_idx[node.left_first + i] * 3]);
+            if (new_intersect.t < ray.t)
             {
+                ray.t = new_intersect.t;
                 memcpy(&intersect, &new_intersect, sizeof(IntersectionParams));
             }
         }

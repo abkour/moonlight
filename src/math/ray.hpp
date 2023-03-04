@@ -23,6 +23,7 @@ struct Ray {
 
     // origin refers to the ray origin in world space and direction refers to the direction
     // the ray travels in. The direction vector has to be normalized
+    float t = std::numeric_limits<float>::max();
     Vector3<float> o, d;
     Vector3<float> invd;	// Inverse direction is used for some intersection algorithms for performance
 };

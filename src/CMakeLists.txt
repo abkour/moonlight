@@ -18,7 +18,7 @@ add_executable (moonlight WIN32
 	"core/descriptor_heap.cpp" 
 	"utility/arena_allocator.cpp"
 	"utility/glyph_renderer.cpp" 
- "demos/03_global_illumination/rtx_renderer.cpp" "demos/03_global_illumination/ray_camera.cpp" "math/ray.cpp" "core/texture2D.cpp" "utility/common.cpp" "utility/bvh.cpp" "math/aabb.cpp" "utility/random_number.cpp")
+ "demos/03_global_illumination/rtx_renderer.cpp" "demos/03_global_illumination/ray_camera.cpp" "math/ray.cpp" "core/texture2D.cpp" "utility/common.cpp" "utility/bvh.cpp" "math/aabb.cpp" "utility/random_number.cpp" "logging_file.cpp")
 
 if (MSVC)
 set_target_properties(${BUILD_TARGET} PROPERTIES LINK_FLAGS "/PROFILE")

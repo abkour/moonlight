@@ -120,8 +120,11 @@ static bool ray_hit_circle(const Ray& ray, const float r)
 
 void RTX_Renderer::generate_image()
 {
-    const int N = 20;
-    Vector3<float> test_tris[N * 3];
+    LoggingFile logger("bvh_perf.txt", LoggingFile::Append);
+
+    const int N = 50000;
+    std::unique_ptr<Vector3<float>[]> test_tris
+        = std::make_unique<Vector3<float>[]>(N * 3);
     for (int i = 0; i < N; ++i)
     {
         Vector3<float> r0(random_normalized_float(), random_normalized_float(), random_normalized_float());
@@ -134,13 +137,9 @@ void RTX_Renderer::generate_image()
 
     auto build_time_start = std::chrono::high_resolution_clock::now();
     BVH bvh;
-    bvh.build_bvh(test_tris, N);
+    bvh.build_bvh(test_tris.get(), N);
     auto build_time_end = std::chrono::high_resolution_clock::now();
     auto build_time = (build_time_end - build_time_start).count() * 1e-6;
-
-    char buffer_bt[512];
-    sprintf_s(buffer_bt, "Build time: %f\n", build_time);
-    OutputDebugStringA(buffer_bt);
 
     const Vector3<float> center(0.f, 0.f, 0.f);
     const float radius = 0.25f;
@@ -159,11 +158,16 @@ void RTX_Renderer::generate_image()
     );
 
     ray_camera->initializeVariables(
-        Vector3<float>(0.f, 0.f, -20),
+        Vector3<float>(0.f, 0.f, -25),
         Vector3<float>(0.f, 0.f, 1),
         45,
         1
     );
+
+    logger << "Logging BVH related performance metrics\n";
+    logger << "Metadata:\n\tNumber of triangles: " << N << '\n';
+    logger << "\tCamera position: " << ray_camera->get_position() << '\n';
+    logger << "\nbuild_time: " << build_time << "\n";
 
     std::vector<u8_four> image;
     image.reserve(window->width() * window->height());
@@ -172,9 +176,8 @@ void RTX_Renderer::generate_image()
     {
         for (uint16_t x = 0; x < window->width(); ++x)
         {
-#define TEST_LINEAR
+//#define TEST_LINEAR
 #ifdef TEST_LINEAR
-
             auto ray = ray_camera->getRay({ x, y });
             unsigned i = 0;
             for (; i < N; ++i)
@@ -182,34 +185,32 @@ void RTX_Renderer::generate_image()
                 IntersectionParams intersect = ray_hit_triangle(ray, &test_tris[i * 3]);
                 if (intersect.is_intersection())
                 {
-                    image.emplace_back(255, 0, 0, 255);
+                    image.emplace_back(0, 0, 0, 255);
                     break;
                 }
             }
             if (i == N)
             {
-                image.emplace_back(127, 255, 255, 255);
+                image.emplace_back(127, 127, 127, 255);
             }
 #else
             auto ray = ray_camera->getRay({ x, y });
             IntersectionParams intersect;
-            bvh.intersect(ray, test_tris, intersect);
+            bvh.intersect(ray, test_tris.get(), intersect);
             if (intersect.is_intersection())
             {
-                image.emplace_back(255, 0, 0, 255);
+                image.emplace_back(0, 0, 0, 255);
             } 
             else
             {
-                image.emplace_back(127, 255, 255, 255);
+                image.emplace_back(127, 127, 127, 255);
             }
 #endif
         }
     }
     auto t_end = std::chrono::high_resolution_clock::now();
     auto t_delta = (t_end - t_start).count() * 1e-6;
-    char buffer_tt[512];
-    sprintf_s(buffer_tt, "Traversal time: %f\n", t_delta);
-    OutputDebugStringA(buffer_tt);
+    logger << "Traversal time: " << t_delta << "\n\n";
 
     scene_texture = std::make_unique<Texture2D>(
         device.Get(),

@@ -1,5 +1,6 @@
 #pragma once
 #include "../ext/d3dx12.h"
+#include "logging_file.hpp"
 #include "core/key_state.hpp"
 #include "project_defines.hpp"
 #include "window.hpp"

@@ -30,6 +30,11 @@ struct RayCamera {
     unsigned resx() const;
     unsigned resy() const;
 
+    inline Vector3<float> get_position() const
+    {
+        return eyepos;
+    }
+
 protected:
 
     Vector2<uint16_t> resolution;
