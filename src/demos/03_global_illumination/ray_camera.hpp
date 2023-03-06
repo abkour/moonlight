@@ -1,5 +1,5 @@
 #pragma once
-#include "../../math/ray.hpp"
+#include "../../collision/ray.hpp"
 #include <DirectXMath.h>
 
 namespace moonlight

@@ -15,11 +15,13 @@ public:
         Truncate    // Erases the file contents, when the file is opened
     };
 
+    LoggingFile();
     LoggingFile(const char* filename, OpenMode open_mode);
     ~LoggingFile();
 
     void close();
-    void open();
+    void open(OpenMode open_mode);
+    void open(const char* filename, OpenMode open_mode);
 
     template<typename T>
     LoggingFile& operator<<(T input)

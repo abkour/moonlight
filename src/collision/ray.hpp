@@ -2,6 +2,7 @@
 #include "intersect.hpp"
 #include "../simple_math.hpp"
 #include <ostream>
+#include <intrin.h>
 
 namespace moonlight {
 
@@ -9,7 +10,10 @@ namespace moonlight {
 struct Ray {
 
     // Default constructed rays are meaningless. However, they are needed for intermediate steps.
-    Ray() = default;
+    Ray()
+    {
+        o4 = d4 = invd4 = _mm_set1_ps(1);
+    }
     // Constructs a ray with origin \origin and direction \direction. Must make sure that the 
     // direction vector is normalized
     Ray(const Vector3<float>& origin, const Vector3<float>& direction);
@@ -24,8 +28,30 @@ struct Ray {
     // origin refers to the ray origin in world space and direction refers to the direction
     // the ray travels in. The direction vector has to be normalized
     float t = std::numeric_limits<float>::max();
-    Vector3<float> o, d;
-    Vector3<float> invd;	// Inverse direction is used for some intersection algorithms for performance
+   
+    union {
+        struct {
+            Vector3<float> o;
+            float dummy1;
+        };
+        __m128 o4;
+    };
+
+    union {
+        struct {
+            Vector3<float> d;
+            float dummy2;
+        };
+        __m128 d4;
+    };
+
+    union {
+        struct {
+            Vector3<float> invd;
+            float dummy4;
+        };
+        __m128 invd4;
+    };
 };
 
 // Print out the parameters of the ray

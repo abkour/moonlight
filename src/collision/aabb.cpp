@@ -31,6 +31,12 @@ AABB aabb_construct_from_points(
     return aabb;
 }
 
+float aabb_area(const AABB& aabb)
+{
+    Vector3<float> e = aabb.bmax - aabb.bmin;
+    return e.x * e.y + e.y * e.z + e.x * e.z;
+}
+
 Vector3<float> aabb_center(const AABB& aabb)
 {
     return (aabb.bmax + aabb.bmin) / 2.f;
@@ -39,6 +45,12 @@ Vector3<float> aabb_center(const AABB& aabb)
 bool aabb_empty(const AABB& x)
 {
     return x.bmin == x.bmax;
+}
+
+void aabb_extend(AABB& aabb, const Vector3<float>& p)
+{
+    aabb.bmin = cwise_min(aabb.bmin, p);
+    aabb.bmax = cwise_max(aabb.bmax, p);
 }
 
 bool aabb_degenerate(const AABB& x)

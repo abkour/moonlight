@@ -46,8 +46,8 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         hinstance,
         L"DX12MoonlightApplication",
         L"DX12_Demo_Template",
-        1600,
-        800,
+        640,
+        480,
         &RTX_Renderer::WindowMessagingProcess,
         this
     );
@@ -120,21 +120,28 @@ static bool ray_hit_circle(const Ray& ray, const float r)
 
 void RTX_Renderer::generate_image()
 {
-    LoggingFile logger("bvh_perf.txt", LoggingFile::Append);
-
-    const int N = 50000;
-    std::unique_ptr<Vector3<float>[]> test_tris
-        = std::make_unique<Vector3<float>[]>(N * 3);
-    for (int i = 0; i < N; ++i)
+    const int N = 12582;
+    //const int N = 10000;
+    std::unique_ptr<Triangle[]> test_tris
+        = std::make_unique<Triangle[]>(N);
+    
+    std::string asset_path =
+        std::string(ROOT_DIRECTORY_ASCII) + std::string("//assets//unity.tri");
+    
+    FILE* asset_file = fopen(asset_path.c_str(), "r");
+    float a, b, c, d, e, f, g, h, i;
+    for (int idx = 0; idx < N; ++idx)
     {
-        Vector3<float> r0(random_normalized_float(), random_normalized_float(), random_normalized_float());
-        Vector3<float> r1(random_normalized_float(), random_normalized_float(), random_normalized_float());
-        Vector3<float> r2(random_normalized_float(), random_normalized_float(), random_normalized_float());
-        test_tris[i * 3] = r0 * 9 - Vector3<float>(5);
-        test_tris[i * 3 + 1] = test_tris[i * 3] + r1;
-        test_tris[i * 3 + 2] = test_tris[i * 3] + r2;
+        fscanf(asset_file, "%f %f %f %f %f %f %f %f %f\n",
+            &a, &b, &c, &d, &e, &f, &g, &h, &i);
+        test_tris[idx].v0 = Vector3<float>(a, b, c);
+        test_tris[idx].v1 = Vector3<float>(d, e, f);
+        test_tris[idx].v2 = Vector3<float>(g, h, i);
     }
 
+    LoggingFile logger("bvh_perf_sah.txt", LoggingFile::Append);
+
+    logger << "BVH building...\n";
     auto build_time_start = std::chrono::high_resolution_clock::now();
     BVH bvh;
     bvh.build_bvh(test_tris.get(), N);
@@ -146,6 +153,8 @@ void RTX_Renderer::generate_image()
 
     struct u8_four
     {
+        u8_four() = default;
+
         u8_four(unsigned char aa, unsigned char bb, unsigned char cc, unsigned char dd)
             : r(aa), g(bb), b(cc), a(dd)
         {}
@@ -158,7 +167,7 @@ void RTX_Renderer::generate_image()
     );
 
     ray_camera->initializeVariables(
-        Vector3<float>(0.f, 0.f, -25),
+        Vector3<float>(-3.5f, -1.f, -2.5f),
         Vector3<float>(0.f, 0.f, 1),
         45,
         1
@@ -168,49 +177,51 @@ void RTX_Renderer::generate_image()
     logger << "Metadata:\n\tNumber of triangles: " << N << '\n';
     logger << "\tCamera position: " << ray_camera->get_position() << '\n';
     logger << "\nbuild_time: " << build_time << "\n";
+    logger << "build method: SAH\n";
+    logger << "ray-quad: 4\n";
+    logger << "window_width: " << window->width() << '\n';
+    logger << "window_height: " << window->height() << '\n';
 
     std::vector<u8_four> image;
-    image.reserve(window->width() * window->height());
+    image.resize(window->width() * window->height());
     auto t_start = std::chrono::high_resolution_clock::now();
-    for (uint16_t y = 0; y < window->height(); ++y)
+    for (uint16_t y = 0; y < window->height(); y += 4)
     {
-        for (uint16_t x = 0; x < window->width(); ++x)
+        for (uint16_t x = 0; x < window->width(); x += 4)
         {
-//#define TEST_LINEAR
-#ifdef TEST_LINEAR
-            auto ray = ray_camera->getRay({ x, y });
-            unsigned i = 0;
-            for (; i < N; ++i)
+            for (uint16_t v = 0; v < 4; ++v)
             {
-                IntersectionParams intersect = ray_hit_triangle(ray, &test_tris[i * 3]);
-                if (intersect.is_intersection())
+                for (uint16_t u = 0; u < 4; ++u)
                 {
-                    image.emplace_back(0, 0, 0, 255);
-                    break;
+                    std::size_t idx = ((y + v) * window->width()) + x + u;
+                    uint16_t px = x + u;
+                    uint16_t py = y + v;
+                    auto ray = ray_camera->getRay({ px, py });
+                    IntersectionParams intersect;
+                    bvh.intersect(ray, test_tris.get(), intersect);
+                    if (ray.t < std::numeric_limits<float>::max())
+                    {
+                        unsigned c = (int)(ray.t * 42);
+                        c *= 0x10101;
+                        image[idx].r = c;
+                        image[idx].g = c;
+                        image[idx].b = c;
+                        image[idx].a = c;
+                    } 
+                    else
+                    {
+                        image[idx].r = 0;
+                        image[idx].g = 0;
+                        image[idx].b = 0;
+                        image[idx].a = 0;
+                    }
                 }
             }
-            if (i == N)
-            {
-                image.emplace_back(127, 127, 127, 255);
-            }
-#else
-            auto ray = ray_camera->getRay({ x, y });
-            IntersectionParams intersect;
-            bvh.intersect(ray, test_tris.get(), intersect);
-            if (intersect.is_intersection())
-            {
-                image.emplace_back(0, 0, 0, 255);
-            } 
-            else
-            {
-                image.emplace_back(127, 127, 127, 255);
-            }
-#endif
         }
     }
     auto t_end = std::chrono::high_resolution_clock::now();
     auto t_delta = (t_end - t_start).count() * 1e-6;
-    logger << "Traversal time: " << t_delta << "\n\n";
+    logger << "Traversal time: " << t_delta << "\n\n\n";
 
     scene_texture = std::make_unique<Texture2D>(
         device.Get(),

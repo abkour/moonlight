@@ -7,6 +7,11 @@ namespace moonlight
 
 struct AABB
 {
+    AABB()
+        : bmin(std::numeric_limits<float>::max())
+        , bmax(-std::numeric_limits<float>::max())
+    {}
+
     Vector3<float> bmin, bmax;
 };
 
@@ -16,7 +21,11 @@ AABB aabb_construct_from_points(
     const uint32_t stride
 );
 
+float aabb_area(const AABB& aabb);
+
 Vector3<float> aabb_center(const AABB& aabb);
+
+void aabb_extend(AABB& aabb, const Vector3<float>& p);
 
 bool aabb_empty(const AABB& x);
 

@@ -11,8 +11,8 @@
 #include "../../core/render_texture.hpp"
 #include "../../core/swap_chain.hpp"
 #include "../../core/texture2D.hpp"
-#include "../../math/aabb.hpp"
-#include "../../math/primitive_tests.hpp"
+#include "../../collision/aabb.hpp"
+#include "../../collision/primitive_tests.hpp"
 #include "../../utility/arena_allocator.hpp"
 #include "../../utility/glyph_renderer.hpp"
 #include "../../../ext/DirectXTK12/Inc/DescriptorHeap.h"
@@ -28,10 +28,10 @@ class RTX_Renderer : public IApplication
 
 /*
 *   Requires:
-*       - BVH
-*       - Camera
-*       - PBR
-*       - File Loading
+*       - BVH           [x]
+*       - Camera        [x]
+*       - PBR           [ ]
+*       - File Loading  [ ]
 *
 *   Approach:
 *       Get Camera/PBR done first, then worry about file loading, then worry about BVH

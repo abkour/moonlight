@@ -125,6 +125,9 @@ void Window::create_window(
         parent_pointer
     );
 
+    window_width = width;
+    window_height = height;
+
     assert(handle && "Failed to create window");
 }
 

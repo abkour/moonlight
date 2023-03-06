@@ -3,6 +3,9 @@
 namespace moonlight
 {
 
+LoggingFile::LoggingFile()
+{}
+
 LoggingFile::LoggingFile(const char* filename, OpenMode open_mode)
     : filename(filename)
 {
@@ -18,6 +21,7 @@ LoggingFile::LoggingFile(const char* filename, OpenMode open_mode)
         ofile.open(filename, std::ios::trunc);
         break;
     default:
+        ofile.open(filename, std::ios::app);
         break;
     }
 }
@@ -32,9 +36,14 @@ void LoggingFile::close()
     ofile.close();
 }
 
-void LoggingFile::open()
+void LoggingFile::open(const char* filename, OpenMode open_mode)
 {
-    ofile.open(filename, std::ios::in);
+    ofile.open(filename, open_mode);
+}
+
+void LoggingFile::open(OpenMode open_mode)
+{
+    ofile.open(filename, open_mode);
 }
 
 }
