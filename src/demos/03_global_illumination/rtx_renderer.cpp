@@ -135,10 +135,14 @@ void RTX_Renderer::generate_image()
     {
         fscanf(asset_file, "%f %f %f %f %f %f %f %f %f\n",
             &a, &b, &c, &d, &e, &f, &g, &h, &i);
+        
         test_tris[idx].v0 = Vector3<float>(a, b, c);
         test_tris[idx].v1 = Vector3<float>(d, e, f);
         test_tris[idx].v2 = Vector3<float>(g, h, i);
+        test_tris[idx].centroid =
+            (test_tris[idx].v0 + test_tris[idx].v1 + test_tris[idx].v2) * 0.3333333f;
     }
+
     
     LoggingFile logger("bvh_perf_sah.txt", LoggingFile::Append);
 

@@ -7,9 +7,7 @@
 namespace moonlight
 {
 
-void BVH::build_bvh(
-    Triangle* tris,
-    uint32_t n_triangles)
+void BVH::build_bvh(const Triangle* tris, uint32_t n_triangles)
 {
     n_nodes = n_triangles * 2 - 1;
 
@@ -21,49 +19,15 @@ void BVH::build_bvh(
         tri_idx[i] = i;
     }
     
-    for (uint32_t i = 0; i < n_triangles; ++i)
-    {
-        tris[i].centroid =
-            (tris[i].v0 + tris[i].v1 + tris[i].v2) * 0.3333333f;
-    }
-
     BVHNode& root = m_bvh_nodes[0];
     root.left_first = 0;
     root.tri_count = n_triangles;
 
     update_node_bounds(0, tris);
     sub_divide(0, tris);
-    /*
-    LoggingFile logger("bvh_info.txt", LoggingFile::Truncate);
-    for (int i = 0; i < nodes_used; ++i)
-    {
-        logger << "Node indx: " << i << '\n';
-        logger << "Node type: ";
-        const BVHNode& node = m_bvh_nodes[i];
-        if (node.is_leaf())
-        {
-            logger << "Leaf\n";
-            logger << "First index: " << node.left_first << '\n';
-            logger << "Number of triangles: " << node.tri_count << '\n';
-            logger << "AABBmin: " << node.aabbmin << '\n';
-            logger << "AABBmax: " << node.aabbmax << '\n';
-        } 
-        else
-        {
-            logger << "Interior\n";
-            logger << "Child1: " << node.left_first << '\n';
-            logger << "Child2: " << node.left_first + 1 << '\n';
-            logger << "AABBmin: " << node.aabbmin << '\n';
-            logger << "AABBmax: " << node.aabbmax << '\n';
-        }
-
-        logger << "\n----------------------------------\n";
-    }*/
 }
 
-void BVH::update_node_bounds(
-    uint32_t node_idx, 
-    Triangle* tris)
+void BVH::update_node_bounds(uint32_t node_idx, const Triangle* tris)
 {
     BVHNode& node = m_bvh_nodes[node_idx];
     
@@ -80,14 +44,12 @@ void BVH::update_node_bounds(
     }
 }
 
-void BVH::sub_divide(
-    uint32_t node_idx,
-    Triangle* tris)
+void BVH::sub_divide(uint32_t node_idx, const Triangle* tris)
 {
     BVHNode& node = m_bvh_nodes[node_idx];
     int axis;
     float split_pos;
-    if (!compute_optimal_cost(node, tris, axis, split_pos))
+    if (!compute_optimal_split(node, tris, axis, split_pos))
         return;
 
     // Sort the primitives, such that primitives belonging to
@@ -128,7 +90,8 @@ void BVH::sub_divide(
     sub_divide(right_child_idx, tris);
 }
 
-bool BVH::compute_optimal_cost(BVHNode& node, Triangle* tris, int& axis, float& split_pos)
+bool BVH::compute_optimal_split(
+    const BVHNode& node, const Triangle* tris, int& axis, float& split_pos)
 {
     Vector3<float> e = node.aabbmax - node.aabbmin; // extent of parent
     float parent_area = e.x * e.y + e.y * e.z + e.z * e.x;
@@ -202,9 +165,7 @@ static float IntersectAABB_SSE(const Ray& ray, const __m128 bmin4, const __m128 
 }
 
 void BVH::intersect(
-    Ray& ray, 
-    Triangle* tris,
-    IntersectionParams& intersect)
+    Ray& ray, const Triangle* tris, IntersectionParams& intersect)
 {
     const BVHNode* node = &m_bvh_nodes[0];
     BVHNode* stack[64];
@@ -284,8 +245,8 @@ void BVH::intersect(
 }
 
 float BVH::compute_sah(
-    BVHNode& node, 
-    Triangle* tris, 
+    const BVHNode& node, 
+    const Triangle* tris, 
     int axis, 
     float pos)
 {

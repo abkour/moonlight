@@ -46,13 +46,13 @@ class BVH
 public:
 
     void build_bvh(
-        Triangle* tris,
+        const Triangle* tris,
         uint32_t n_triangles
     );
 
     void intersect(
         Ray& ray, 
-        Triangle* tris, 
+        const Triangle* tris, 
         IntersectionParams& intersect
     );
 
@@ -64,15 +64,15 @@ public:
 
 private:
 
-    void update_node_bounds(uint32_t node_idx, Triangle* tris);
+    void update_node_bounds(uint32_t node_idx, const Triangle* tris);
 
-    void sub_divide(uint32_t node_idx, Triangle* tris);
+    void sub_divide(uint32_t node_idx, const Triangle* tris);
 
     float compute_sah(
-        BVHNode& node, Triangle* tris, int axis, float pos);
+        const BVHNode& node, const Triangle* tris, int axis, float pos);
 
-    bool compute_optimal_cost(
-        BVHNode& node, Triangle* tris, int& axis, float& split_pos);
+    bool compute_optimal_split(
+        const BVHNode& node, const Triangle* tris, int& axis, float& split_pos);
 
 private:
 
