@@ -85,36 +85,10 @@ void BVH::sub_divide(
     Triangle* tris)
 {
     BVHNode& node = m_bvh_nodes[node_idx];
-
-    // Determine splitting plane using SAH
-    Vector3<float> e = node.aabbmax - node.aabbmin; // extent of parent
-    float parent_area = e.x * e.y + e.y * e.z + e.z * e.x;
-    float parent_cost = node.tri_count * parent_area;
-    
-    int best_axis = -1;
-    float best_pos = 0.f;
-    float best_cost = std::numeric_limits<float>::max();
-    
-    for (int axis = 0; axis < 3; ++axis)
-    {
-        for (unsigned i = 0; i < node.tri_count; ++i)
-        {
-            unsigned idx = tri_idx[node.left_first + i];
-            float candidate_pos = tris[idx].centroid[axis];
-            float cost = compute_sah(node, tris, axis, candidate_pos);
-            if (cost < best_cost)
-            {
-                best_pos = candidate_pos;
-                best_axis = axis;
-                best_cost = cost;
-            }
-        }
-    }
-
-    if (best_cost >= parent_cost) return;
-
-    int axis = best_axis;
-    float split_pos = best_pos;
+    int axis;
+    float split_pos;
+    if (!compute_optimal_cost(node, tris, axis, split_pos))
+        return;
 
     // Sort the primitives, such that primitives belonging to
     // group A are all in consecutive order.
@@ -154,6 +128,38 @@ void BVH::sub_divide(
     sub_divide(right_child_idx, tris);
 }
 
+bool BVH::compute_optimal_cost(BVHNode& node, Triangle* tris, int& axis, float& split_pos)
+{
+    Vector3<float> e = node.aabbmax - node.aabbmin; // extent of parent
+    float parent_area = e.x * e.y + e.y * e.z + e.z * e.x;
+    float parent_cost = node.tri_count * parent_area;
+
+    int best_axis = -1;
+    float best_pos = 0.f;
+    float best_cost = std::numeric_limits<float>::max();
+
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        for (unsigned i = 0; i < node.tri_count; ++i)
+        {
+            unsigned idx = tri_idx[node.left_first + i];
+            float candidate_pos = tris[idx].centroid[axis];
+            float cost = compute_sah(node, tris, axis, candidate_pos);
+            if (cost < best_cost)
+            {
+                best_pos = candidate_pos;
+                best_axis = axis;
+                best_cost = cost;
+            }
+        }
+    }
+
+    if (best_cost >= parent_cost) return false;
+    
+    axis = best_axis;
+    split_pos = best_pos;
+    return true;
+}
 
 static float IntersectAABB(const Ray& ray, const Vector3<float> bmin, const Vector3<float> bmax)
 {

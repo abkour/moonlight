@@ -121,6 +121,7 @@ static bool ray_hit_circle(const Ray& ray, const float r)
 void RTX_Renderer::generate_image()
 {
     const int N = 12582;
+    
     //const int N = 10000;
     std::unique_ptr<Triangle[]> test_tris
         = std::make_unique<Triangle[]>(N);
@@ -138,15 +139,18 @@ void RTX_Renderer::generate_image()
         test_tris[idx].v1 = Vector3<float>(d, e, f);
         test_tris[idx].v2 = Vector3<float>(g, h, i);
     }
-
+    
     LoggingFile logger("bvh_perf_sah.txt", LoggingFile::Append);
 
     logger << "BVH building...\n";
     auto build_time_start = std::chrono::high_resolution_clock::now();
     BVH bvh;
-    bvh.build_bvh(test_tris.get(), N);
+    bvh.deserialize("RawBVH.bin");
+    //bvh.build_bvh(test_tris.get(), N);
     auto build_time_end = std::chrono::high_resolution_clock::now();
     auto build_time = (build_time_end - build_time_start).count() * 1e-6;
+
+    //bvh.serialize("RawBVH.bin");
 
     const Vector3<float> center(0.f, 0.f, 0.f);
     const float radius = 0.25f;

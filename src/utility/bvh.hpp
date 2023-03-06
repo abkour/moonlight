@@ -64,22 +64,15 @@ public:
 
 private:
 
-    void update_node_bounds(
-        uint32_t node_idx,
-        Triangle* tris
-    );
+    void update_node_bounds(uint32_t node_idx, Triangle* tris);
 
-    void sub_divide(
-        uint32_t node_idx, 
-        Triangle* tris
-    );
+    void sub_divide(uint32_t node_idx, Triangle* tris);
 
     float compute_sah(
-        BVHNode& node,
-        Triangle* tris, 
-        int axis, 
-        float pos
-    );
+        BVHNode& node, Triangle* tris, int axis, float pos);
+
+    bool compute_optimal_cost(
+        BVHNode& node, Triangle* tris, int& axis, float& split_pos);
 
 private:
 
