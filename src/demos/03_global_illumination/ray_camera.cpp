@@ -96,7 +96,7 @@ void RayCamera::translate(KeyState kd, const float dt)
 
 void RayCamera::reinitialize_camera_variables()
 {
-    const Vector3f T(eyedir - eyepos);
+    const Vector3f T(eyedir);
     const Vector3f up(0.f, 1.f, 0.f);
     const Vector3f right_norm(normalize(cross(up, T)));
     const Vector3f t_norm(normalize(T));

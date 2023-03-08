@@ -223,36 +223,91 @@ void RTX_Renderer::generate_image()
         }
     }
 
-    scene_texture = std::make_unique<Texture2D>(
-        device.Get(),
-        command_list_direct.Get(),
-        DXGI_FORMAT_R8G8B8A8_UNORM,
-        image.data(),
-        window->width(),
-        window->height(),
-        sizeof(u8_four)
-    );
+    if (scene_texture != nullptr)
+    {
+        command_allocator->Reset();
+        command_list_direct->Reset(command_allocator.Get(), nullptr);
 
-    transition_resource(
-        command_list_direct.Get(),
-        scene_texture->get_underlying(),
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-    );
+        transition_resource(
+            command_list_direct.Get(),
+            scene_texture->get_underlying(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_COPY_DEST
+        );
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srv_desc.TextureCube.MostDetailedMip = 0;
-    srv_desc.TextureCube.MipLevels = 1;
-    srv_desc.TextureCube.ResourceMinLODClamp = 0.f;
-    srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    
-    device->CreateShaderResourceView(
-        scene_texture->get_underlying(),
-        &srv_desc,
-        srv_descriptor_heap->cpu_handle()
-    );
+        scene_texture->update(
+            command_list_direct.Get(),
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            image.data(),
+            window->width(),
+            window->height(),
+            sizeof(u8_four)
+        );
+
+        transition_resource(
+            command_list_direct.Get(),
+            scene_texture->get_underlying(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv_desc.TextureCube.MostDetailedMip = 0;
+        srv_desc.TextureCube.MipLevels = 1;
+        srv_desc.TextureCube.ResourceMinLODClamp = 0.f;
+        srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+        device->CreateShaderResourceView(
+            scene_texture->get_underlying(),
+            &srv_desc,
+            srv_descriptor_heap->cpu_handle()
+        );
+
+        command_list_direct->Close();
+        // Execute eall command now
+        ID3D12CommandList* command_lists[] =
+        {
+            command_list_direct.Get()
+        };
+        command_queue->execute_command_list(command_lists, 1);
+        command_queue->signal();
+        command_queue->wait_for_fence();
+    }
+    else
+    {
+        scene_texture = std::make_unique<Texture2D>(
+            device.Get(),
+            command_list_direct.Get(),
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            image.data(),
+            window->width(),
+            window->height(),
+            sizeof(u8_four)
+        );
+
+        transition_resource(
+            command_list_direct.Get(),
+            scene_texture->get_underlying(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv_desc.TextureCube.MostDetailedMip = 0;
+        srv_desc.TextureCube.MipLevels = 1;
+        srv_desc.TextureCube.ResourceMinLODClamp = 0.f;
+        srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+        device->CreateShaderResourceView(
+            scene_texture->get_underlying(),
+            &srv_desc,
+            srv_descriptor_heap->cpu_handle()
+        );
+    }
 }
 
 bool RTX_Renderer::is_gui_enabled()
@@ -435,7 +490,7 @@ void RTX_Renderer::update()
         old_window_dimensions = { window->width(), window->height() };
         image.resize(window->width() * window->height());
     }
-
+    
     ray_camera->translate(keyboard_state, elapsed_time);
 
     if (ray_camera->camera_variables_need_updating())
