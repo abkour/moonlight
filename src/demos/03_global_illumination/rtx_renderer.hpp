@@ -14,6 +14,7 @@
 #include "../../collision/aabb.hpp"
 #include "../../collision/primitive_tests.hpp"
 #include "../../utility/arena_allocator.hpp"
+#include "../../utility/bvh.hpp"
 #include "../../utility/glyph_renderer.hpp"
 #include "../../../ext/DirectXTK12/Inc/DescriptorHeap.h"
 #include "../../../ext/DirectXTK12/Inc/ResourceUploadBatch.h"
@@ -61,6 +62,8 @@ private:
 
 private:
 
+    void parse_files(const char* filename);
+    void construct_bvh();
     void generate_image();
 
 private:
@@ -91,8 +94,15 @@ private:
 
 private:
 
-    // IMGUI related
+    struct u8_four;
 
+    // BVH related
+    std::vector<u8_four> image;
+    BVH m_bvh;
+    uint64_t m_num_triangles = 0;
+    std::unique_ptr<Triangle[]> m_triangles;
+
+    Vector2<uint32_t> old_window_dimensions;
 };
 
 }

@@ -1,6 +1,5 @@
 #include "rtx_renderer.hpp"
 #include "../../utility/random_number.hpp"
-#include "../../utility/bvh.hpp"
 
 #include <chrono>
 #include <numeric>  // for std::iota
@@ -9,6 +8,17 @@ using namespace DirectX;
 using namespace Microsoft::WRL;
 
 namespace moonlight {
+
+struct RTX_Renderer::u8_four
+{
+    u8_four() = default;
+
+    u8_four(unsigned char aa, unsigned char bb, unsigned char cc, unsigned char dd)
+        : r(aa), g(bb), b(cc), a(dd)
+    {}
+
+    unsigned char r, g, b, a;
+};
 
 struct VertexFormat
 {
@@ -80,6 +90,21 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     srv_descriptor_heap = 
         std::make_unique<DescriptorHeap>(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2);
 
+    ray_camera = std::make_unique<RayCamera>(
+        Vector2<uint16_t>(window->width(), window->height())
+    );
+
+    ray_camera->initializeVariables(
+        Vector3<float>(-3.5f, 1.f, -2.5f),
+        normalize(Vector3<float>(0.f, 0.707f, 0.707)),
+        45,
+        1
+    );
+
+    old_window_dimensions = { window->width(), window->height() };
+    image.resize(old_window_dimensions.x * old_window_dimensions.y);
+
+    construct_bvh();
     generate_image();
 
     load_assets();
@@ -131,101 +156,38 @@ static bool ray_hit_circle(const Ray& ray, const float r)
     return length(P) <= r;
 }
 
-static std::unique_ptr<Triangle[]> parse_files(const char* filename, uint64_t& n_triangles)
+void RTX_Renderer::parse_files(const char* filename)
 {
     uint64_t n_bytes = 0;
     uint64_t stride_in_32floats = 0;
 
     std::ifstream file(filename, std::ios::in | std::ios::binary);
 
-    file.read((char*)&n_triangles, sizeof(uint64_t));
+    file.read((char*)&m_num_triangles, sizeof(uint64_t));
     file.read((char*)&stride_in_32floats, sizeof(uint64_t));
     file.read((char*)&n_bytes, sizeof(uint64_t));
 
-    std::unique_ptr<Triangle[]> tris 
-        = std::make_unique<Triangle[]>(n_triangles);
+    m_triangles = std::make_unique<Triangle[]>(m_num_triangles);
 
-    file.read((char*)tris.get(), n_bytes);
+    file.read((char*)m_triangles.get(), n_bytes);
+}
 
-    return tris;
+void RTX_Renderer::construct_bvh()
+{
+    std::string asset_path =
+        std::string(ROOT_DIRECTORY_ASCII) + std::string("//assets//boxplane.bin");
+
+    parse_files(asset_path.c_str());
+
+    std::string binstr = std::string(ROOT_DIRECTORY_ASCII) + "//assets//boxplane.rawbin";
+    m_bvh.build_bvh(m_triangles.get(), m_num_triangles);
 }
 
 void RTX_Renderer::generate_image()
 {
-    //const int N = 12582;
-    std::string asset_path =
-        std::string(ROOT_DIRECTORY_ASCII) + std::string("//assets//boxplane.bin");
-    
-    uint64_t N;
-    std::unique_ptr<Triangle[]> test_tris
-        = parse_files(asset_path.c_str(), N);
-    
-    /*
-    FILE* asset_file = fopen(asset_path.c_str(), "r");
-    float a, b, c, d, e, f, g, h, i;
-    for (int idx = 0; idx < N; ++idx)
-    {
-        fscanf(asset_file, "%f %f %f %f %f %f %f %f %f\n",
-            &a, &b, &c, &d, &e, &f, &g, &h, &i);
-        
-        test_tris[idx].v0 = Vector3<float>(a, b, c);
-        test_tris[idx].v1 = Vector3<float>(d, e, f);
-        test_tris[idx].v2 = Vector3<float>(g, h, i);
-        test_tris[idx].centroid =
-            (test_tris[idx].v0 + test_tris[idx].v1 + test_tris[idx].v2) * 0.3333333f;
-    }*/
-
-    LoggingFile logger("bvh_perf_sah.txt", LoggingFile::Append);
-
-    logger << "BVH building...\n";
-    auto build_time_start = std::chrono::high_resolution_clock::now();
-    BVH bvh;
-    std::string binstr = std::string(ROOT_DIRECTORY_ASCII) + "//assets//boxplane.rawbin";
-    //bvh.deserialize(binstr.c_str());
-    bvh.build_bvh(test_tris.get(), N);
-    bvh.serialize(binstr.c_str());
-    auto build_time_end = std::chrono::high_resolution_clock::now();
-    auto build_time = (build_time_end - build_time_start).count() * 1e-6;
-
-    //bvh.serialize("RawBVH.bin");
-
     const Vector3<float> center(0.f, 0.f, 0.f);
     const float radius = 0.25f;
 
-    struct u8_four
-    {
-        u8_four() = default;
-
-        u8_four(unsigned char aa, unsigned char bb, unsigned char cc, unsigned char dd)
-            : r(aa), g(bb), b(cc), a(dd)
-        {}
-
-        unsigned char r, g, b, a;
-    };
-
-    ray_camera = std::make_unique<RayCamera>(
-        Vector2<uint16_t>(window->width(), window->height())
-    );
-
-    ray_camera->initializeVariables(
-        Vector3<float>(-3.5f, 1.f, -2.5f),
-        normalize(Vector3<float>(0.f, 0.707f, 0.707)),
-        45,
-        1
-    );
-
-    logger << "Logging BVH related performance metrics\n";
-    logger << "Metadata:\n\tNumber of triangles: " << N << '\n';
-    logger << "\tCamera position: " << ray_camera->get_position() << '\n';
-    logger << "\nbuild_time: " << build_time << "\n";
-    logger << "build method: SAH\n";
-    logger << "ray-quad: 4\n";
-    logger << "window_width: " << window->width() << '\n';
-    logger << "window_height: " << window->height() << '\n';
-
-    std::vector<u8_four> image;
-    image.resize(window->width() * window->height());
-    auto t_start = std::chrono::high_resolution_clock::now();
     for (uint16_t y = 0; y < window->height(); y += 4)
     {
         for (uint16_t x = 0; x < window->width(); x += 4)
@@ -239,7 +201,7 @@ void RTX_Renderer::generate_image()
                     uint16_t py = y + v;
                     auto ray = ray_camera->getRay({ px, py });
                     IntersectionParams intersect;
-                    bvh.intersect(ray, test_tris.get(), intersect);
+                    m_bvh.intersect(ray, m_triangles.get(), intersect);
                     if (ray.t < std::numeric_limits<float>::max())
                     {
                         unsigned c = (int)(ray.t * 42);
@@ -260,9 +222,6 @@ void RTX_Renderer::generate_image()
             }
         }
     }
-    auto t_end = std::chrono::high_resolution_clock::now();
-    auto t_delta = (t_end - t_start).count() * 1e-6;
-    logger << "Traversal time: " << t_delta << "\n\n\n";
 
     scene_texture = std::make_unique<Texture2D>(
         device.Get(),
@@ -289,7 +248,8 @@ void RTX_Renderer::generate_image()
     srv_desc.TextureCube.ResourceMinLODClamp = 0.f;
     srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     
-    device->CreateShaderResourceView(scene_texture->get_underlying(),
+    device->CreateShaderResourceView(
+        scene_texture->get_underlying(),
         &srv_desc,
         srv_descriptor_heap->cpu_handle()
     );
@@ -370,7 +330,7 @@ void RTX_Renderer::on_mouse_move(LPARAM lparam)
             break;
         }
         
-        //camera.rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
+        ray_camera->rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
     }
 
     delete[] lpb;
@@ -461,6 +421,28 @@ void RTX_Renderer::resize()
 
 void RTX_Renderer::update()
 {
+    static float elapsed_time_at_threshold = 0.f;
+    static auto t0 = std::chrono::high_resolution_clock::now();
+    static float total_time = 0.f;
+    auto t1 = std::chrono::high_resolution_clock::now();
+    elapsed_time = (t1 - t0).count() * 1e-9;
+    total_time += elapsed_time;
+    t0 = t1;
+
+    if (window->width()  != old_window_dimensions.x || 
+        window->height() != old_window_dimensions.y)
+    {
+        old_window_dimensions = { window->width(), window->height() };
+        image.resize(window->width() * window->height());
+    }
+
+    ray_camera->translate(keyboard_state, elapsed_time);
+
+    if (ray_camera->camera_variables_need_updating())
+    {
+        ray_camera->reinitialize_camera_variables();
+        generate_image();
+    }
 }
 
 void RTX_Renderer::load_assets()
