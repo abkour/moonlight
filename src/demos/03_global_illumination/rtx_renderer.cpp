@@ -46,8 +46,8 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         hinstance,
         L"DX12MoonlightApplication",
         L"DX12_Demo_Template",
-        640,
-        480,
+        1280,
+        960,
         &RTX_Renderer::WindowMessagingProcess,
         this
     );
@@ -78,7 +78,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     );
 
     srv_descriptor_heap = 
-        std::make_unique<DescriptorHeap>(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+        std::make_unique<DescriptorHeap>(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2);
 
     generate_image();
 
@@ -94,21 +94,34 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     command_queue->signal();
     command_queue->wait_for_fence();
 
+    {
+        // IMGUI initialization
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+        (void)io;
+
+        ImGui::StyleColorsDark();
+
+        ImGui_ImplWin32_Init(window->handle);
+        ImGui_ImplDX12_Init(
+            device.Get(),
+            3,
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            srv_descriptor_heap->get_underlying(),
+            srv_descriptor_heap->cpu_handle(1),
+            srv_descriptor_heap->gpu_handle(1)
+        );
+    }
+
     app_initialized = true;
 }
 
 RTX_Renderer::~RTX_Renderer()
 {
-}
-
-static bool ray_hit_sphere(const Ray& ray, const Vector3<float>& center, const float r)
-{
-    Vector3<float> oc = ray.o - center;
-    float a = dot(ray.d, ray.d);
-    float b = 2.0 * dot(oc, ray.d);
-    float c = dot(oc, oc) - r * r;
-    float discriminant = b * b - 4 * a * c;
-    return (discriminant > 0);
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
 }
 
 static bool ray_hit_circle(const Ray& ray, const float r)
@@ -118,17 +131,36 @@ static bool ray_hit_circle(const Ray& ray, const float r)
     return length(P) <= r;
 }
 
+static std::unique_ptr<Triangle[]> parse_files(const char* filename, uint64_t& n_triangles)
+{
+    uint64_t n_bytes = 0;
+    uint64_t stride_in_32floats = 0;
+
+    std::ifstream file(filename, std::ios::in | std::ios::binary);
+
+    file.read((char*)&n_triangles, sizeof(uint64_t));
+    file.read((char*)&stride_in_32floats, sizeof(uint64_t));
+    file.read((char*)&n_bytes, sizeof(uint64_t));
+
+    std::unique_ptr<Triangle[]> tris 
+        = std::make_unique<Triangle[]>(n_triangles);
+
+    file.read((char*)tris.get(), n_bytes);
+
+    return tris;
+}
+
 void RTX_Renderer::generate_image()
 {
-    const int N = 12582;
-    
-    //const int N = 10000;
-    std::unique_ptr<Triangle[]> test_tris
-        = std::make_unique<Triangle[]>(N);
-    
+    //const int N = 12582;
     std::string asset_path =
-        std::string(ROOT_DIRECTORY_ASCII) + std::string("//assets//unity.tri");
+        std::string(ROOT_DIRECTORY_ASCII) + std::string("//assets//boxplane.bin");
     
+    uint64_t N;
+    std::unique_ptr<Triangle[]> test_tris
+        = parse_files(asset_path.c_str(), N);
+    
+    /*
     FILE* asset_file = fopen(asset_path.c_str(), "r");
     float a, b, c, d, e, f, g, h, i;
     for (int idx = 0; idx < N; ++idx)
@@ -141,16 +173,17 @@ void RTX_Renderer::generate_image()
         test_tris[idx].v2 = Vector3<float>(g, h, i);
         test_tris[idx].centroid =
             (test_tris[idx].v0 + test_tris[idx].v1 + test_tris[idx].v2) * 0.3333333f;
-    }
+    }*/
 
-    
     LoggingFile logger("bvh_perf_sah.txt", LoggingFile::Append);
 
     logger << "BVH building...\n";
     auto build_time_start = std::chrono::high_resolution_clock::now();
     BVH bvh;
-    bvh.deserialize("RawBVH.bin");
-    //bvh.build_bvh(test_tris.get(), N);
+    std::string binstr = std::string(ROOT_DIRECTORY_ASCII) + "//assets//boxplane.rawbin";
+    //bvh.deserialize(binstr.c_str());
+    bvh.build_bvh(test_tris.get(), N);
+    bvh.serialize(binstr.c_str());
     auto build_time_end = std::chrono::high_resolution_clock::now();
     auto build_time = (build_time_end - build_time_start).count() * 1e-6;
 
@@ -175,8 +208,8 @@ void RTX_Renderer::generate_image()
     );
 
     ray_camera->initializeVariables(
-        Vector3<float>(-3.5f, -1.f, -2.5f),
-        Vector3<float>(0.f, 0.f, 1),
+        Vector3<float>(-3.5f, 1.f, -2.5f),
+        normalize(Vector3<float>(0.f, 0.707f, 0.707)),
         45,
         1
     );
@@ -262,6 +295,11 @@ void RTX_Renderer::generate_image()
     );
 }
 
+bool RTX_Renderer::is_gui_enabled()
+{
+    return true;
+}
+
 bool RTX_Renderer::is_application_initialized()
 {
     return app_initialized;
@@ -285,6 +323,14 @@ void RTX_Renderer::initialize_raw_input_devices()
 
 void RTX_Renderer::on_key_event(const PackedKeyArguments key_state)
 {
+    ImGuiIO& io = ImGui::GetIO();
+    bool down = key_state.key_state == PackedKeyArguments::Pressed;
+
+    if (key_state.key < 256)
+    {
+        io.KeysDown[key_state.key] == down;
+    }
+
     switch (key_state.key_state)
     {
     case PackedKeyArguments::Released:
@@ -298,6 +344,36 @@ void RTX_Renderer::on_key_event(const PackedKeyArguments key_state)
 
 void RTX_Renderer::on_mouse_move(LPARAM lparam)
 {
+    UINT size;
+
+    GetRawInputData((HRAWINPUT)lparam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
+    LPBYTE lpb = new BYTE[size];
+    if (lpb == NULL) return;
+
+    if (GetRawInputData((HRAWINPUT)lparam, RID_INPUT, lpb, &size, sizeof(RAWINPUTHEADER)) != size)
+    {
+        OutputDebugStringA("GetRawInputData does not report correct size");
+    }
+    RAWINPUT* raw = (RAWINPUT*)lpb;
+    if (raw->header.dwType == RIM_TYPEMOUSE)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        switch (raw->data.mouse.usButtonFlags)
+        {
+        case RI_MOUSE_BUTTON_1_DOWN:
+            io.MouseDown[0] = true;
+            break;
+        case RI_MOUSE_BUTTON_1_UP:
+            io.MouseDown[0] = false;
+            break;
+        default:
+            break;
+        }
+        
+        //camera.rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
+    }
+
+    delete[] lpb;
 }
 
 void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
@@ -350,6 +426,17 @@ void RTX_Renderer::render()
     }
 
     record_command_list(command_list_direct.Get());
+
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::ShowDemoWindow();
+
+    ImGui::Render();
+
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), command_list_direct.Get());
+    
 
     // Present
     {

@@ -45,6 +45,8 @@ class BVH
 {
 public:
 
+    ~BVH();
+
     void build_bvh(
         const Triangle* tris,
         uint32_t n_triangles
@@ -80,6 +82,7 @@ private:
     std::unique_ptr<BVHNode[]> m_bvh_nodes;
     unsigned n_nodes;
     unsigned nodes_used = 1;
+    unsigned loopc = 0;
 };
 
 }

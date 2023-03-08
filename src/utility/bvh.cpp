@@ -27,6 +27,10 @@ void BVH::build_bvh(const Triangle* tris, uint32_t n_triangles)
     sub_divide(0, tris);
 }
 
+BVH::~BVH()
+{
+}
+
 void BVH::update_node_bounds(uint32_t node_idx, const Triangle* tris)
 {
     BVHNode& node = m_bvh_nodes[node_idx];
@@ -124,7 +128,7 @@ bool BVH::compute_optimal_split(
     return true;
 }
 
-static float IntersectAABB(const Ray& ray, const Vector3<float> bmin, const Vector3<float> bmax)
+static float IntersectAABB(const Vector3<float> bmin, const Vector3<float> bmax, const Ray& ray)
 {
     float tx1 = (bmin.x - ray.o.x) * ray.invd.x;
     float tx2 = (bmax.x - ray.o.x) * ray.invd.x;
@@ -149,7 +153,7 @@ static float IntersectAABB(const Ray& ray, const Vector3<float> bmin, const Vect
     }
 }
 
-static float IntersectAABB_SSE(const Ray& ray, const __m128 bmin4, const __m128 bmax4)
+static float IntersectAABB_SSE(const __m128 bmin4, const __m128 bmax4, const Ray& ray)
 {
     static __m128 mask4 = _mm_cmpeq_ps(_mm_setzero_ps(), _mm_set_ps(1, 0, 0, 0));
     __m128 t1 = _mm_mul_ps(_mm_sub_ps(_mm_and_ps(bmin4, mask4), ray.o4), ray.invd4);
@@ -203,8 +207,15 @@ void BVH::intersect(
         BVHNode* child1 = &m_bvh_nodes[node->left_first];
         BVHNode* child2 = &m_bvh_nodes[node->left_first + 1];
 
-        float dist1 = IntersectAABB(ray, child1->aabbmin, child1->aabbmax);
-        float dist2 = IntersectAABB(ray, child2->aabbmin, child2->aabbmax);
+        // TODO: There is a strange performance degradation when both distances 
+        // are computed via the ray_intersects_aabb method. When only one of the
+        // distances is computed with that function, the performance improves
+        // over the IntersectAABB method. 
+        // How can this behavior be explained? 
+        //      - The number of loop iterations is not the culprit.
+        float dist1 = IntersectAABB(child1->aabbmin, child1->aabbmax, ray);
+        float dist2 = IntersectAABB(child2->aabbmin, child2->aabbmax, ray);
+        //float dist2 = ray_intersects_aabb(child2->aabbmin, child2->aabbmax, ray);
 
         if (dist1 > dist2)
         {
@@ -245,10 +256,7 @@ void BVH::intersect(
 }
 
 float BVH::compute_sah(
-    const BVHNode& node, 
-    const Triangle* tris, 
-    int axis, 
-    float pos)
+    const BVHNode& node, const Triangle* tris, int axis, float pos)
 {
     AABB left_box;
     AABB right_box;

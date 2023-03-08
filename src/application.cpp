@@ -33,6 +33,9 @@ void IApplication::run()
     flush();
 }
 
+// Forward declare message handler from imgui_impl_win32.cpp
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 LRESULT CALLBACK IApplication::WindowMessagingProcess(
     HWND hwnd, 
     UINT message, 
@@ -58,7 +61,10 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
         return FALSE;
     }
     
-    if (app->is_application_initialized()) {
+    if (app->is_application_initialized()) 
+    {
+        UINT msg = message;
+
         switch (message) {
         case WM_PAINT:
             app->update();
@@ -92,7 +98,8 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
         case WM_INPUT:
             app->on_mouse_move(lParam);
             break;
-        case WM_KEYUP:
+        case WM_SYSKEYUP:
+        case WM_KEYUP: 
         {
             KeyCode key = (KeyCode)wParam;
             PackedKeyArguments key_state(

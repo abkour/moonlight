@@ -31,7 +31,7 @@ class RTX_Renderer : public IApplication
 *       - BVH           [x]
 *       - Camera        [x]
 *       - PBR           [ ]
-*       - File Loading  [ ]
+*       - File Loading  [X]
 *
 *   Approach:
 *       Get Camera/PBR done first, then worry about file loading, then worry about BVH
@@ -43,6 +43,7 @@ public:
     ~RTX_Renderer();
 
     bool is_application_initialized() override;
+    bool is_gui_enabled() override;
 
     void flush() override;
     void on_key_event(const PackedKeyArguments) override;
@@ -87,6 +88,11 @@ private:
     std::unique_ptr<RayCamera> ray_camera;
     std::unique_ptr<DescriptorHeap> srv_descriptor_heap;
     std::unique_ptr<Texture2D> scene_texture;
+
+private:
+
+    // IMGUI related
+
 };
 
 }

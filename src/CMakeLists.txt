@@ -3,6 +3,7 @@
 #
 
 # Add source to this project's executable.
+
 add_executable (moonlight WIN32
 	"application.cpp"
 	"moonlight.cpp" 
@@ -27,6 +28,14 @@ add_executable (moonlight WIN32
 	"collision/aabb.cpp" 
 	"utility/random_number.cpp" 
 	"logging_file.cpp"
+	# imgui
+	"imgui/imgui.cpp"
+	"imgui/imgui_demo.cpp"
+	"imgui/imgui_draw.cpp"
+	"imgui/imgui_impl_dx12.cpp"
+	"imgui/imgui_impl_win32.cpp"
+	"imgui/imgui_tables.cpp"
+	"imgui/imgui_widgets.cpp"
 )
 
 if (MSVC)

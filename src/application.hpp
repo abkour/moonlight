@@ -14,6 +14,10 @@
 #include <wrl.h>
 #include <DirectXMath.h>
 
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_win32.h"
+#include "imgui/imgui_impl_dx12.h"
+
 namespace moonlight {
 
 class IApplication {
@@ -29,6 +33,8 @@ public:
     }
 
     virtual bool is_application_initialized() = 0;
+
+    virtual bool is_gui_enabled() = 0;
 
     virtual void flush() = 0;
 

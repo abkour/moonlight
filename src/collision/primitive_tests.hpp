@@ -231,32 +231,30 @@ inline bool ray_intersects_aabb(
     return true;
 }
 
-inline bool ray_intersects_aabb(
-    const AABB* aabb, 
-    const Ray* ray, 
-    float& near_t, 
-    float& far_t)
+inline float ray_intersects_aabb(
+    const Vector3<float>& aabbmin, 
+    const Vector3<float>& aabbmax, 
+    const Ray& ray)
 {
-    near_t = std::numeric_limits<float>::min();
-    far_t = std::numeric_limits<float>::max();
+    float near_t = std::numeric_limits<float>::min();
+    float far_t = std::numeric_limits<float>::max();
 
     for (int i = 0; i < 3; i++) 
     {
-        float origin = ray->o[i];
-        float minVal = aabb->bmin[i];
-        float maxVal = aabb->bmax[i];
+        float origin = ray.o[i];
+        float minVal = aabbmin[i];
+        float maxVal = aabbmax[i];
 
         // If the ray is parallel to the bounding box, return early.
-        if (ray->d[i] == 0) 
+        if (ray.d[i] == 0) 
         {
-            //xx++;
             if (origin < minVal || origin > maxVal)
                 return false;
         } 
         else 
         {
-            float t1 = (minVal - origin) * ray->invd[i];
-            float t2 = (maxVal - origin) * ray->invd[i];
+            float t1 = (minVal - origin) * ray.invd[i];
+            float t2 = (maxVal - origin) * ray.invd[i];
 
             if (t1 > t2)
                 std::swap(t1, t2);
@@ -265,11 +263,11 @@ inline bool ray_intersects_aabb(
             far_t = std::min(t2, far_t);
 
             if (!(near_t <= far_t))
-                return false;
+                return std::numeric_limits<float>::max();
         }
     }
 
-    return true;
+    return near_t;
 }
 
 }
