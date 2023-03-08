@@ -385,7 +385,10 @@ void RTX_Renderer::on_mouse_move(LPARAM lparam)
             break;
         }
         
-        ray_camera->rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
+        if (keyboard_state.keys[KeyCode::Shift])
+        {
+            ray_camera->rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
+        }
     }
 
     delete[] lpb;
@@ -491,7 +494,10 @@ void RTX_Renderer::update()
         image.resize(window->width() * window->height());
     }
     
-    ray_camera->translate(keyboard_state, elapsed_time);
+    if (keyboard_state.keys[KeyCode::Shift])
+    {
+        ray_camera->translate(keyboard_state, elapsed_time);
+    }
 
     if (ray_camera->camera_variables_need_updating())
     {
