@@ -66,58 +66,58 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     initialize_raw_input_devices();
 
     ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
-    device = _pimpl_create_device(most_sutiable_adapter);
-    command_queue = std::make_unique<CommandQueue>(device.Get());
-    command_allocator = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    command_list_direct = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    m_device = _pimpl_create_device(most_sutiable_adapter);
+    m_command_queue = std::make_unique<CommandQueue>(m_device.Get());
+    m_command_allocator = _pimpl_create_command_allocator(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    m_command_list_direct = _pimpl_create_command_list(m_device, m_command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-    swap_chain = std::make_unique<SwapChain>(
-        device.Get(),
-        command_queue->get_underlying(),
+    m_swap_chain = std::make_unique<SwapChain>(
+        m_device.Get(),
+        m_command_queue->get_underlying(),
         m_window->width(),
         m_window->height(),
         m_window->handle
     );
 
-    scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
-    viewport = CD3DX12_VIEWPORT(
+    m_scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+    m_viewport = CD3DX12_VIEWPORT(
         0.f,
         0.f,
         static_cast<float>(m_window->width()),
         static_cast<float>(m_window->height())
     );
 
-    srv_descriptor_heap = 
-        std::make_unique<DescriptorHeap>(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2);
+    m_srv_descriptor_heap = 
+        std::make_unique<DescriptorHeap>(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2);
 
-    ray_camera = std::make_unique<RayCamera>(
+    m_ray_camera = std::make_unique<RayCamera>(
         Vector2<uint16_t>(m_window->width(), m_window->height())
     );
 
-    ray_camera->initializeVariables(
+    m_ray_camera->initializeVariables(
         Vector3<float>(-3.5f, 1.f, -2.5f),
         normalize(Vector3<float>(0.f, 0.707f, 0.707)),
         45,
         1
     );
 
-    old_window_dimensions = { m_window->width(), m_window->height() };
-    image.resize(old_window_dimensions.x * old_window_dimensions.y);
+    m_old_window_dimensions = { m_window->width(), m_window->height() };
+    m_image.resize(m_old_window_dimensions.x * m_old_window_dimensions.y);
 
     construct_bvh();
     generate_image();
 
     load_assets();
 
-    command_list_direct->Close();
+    m_command_list_direct->Close();
     // Execute eall command now
     ID3D12CommandList* command_lists[] =
     {
-        command_list_direct.Get()
+        m_command_list_direct.Get()
     };
-    command_queue->execute_command_list(command_lists, 1);
-    command_queue->signal();
-    command_queue->wait_for_fence();
+    m_command_queue->execute_command_list(command_lists, 1);
+    m_command_queue->signal();
+    m_command_queue->wait_for_fence();
 
     {
         // IMGUI initialization
@@ -130,12 +130,12 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
 
         ImGui_ImplWin32_Init(m_window->handle);
         ImGui_ImplDX12_Init(
-            device.Get(),
+            m_device.Get(),
             3,
             DXGI_FORMAT_R8G8B8A8_UNORM,
-            srv_descriptor_heap->get_underlying(),
-            srv_descriptor_heap->cpu_handle(1),
-            srv_descriptor_heap->gpu_handle(1)
+            m_srv_descriptor_heap->get_underlying(),
+            m_srv_descriptor_heap->cpu_handle(1),
+            m_srv_descriptor_heap->gpu_handle(1)
         );
     }
 
@@ -198,57 +198,57 @@ void RTX_Renderer::generate_image()
                 for (uint16_t u = 0; u < 4; ++u)
                 {
                     std::size_t idx = ((y + v) * m_window->width()) + x + u;
-                    if (idx >= image.size()) break;
+                    if (idx >= m_image.size()) break;
                     uint16_t px = x + u;
                     uint16_t py = y + v;
-                    auto ray = ray_camera->getRay({ px, py });
+                    auto ray = m_ray_camera->getRay({ px, py });
                     IntersectionParams intersect;
                     m_bvh.intersect(ray, m_mesh.get(), m_stride_in_32floats, intersect);
                     if (ray.t < std::numeric_limits<float>::max())
                     {
                         unsigned c = (int)(ray.t * 42);
                         c *= 0x10101;
-                        image[idx].r = c;
-                        image[idx].g = c;
-                        image[idx].b = c;
-                        image[idx].a = c;
+                        m_image[idx].r = c;
+                        m_image[idx].g = c;
+                        m_image[idx].b = c;
+                        m_image[idx].a = c;
                     } 
                     else
                     {
-                        image[idx].r = 0;
-                        image[idx].g = 0;
-                        image[idx].b = 0;
-                        image[idx].a = 0;
+                        m_image[idx].r = 0;
+                        m_image[idx].g = 0;
+                        m_image[idx].b = 0;
+                        m_image[idx].a = 0;
                     }
                 }
             }
         }
     }
 
-    if (scene_texture != nullptr)
+    if (m_scene_texture != nullptr)
     {
-        command_allocator->Reset();
-        command_list_direct->Reset(command_allocator.Get(), nullptr);
+        m_command_allocator->Reset();
+        m_command_list_direct->Reset(m_command_allocator.Get(), nullptr);
 
         transition_resource(
-            command_list_direct.Get(),
-            scene_texture->get_underlying(),
+            m_command_list_direct.Get(),
+            m_scene_texture->get_underlying(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_COPY_DEST
         );
 
-        scene_texture->update(
-            command_list_direct.Get(),
+        m_scene_texture->update(
+            m_command_list_direct.Get(),
             DXGI_FORMAT_R8G8B8A8_UNORM,
-            image.data(),
+            m_image.data(),
             m_window->width(),
             m_window->height(),
             sizeof(u8_four)
         );
 
         transition_resource(
-            command_list_direct.Get(),
-            scene_texture->get_underlying(),
+            m_command_list_direct.Get(),
+            m_scene_texture->get_underlying(),
             D3D12_RESOURCE_STATE_COPY_DEST,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
         );
@@ -259,37 +259,37 @@ void RTX_Renderer::generate_image()
         srv_desc.Texture2D.MipLevels = 1;
         srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-        device->CreateShaderResourceView(
-            scene_texture->get_underlying(),
+        m_device->CreateShaderResourceView(
+            m_scene_texture->get_underlying(),
             &srv_desc,
-            srv_descriptor_heap->cpu_handle()
+            m_srv_descriptor_heap->cpu_handle()
         );
 
-        command_list_direct->Close();
+        m_command_list_direct->Close();
         // Execute eall command now
         ID3D12CommandList* command_lists[] =
         {
-            command_list_direct.Get()
+            m_command_list_direct.Get()
         };
-        command_queue->execute_command_list(command_lists, 1);
-        command_queue->signal();
-        command_queue->wait_for_fence();
+        m_command_queue->execute_command_list(command_lists, 1);
+        m_command_queue->signal();
+        m_command_queue->wait_for_fence();
     }
     else
     {
-        scene_texture = std::make_unique<Texture2D>(
-            device.Get(),
-            command_list_direct.Get(),
+        m_scene_texture = std::make_unique<Texture2D>(
+            m_device.Get(),
+            m_command_list_direct.Get(),
             DXGI_FORMAT_R8G8B8A8_UNORM,
-            image.data(),
+            m_image.data(),
             m_window->width(),
             m_window->height(),
             sizeof(u8_four)
         );
 
         transition_resource(
-            command_list_direct.Get(),
-            scene_texture->get_underlying(),
+            m_command_list_direct.Get(),
+            m_scene_texture->get_underlying(),
             D3D12_RESOURCE_STATE_COPY_DEST,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
         );
@@ -300,10 +300,10 @@ void RTX_Renderer::generate_image()
         srv_desc.Texture2D.MipLevels = 1;
         srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-        device->CreateShaderResourceView(
-            scene_texture->get_underlying(),
+        m_device->CreateShaderResourceView(
+            m_scene_texture->get_underlying(),
             &srv_desc,
-            srv_descriptor_heap->cpu_handle()
+            m_srv_descriptor_heap->cpu_handle()
         );
     }
 }
@@ -320,7 +320,7 @@ bool RTX_Renderer::is_application_initialized()
 
 void RTX_Renderer::flush()
 {
-    command_queue->flush();
+    m_command_queue->flush();
 }
 
 void RTX_Renderer::initialize_raw_input_devices()
@@ -347,10 +347,10 @@ void RTX_Renderer::on_key_event(const PackedKeyArguments key_state)
     switch (key_state.key_state)
     {
     case PackedKeyArguments::Released:
-        keyboard_state.reset(key_state.key);
+        m_keyboard_state.reset(key_state.key);
         break;
     case PackedKeyArguments::Pressed:
-        keyboard_state.set(key_state.key);
+        m_keyboard_state.set(key_state.key);
         break;
     }
 }
@@ -383,9 +383,9 @@ void RTX_Renderer::on_mouse_move(LPARAM lparam)
             break;
         }
         
-        if (keyboard_state.keys[KeyCode::Shift])
+        if (m_keyboard_state.keys[KeyCode::Shift])
         {
-            ray_camera->rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
+            m_ray_camera->rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
         }
     }
 
@@ -394,53 +394,53 @@ void RTX_Renderer::on_mouse_move(LPARAM lparam)
 
 void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
 {
-    uint8_t backbuffer_idx = swap_chain->current_backbuffer_index();
+    uint8_t backbuffer_idx = m_swap_chain->current_backbuffer_index();
     D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle =
-        swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
+        m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
 
     //
     // Render Scene to Texture
-    command_list->SetPipelineState(scene_pso.Get());
-    command_list->SetGraphicsRootSignature(scene_root_signature.Get());
+    command_list->SetPipelineState(m_scene_pso.Get());
+    command_list->SetGraphicsRootSignature(m_scene_root_signature.Get());
 
-    ID3D12DescriptorHeap* heaps[] = { srv_descriptor_heap->get_underlying() };
-    command_list_direct->SetDescriptorHeaps(1, heaps);
-    command_list_direct->SetGraphicsRootDescriptorTable(
+    ID3D12DescriptorHeap* heaps[] = { m_srv_descriptor_heap->get_underlying() };
+    m_command_list_direct->SetDescriptorHeaps(1, heaps);
+    m_command_list_direct->SetGraphicsRootDescriptorTable(
         0,
-        srv_descriptor_heap->gpu_handle()
+        m_srv_descriptor_heap->gpu_handle()
     );
 
-    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { vertex_buffer_view };
+    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer_view };
     command_list->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    command_list->RSSetViewports(1, &viewport);
-    command_list->RSSetScissorRects(1, &scissor_rect);
+    command_list->RSSetViewports(1, &m_viewport);
+    command_list->RSSetScissorRects(1, &m_scissor_rect);
     command_list->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, nullptr);
     command_list->DrawInstanced(sizeof(quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
 }
 
 void RTX_Renderer::render()
 {
-    ThrowIfFailed(command_allocator->Reset());
-    ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
+    ThrowIfFailed(m_command_allocator->Reset());
+    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
 
-    uint8_t backbuffer_idx = swap_chain->current_backbuffer_index();
+    uint8_t backbuffer_idx = m_swap_chain->current_backbuffer_index();
 
     // Clear
     {
-        swap_chain->transition_to_rtv(command_list_direct.Get());
+        m_swap_chain->transition_to_rtv(m_command_list_direct.Get());
 
         // Clear backbuffer
         const FLOAT clear_color[] = { 0.05f, 0.05f, 0.05f, 1.f };
-        command_list_direct->ClearRenderTargetView(
-            swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx),
+        m_command_list_direct->ClearRenderTargetView(
+            m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx),
             clear_color,
             0,
             NULL
         );
     }
 
-    record_command_list(command_list_direct.Get());
+    record_command_list(m_command_list_direct.Get());
 
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -450,23 +450,23 @@ void RTX_Renderer::render()
 
     ImGui::Render();
 
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), command_list_direct.Get());
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_command_list_direct.Get());
     
 
     // Present
     {
-        swap_chain->transition_to_present(command_list_direct.Get());
+        m_swap_chain->transition_to_present(m_command_list_direct.Get());
 
-        command_list_direct->Close();
+        m_command_list_direct->Close();
         ID3D12CommandList* command_lists[] =
         {
-            command_list_direct.Get()
+            m_command_list_direct.Get()
         };
 
-        command_queue->execute_command_list(command_lists, 1);
-        command_queue->signal();
-        swap_chain->present();
-        command_queue->wait_for_fence();
+        m_command_queue->execute_command_list(command_lists, 1);
+        m_command_queue->signal();
+        m_swap_chain->present();
+        m_command_queue->wait_for_fence();
     }
 }
 
@@ -474,15 +474,15 @@ void RTX_Renderer::resize()
 {
     flush();
     
-    ThrowIfFailed(command_allocator->Reset());
-    ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
+    ThrowIfFailed(m_command_allocator->Reset());
+    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
 
     m_window->resize();
-    swap_chain->resize(device.Get(), m_window->width(), m_window->height());
+    m_swap_chain->resize(m_device.Get(), m_window->width(), m_window->height());
 
-    image.resize(m_window->width() * m_window->height());
-    scene_texture->resize(
-        device.Get(),
+    m_image.resize(m_window->width() * m_window->height());
+    m_scene_texture->resize(
+        m_device.Get(),
         m_window->width(), m_window->height(),
         sizeof(u8_four)
     );
@@ -493,42 +493,42 @@ void RTX_Renderer::resize()
     srv_desc.Texture2D.MipLevels = 1;
     srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-    device->CreateShaderResourceView(
-        scene_texture->get_underlying(),
+    m_device->CreateShaderResourceView(
+        m_scene_texture->get_underlying(),
         &srv_desc,
-        srv_descriptor_heap->cpu_handle()
+        m_srv_descriptor_heap->cpu_handle()
     );
 
     transition_resource(
-        command_list_direct.Get(),
-        scene_texture->get_underlying(),
+        m_command_list_direct.Get(),
+        m_scene_texture->get_underlying(),
         D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
     );
 
-    command_list_direct->Close();
+    m_command_list_direct->Close();
     // Execute eall command now
     ID3D12CommandList* command_lists[] =
     {
-        command_list_direct.Get()
+        m_command_list_direct.Get()
     };
-    command_queue->execute_command_list(command_lists, 1);
-    command_queue->signal();
-    command_queue->wait_for_fence();
+    m_command_queue->execute_command_list(command_lists, 1);
+    m_command_queue->signal();
+    m_command_queue->wait_for_fence();
 }
 
 void RTX_Renderer::update()
 {
-    compute_delta_time(elapsed_time);
+    compute_delta_time(m_elapsed_time);
 
-    if (keyboard_state.keys[KeyCode::Shift])
+    if (m_keyboard_state.keys[KeyCode::Shift])
     {
-        ray_camera->translate(keyboard_state, elapsed_time);
+        m_ray_camera->translate(m_keyboard_state, m_elapsed_time);
     }
 
-    if (ray_camera->camera_variables_need_updating())
+    if (m_ray_camera->camera_variables_need_updating())
     {
-        ray_camera->reinitialize_camera_variables();
+        m_ray_camera->reinitialize_camera_variables();
         generate_image();
     }
 }
@@ -542,15 +542,15 @@ void RTX_Renderer::load_scene_shader_assets()
 {
     // Vertex buffer uploading
     {
-        vertex_buffer = std::make_unique<DX12Resource>();
-        vertex_buffer->upload(device.Get(), command_list_direct.Get(),
+        m_vertex_buffer = std::make_unique<DX12Resource>();
+        m_vertex_buffer->upload(m_device.Get(), m_command_list_direct.Get(),
             (float*)quad_vertices,
             sizeof(quad_vertices)
         );
 
-        vertex_buffer_view.BufferLocation = vertex_buffer->gpu_virtual_address();
-        vertex_buffer_view.SizeInBytes = sizeof(quad_vertices);
-        vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
+        m_vertex_buffer_view.BufferLocation = m_vertex_buffer->gpu_virtual_address();
+        m_vertex_buffer_view.SizeInBytes = sizeof(quad_vertices);
+        m_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
     ComPtr<ID3DBlob> vs_blob;
@@ -576,7 +576,7 @@ void RTX_Renderer::load_scene_shader_assets()
 
     D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
     feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
+    if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
     {
         feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
     }
@@ -613,11 +613,11 @@ void RTX_Renderer::load_scene_shader_assets()
         &error_blob
     ));
 
-    ThrowIfFailed(device->CreateRootSignature(
+    ThrowIfFailed(m_device->CreateRootSignature(
         0,
         root_signature_blob->GetBufferPointer(),
         root_signature_blob->GetBufferSize(),
-        IID_PPV_ARGS(&scene_root_signature)
+        IID_PPV_ARGS(&m_scene_root_signature)
     ));
 
     D3D12_RT_FORMAT_ARRAY rtv_formats = {};
@@ -633,7 +633,7 @@ void RTX_Renderer::load_scene_shader_assets()
     scene_pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
     scene_pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     scene_pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
-    scene_pipeline_state_stream.root_signature = scene_root_signature.Get();
+    scene_pipeline_state_stream.root_signature = m_scene_root_signature.Get();
     scene_pipeline_state_stream.rs = rasterizer_desc;
     scene_pipeline_state_stream.rtv_formats = rtv_formats;
     scene_pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
@@ -643,7 +643,7 @@ void RTX_Renderer::load_scene_shader_assets()
         &scene_pipeline_state_stream
     };
 
-    ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&scene_pso)));
+    ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_scene_pso)));
 }
 
 }

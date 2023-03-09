@@ -70,40 +70,40 @@ private:
 
     bool app_initialized;
 
-    Microsoft::WRL::ComPtr<ID3D12Device2>             device;
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    command_allocator;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_direct;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature>       scene_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>       scene_pso;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>       quad_pso;
+    Microsoft::WRL::ComPtr<ID3D12Device2>             m_device;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    m_command_allocator;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_command_list_direct;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature>       m_scene_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>       m_scene_pso;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>       m_quad_pso;
 
-    std::unique_ptr<SwapChain>      swap_chain;
-    std::unique_ptr<CommandQueue>   command_queue;
-    std::unique_ptr<DX12Resource>   vertex_buffer;
-    D3D12_VERTEX_BUFFER_VIEW        vertex_buffer_view;
+    std::unique_ptr<SwapChain>      m_swap_chain;
+    std::unique_ptr<CommandQueue>   m_command_queue;
+    std::unique_ptr<DX12Resource>   m_vertex_buffer;
+    D3D12_VERTEX_BUFFER_VIEW        m_vertex_buffer_view;
 
-    D3D12_VIEWPORT viewport;
-    D3D12_RECT     scissor_rect;
+    D3D12_VIEWPORT m_viewport;
+    D3D12_RECT     m_scissor_rect;
 
-    float elapsed_time = 0.f;
-    KeyState keyboard_state;
+    float m_elapsed_time = 0.f;
+    KeyState m_keyboard_state;
 
-    std::unique_ptr<RayCamera> ray_camera;
-    std::unique_ptr<DescriptorHeap> srv_descriptor_heap;
-    std::unique_ptr<Texture2D> scene_texture;
+    std::unique_ptr<RayCamera> m_ray_camera;
+    std::unique_ptr<DescriptorHeap> m_srv_descriptor_heap;
+    std::unique_ptr<Texture2D> m_scene_texture;
 
 private:
 
     struct u8_four;
 
     // BVH related
-    std::vector<u8_four> image;
+    std::vector<u8_four> m_image;
     BVH m_bvh;
     uint64_t m_num_triangles = 0;
     uint64_t m_stride_in_32floats = 0;
     std::unique_ptr<float[]> m_mesh;
 
-    Vector2<uint32_t> old_window_dimensions;
+    Vector2<uint32_t> m_old_window_dimensions;
 };
 
 }
