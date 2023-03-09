@@ -20,20 +20,20 @@ public:
 
     ID3D12CommandQueue* get_underlying()
     {
-        return command_queue.Get();
+        return m_command_queue.Get();
     }
 
     uint64_t get_fence_value() const
     {
-        return  fence_value;
+        return  m_fence_value;
     }
 
 private:
 
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue;
-    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-    uint64_t fence_value;
-    HANDLE fence_event;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_command_queue;
+    Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
+    uint64_t m_fence_value;
+    HANDLE m_fence_event;
 };
 
 }
