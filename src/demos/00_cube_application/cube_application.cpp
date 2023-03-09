@@ -70,7 +70,7 @@ float vertices[] = {
 CubeApplication::CubeApplication(HINSTANCE hinstance)
     : IApplication(hinstance)
 {
-    window = std::make_unique<Window>(
+    m_window = std::make_unique<Window>(
         hinstance,
         L"DX12MoonlightApplication",
         L"DX12 Demo",

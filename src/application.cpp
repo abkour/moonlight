@@ -17,7 +17,7 @@ IApplication::IApplication(HINSTANCE hinstance)
 
 void IApplication::run() 
 {
-    ::ShowWindow(window->handle, SW_SHOW);
+    ::ShowWindow(m_window->handle, SW_SHOW);
 
     MSG msg = {};
     while (msg.message != WM_QUIT)
@@ -75,13 +75,13 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
         {
             switch (wParam) {
             case 'V':
-                app->window->flip_vsync();
+                app->m_window->flip_vsync();
                 break;
             case VK_ESCAPE:
                 ::PostQuitMessage(0);
                 break;
             case VK_F11:
-                app->window->flip_fullscreen();
+                app->m_window->flip_fullscreen();
                 break;
             default:
             {
@@ -251,14 +251,14 @@ ComPtr<IDXGISwapChain4> IApplication::_pimpl_create_swap_chain(
     ComPtr<IDXGISwapChain1> swap_chain1;
     factory4->CreateSwapChainForHwnd(
         command_queue,
-        window->handle,
+        m_window->handle,
         &swap_chain_desc,
         NULL,
         NULL,
         &swap_chain1
     );
 
-    ThrowIfFailed(factory4->MakeWindowAssociation(window->handle, DXGI_MWA_NO_ALT_ENTER));
+    ThrowIfFailed(factory4->MakeWindowAssociation(m_window->handle, DXGI_MWA_NO_ALT_ENTER));
 
     ComPtr<IDXGISwapChain4> swap_chain;
     swap_chain1.As(&swap_chain);

@@ -97,7 +97,7 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
 {
     text_output.resize(256);
 
-    window = std::make_unique<Window>(
+    m_window = std::make_unique<Window>(
         hinstance,
         L"DX12MoonlightApplication",
         L"DX12_Demo_01_Frustum_Culling",
@@ -132,17 +132,17 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     swap_chain = std::make_unique<SwapChain>(
         device.Get(),
         command_queue->get_underlying(),
-        window->width(),
-        window->height(),
-        window->handle
+        m_window->width(),
+        m_window->height(),
+        m_window->handle
     );
 
     scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
     viewport0 = CD3DX12_VIEWPORT(
         0.f,
         0.f,
-        static_cast<float>(window->width()),
-        static_cast<float>(window->height())
+        static_cast<float>(m_window->width()),
+        static_cast<float>(m_window->height())
     );
 
     scene_texture = std::make_unique<RenderTexture>(DXGI_FORMAT_R8G8B8A8_UNORM);
@@ -152,13 +152,13 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
         srv_descriptor_heap->cpu_handle()
     );
     scene_texture->set_clear_color(DirectX::XMFLOAT4(0.1f, 0.1f, 0.1f, 0.f));
-    scene_texture->init(window->width(), window->height());
+    scene_texture->init(m_window->width(), m_window->height());
 
     load_assets();
     depth_buffer = _pimpl_create_dsv(
         device, 
         dsv_descriptor_heap->cpu_handle(), 
-        window->width(), window->height()
+        m_window->width(), m_window->height()
     );
 
     std::wstring font_filename = std::wstring(ROOT_DIRECTORY_WIDE) + L"/rsc/myfile.spriteFont";
@@ -168,8 +168,8 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
         viewport0,
         font_filename.c_str()
     );
-    font_pos.x = static_cast<float>(window->width()) * 0.9;
-    font_pos.y = static_cast<float>(window->height()) * 0.5;
+    font_pos.x = static_cast<float>(m_window->width()) * 0.9;
+    font_pos.y = static_cast<float>(m_window->height()) * 0.5;
 
     command_list_direct->Close();
 
@@ -354,7 +354,7 @@ void FrustumCulling::update()
     total_time += elapsed_time;
     t0 = t1;
 
-    float aspect_ratio = static_cast<float>(window->width()) / static_cast<float>(window->height());
+    float aspect_ratio = static_cast<float>(m_window->width()) / static_cast<float>(m_window->height());
     const float scale_factor = 1.f;
     static float near_clip_distance = 0.1f;
     static float far_clip_distance = 2000.f;

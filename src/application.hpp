@@ -125,7 +125,7 @@ protected:
 
 protected:
 
-    std::unique_ptr<Window> window;
+    std::unique_ptr<Window> m_window;
 };
 
 }

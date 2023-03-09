@@ -52,7 +52,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     : IApplication(hinstance)
     , app_initialized(false)
 {
-    window = std::make_unique<Window>(
+    m_window = std::make_unique<Window>(
         hinstance,
         L"DX12MoonlightApplication",
         L"DX12_Demo_Template",
@@ -74,24 +74,24 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     swap_chain = std::make_unique<SwapChain>(
         device.Get(),
         command_queue->get_underlying(),
-        window->width(),
-        window->height(),
-        window->handle
+        m_window->width(),
+        m_window->height(),
+        m_window->handle
     );
 
     scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
     viewport = CD3DX12_VIEWPORT(
         0.f,
         0.f,
-        static_cast<float>(window->width()),
-        static_cast<float>(window->height())
+        static_cast<float>(m_window->width()),
+        static_cast<float>(m_window->height())
     );
 
     srv_descriptor_heap = 
         std::make_unique<DescriptorHeap>(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2);
 
     ray_camera = std::make_unique<RayCamera>(
-        Vector2<uint16_t>(window->width(), window->height())
+        Vector2<uint16_t>(m_window->width(), m_window->height())
     );
 
     ray_camera->initializeVariables(
@@ -101,7 +101,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         1
     );
 
-    old_window_dimensions = { window->width(), window->height() };
+    old_window_dimensions = { m_window->width(), m_window->height() };
     image.resize(old_window_dimensions.x * old_window_dimensions.y);
 
     construct_bvh();
@@ -128,7 +128,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
 
         ImGui::StyleColorsDark();
 
-        ImGui_ImplWin32_Init(window->handle);
+        ImGui_ImplWin32_Init(m_window->handle);
         ImGui_ImplDX12_Init(
             device.Get(),
             3,
@@ -189,15 +189,15 @@ void RTX_Renderer::generate_image()
     const Vector3<float> center(0.f, 0.f, 0.f);
     const float radius = 0.25f;
 
-    for (uint16_t y = 0; y < window->height(); y += 4)
+    for (uint16_t y = 0; y < m_window->height(); y += 4)
     {
-        for (uint16_t x = 0; x < window->width(); x += 4)
+        for (uint16_t x = 0; x < m_window->width(); x += 4)
         {
             for (uint16_t v = 0; v < 4; ++v)
             {
                 for (uint16_t u = 0; u < 4; ++u)
                 {
-                    std::size_t idx = ((y + v) * window->width()) + x + u;
+                    std::size_t idx = ((y + v) * m_window->width()) + x + u;
                     if (idx >= image.size()) break;
                     uint16_t px = x + u;
                     uint16_t py = y + v;
@@ -241,8 +241,8 @@ void RTX_Renderer::generate_image()
             command_list_direct.Get(),
             DXGI_FORMAT_R8G8B8A8_UNORM,
             image.data(),
-            window->width(),
-            window->height(),
+            m_window->width(),
+            m_window->height(),
             sizeof(u8_four)
         );
 
@@ -282,8 +282,8 @@ void RTX_Renderer::generate_image()
             command_list_direct.Get(),
             DXGI_FORMAT_R8G8B8A8_UNORM,
             image.data(),
-            window->width(),
-            window->height(),
+            m_window->width(),
+            m_window->height(),
             sizeof(u8_four)
         );
 
@@ -477,13 +477,13 @@ void RTX_Renderer::resize()
     ThrowIfFailed(command_allocator->Reset());
     ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
 
-    window->resize();
-    swap_chain->resize(device.Get(), window->width(), window->height());
+    m_window->resize();
+    swap_chain->resize(device.Get(), m_window->width(), m_window->height());
 
-    image.resize(window->width() * window->height());
+    image.resize(m_window->width() * m_window->height());
     scene_texture->resize(
         device.Get(),
-        window->width(), window->height(),
+        m_window->width(), m_window->height(),
         sizeof(u8_four)
     );
 
