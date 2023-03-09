@@ -139,6 +139,24 @@ void Texture2D::resize(
 {
     const unsigned size = width * height * format_size;
 
+    D3D12_RESOURCE_DESC rsc_desc = {};
+    rsc_desc.DepthOrArraySize = 1;
+    rsc_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rsc_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    rsc_desc.MipLevels = 1;
+    rsc_desc.Width = width;
+    rsc_desc.Height = height;
+    rsc_desc.SampleDesc = { 1, 0 };
+
+    ThrowIfFailed(device->CreateCommittedResource(
+        temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+        D3D12_HEAP_FLAG_NONE,
+        &rsc_desc,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr,
+        IID_PPV_ARGS(&m_texture)
+    ));
+
     ThrowIfFailed(device->CreateCommittedResource(
         temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
         D3D12_HEAP_FLAG_NONE,

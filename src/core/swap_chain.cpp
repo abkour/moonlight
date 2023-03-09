@@ -67,7 +67,7 @@ void SwapChain::create_backbuffers(ID3D12Device2* device)
             nullptr,
             rtv_handle
         );
-
+        
         backbuffers[i] = backbuffer;
     }
 }
@@ -101,7 +101,7 @@ void SwapChain::resize(ID3D12Device2* device, uint32_t width, uint32_t height)
 {
     for (int i = 0; i < n_backbuffers; ++i)
     {
-        backbuffers[i]->Release();
+        backbuffers[i].Reset();
     }
 
     ThrowIfFailed(swap_chain->ResizeBuffers(

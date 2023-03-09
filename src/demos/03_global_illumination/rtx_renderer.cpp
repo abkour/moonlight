@@ -256,9 +256,7 @@ void RTX_Renderer::generate_image()
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srv_desc.TextureCube.MostDetailedMip = 0;
-        srv_desc.TextureCube.MipLevels = 1;
-        srv_desc.TextureCube.ResourceMinLODClamp = 0.f;
+        srv_desc.Texture2D.MipLevels = 1;
         srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 
         device->CreateShaderResourceView(
@@ -299,9 +297,7 @@ void RTX_Renderer::generate_image()
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srv_desc.TextureCube.MostDetailedMip = 0;
-        srv_desc.TextureCube.MipLevels = 1;
-        srv_desc.TextureCube.ResourceMinLODClamp = 0.f;
+        srv_desc.Texture2D.MipLevels = 1;
         srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 
         device->CreateShaderResourceView(
@@ -399,7 +395,6 @@ void RTX_Renderer::on_mouse_move(LPARAM lparam)
 void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
 {
     uint8_t backbuffer_idx = swap_chain->current_backbuffer_index();
-    UINT rtv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle =
         swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
 
@@ -477,27 +472,55 @@ void RTX_Renderer::render()
 
 void RTX_Renderer::resize()
 {
-    //window->resize();
-    //swap_chain->resize(device.Get(), window->width(), window->height());
+    flush();
+    
+    ThrowIfFailed(command_allocator->Reset());
+    ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
+
+    window->resize();
+    swap_chain->resize(device.Get(), window->width(), window->height());
+
+    image.resize(window->width() * window->height());
+    scene_texture->resize(
+        device.Get(),
+        window->width(), window->height(),
+        sizeof(u8_four)
+    );
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Texture2D.MipLevels = 1;
+    srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    device->CreateShaderResourceView(
+        scene_texture->get_underlying(),
+        &srv_desc,
+        srv_descriptor_heap->cpu_handle()
+    );
+
+    transition_resource(
+        command_list_direct.Get(),
+        scene_texture->get_underlying(),
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+    );
+
+    command_list_direct->Close();
+    // Execute eall command now
+    ID3D12CommandList* command_lists[] =
+    {
+        command_list_direct.Get()
+    };
+    command_queue->execute_command_list(command_lists, 1);
+    command_queue->signal();
+    command_queue->wait_for_fence();
 }
 
 void RTX_Renderer::update()
 {
     compute_delta_time(elapsed_time);
 
-    if (window->width()  != old_window_dimensions.x || 
-        window->height() != old_window_dimensions.y)
-    {
-        /*
-        old_window_dimensions = { window->width(), window->height() };
-        image.resize(window->width() * window->height());
-        scene_texture->resize(
-            device.Get(),
-            window->width(), window->height(), 
-            sizeof(u8_four)
-        );*/
-    }
-    
     if (keyboard_state.keys[KeyCode::Shift])
     {
         ray_camera->translate(keyboard_state, elapsed_time);
