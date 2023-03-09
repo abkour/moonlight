@@ -12,7 +12,7 @@ T* temp_address(T&& rvalue)
 }
 
 DX12Resource::DX12Resource()
-    : state(D3D12_RESOURCE_STATE_COMMON)
+    : m_state(D3D12_RESOURCE_STATE_COMMON)
 {
 }
 
@@ -25,14 +25,14 @@ void DX12Resource::transition(
     D3D12_RESOURCE_STATES new_state)
 {
     CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        resource.Get(),
-        state,
+        m_resource.Get(),
+        m_state,
         new_state
     );
 
     command_list->ResourceBarrier(1, &barrier);
 
-    state = new_state;
+    m_state = new_state;
 }
 
 void DX12Resource::update(
@@ -47,13 +47,13 @@ void DX12Resource::update(
     // Copy the new data into the UPLOAD_HEAP resource
     UINT32* data_begin = nullptr;
     CD3DX12_RANGE read_range(0, 0);
-    ThrowIfFailed(intermediate_buffer->Map(
+    ThrowIfFailed(m_intermediate_buffer->Map(
         0,
         &read_range,
         reinterpret_cast<void**>(&data_begin)
     ));
     memcpy(data_begin, data, size_in_bytes);
-    intermediate_buffer->Unmap(0, nullptr);
+    m_intermediate_buffer->Unmap(0, nullptr);
 
     // Memory layout description for the new data.
     D3D12_SUBRESOURCE_DATA data_desc = {};
@@ -62,7 +62,7 @@ void DX12Resource::update(
     data_desc.SlicePitch = size_in_bytes;
     
     // Upload the DEFAULT_HEAP resource with the contents of the UPLOAD_HEAP resource.
-    UpdateSubresources(command_list, resource.Get(), intermediate_buffer.Get(), 0, 0, 1, &data_desc);
+    UpdateSubresources(command_list, m_resource.Get(), m_intermediate_buffer.Get(), 0, 0, 1, &data_desc);
 
     // Finally, transition the resource into the VCB state
     transition(command_list, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
@@ -74,14 +74,14 @@ void DX12Resource::upload(
     void* data,
     size_t size_in_bytes)
 {
-    state = D3D12_RESOURCE_STATE_COPY_DEST;
+    m_state = D3D12_RESOURCE_STATE_COPY_DEST;
     ThrowIfFailed(device->CreateCommittedResource(
         temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
         D3D12_HEAP_FLAG_NONE,
         temp_address(CD3DX12_RESOURCE_DESC::Buffer(size_in_bytes)),
         D3D12_RESOURCE_STATE_COPY_DEST,
         nullptr,
-        IID_PPV_ARGS(&resource)
+        IID_PPV_ARGS(&m_resource)
     ));
 
     // Don't forget to release the intermediate buffer, once the data has been uploaded
@@ -92,7 +92,7 @@ void DX12Resource::upload(
         temp_address(CD3DX12_RESOURCE_DESC::Buffer(size_in_bytes)),
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
-        IID_PPV_ARGS(&intermediate_buffer)
+        IID_PPV_ARGS(&m_intermediate_buffer)
     ));
 
     D3D12_SUBRESOURCE_DATA data_desc = {};
@@ -100,7 +100,7 @@ void DX12Resource::upload(
     data_desc.RowPitch = size_in_bytes;
     data_desc.SlicePitch = size_in_bytes;
 
-    UpdateSubresources(command_list, resource.Get(), intermediate_buffer.Get(), 0, 0, 1, &data_desc);
+    UpdateSubresources(command_list, m_resource.Get(), m_intermediate_buffer.Get(), 0, 0, 1, &data_desc);
 
     // Create the CBV view
     transition(command_list, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);

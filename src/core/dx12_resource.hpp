@@ -18,17 +18,17 @@ struct DX12Resource
 
     D3D12_RESOURCE_STATES get_state() const
     {
-        return state;
+        return m_state;
     }
 
     ID3D12Resource* get_underlying()
     {
-        return resource.Get();
+        return m_resource.Get();
     }
 
     D3D12_GPU_VIRTUAL_ADDRESS gpu_virtual_address()
     {
-        return resource->GetGPUVirtualAddress();
+        return m_resource->GetGPUVirtualAddress();
     }
 
     void update(
@@ -56,14 +56,14 @@ private:
     *    The state transition only happens after the responsible command list
     *    has been executed.
     */
-    D3D12_RESOURCE_STATES state;
-    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    D3D12_RESOURCE_STATES m_state;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_resource;
     // NOTE: This buffer is only a temporary solution. It is required, because
     // the buffer cannot be released before the data has been copied to the resource buffer.
     // Another solution would be to pass the intermediate buffer as argument. However,
     // that exposes more implementation details to the user. 
     // The goal for now is ease of use.
-    Microsoft::WRL::ComPtr<ID3D12Resource> intermediate_buffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_intermediate_buffer;
 };
 
 }
