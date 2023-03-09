@@ -21,12 +21,12 @@ struct Camera
 
     DirectX::XMFLOAT3 get_direction() const
     {
-        return eye_direction;
+        return m_eye_direction;
     }
 
     DirectX::XMFLOAT3 get_position() const
     {
-        return eye_position;
+        return m_eye_position;
     }
 
     void set_movement_speed(const float movement_speed);
@@ -35,9 +35,9 @@ struct Camera
 
 private:
 
-    float movement_speed;
-    float pitch, yaw;
-    DirectX::XMFLOAT3 eye_position, eye_direction;
+    float m_movement_speed;
+    float m_pitch, m_yaw;
+    DirectX::XMFLOAT3 m_eye_position, m_eye_direction;
 };
 
 }

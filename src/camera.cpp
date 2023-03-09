@@ -10,11 +10,11 @@ Camera::Camera(
     DirectX::XMFLOAT3 eye_direction, 
     const float movement_speed)
 {
-    pitch = 0.f;
-    yaw = 0.f;
-    this->movement_speed = movement_speed;
-    this->eye_direction = eye_direction;
-    this->eye_position = eye_position;
+    m_pitch = 0.f;
+    m_yaw = 0.f;
+    m_movement_speed = movement_speed;
+    m_eye_direction = eye_direction;
+    m_eye_position = eye_position;
 
     XMVECTOR eye_position_xmv = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(&eye_position));
     XMVECTOR eye_direction_xmv = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(&eye_direction));
@@ -25,43 +25,43 @@ Camera::Camera(
 void Camera::rotate(float dx, float dy)
 {
     const float scale = 0.15f;
-    yaw += dx * scale;
-    pitch += dy * scale;
+    m_yaw += dx * scale;
+    m_pitch += dy * scale;
 
-    if (pitch > 89.f)
+    if (m_pitch > 89.f)
     {
-        pitch = 89.f;
+        m_pitch = 89.f;
     }
-    else if (pitch < -89.f)
+    else if (m_pitch < -89.f)
     {
-        pitch = -89.f;
+        m_pitch = -89.f;
     }
 
-    eye_direction.x = std::cos(radians(yaw)) * std::cos(radians(pitch));
-    eye_direction.y = std::sin(radians(pitch));
-    eye_direction.z = std::sin(radians(yaw)) * std::cos(radians(pitch));
+    m_eye_direction.x = std::cos(radians(m_yaw)) * std::cos(radians(m_pitch));
+    m_eye_direction.y = std::sin(radians(m_pitch));
+    m_eye_direction.z = std::sin(radians(m_yaw)) * std::cos(radians(m_pitch));
 
-    XMVECTOR eye_position_xmv = XMLoadFloat3(&eye_position);
-    XMVECTOR eye_direction_xmv = XMLoadFloat3(&eye_direction);
+    XMVECTOR eye_position_xmv = XMLoadFloat3(&m_eye_position);
+    XMVECTOR eye_direction_xmv = XMLoadFloat3(&m_eye_direction);
     eye_direction_xmv = XMVector3Normalize(eye_direction_xmv);
 
     XMVECTOR world_up = XMVectorSet(0, 1, 0, 0);
     view = XMMatrixLookAtLH(eye_position_xmv, eye_position_xmv + eye_direction_xmv, world_up);
 
-    XMStoreFloat3(&eye_position, eye_position_xmv);
-    XMStoreFloat3(&eye_direction, eye_direction_xmv);
+    XMStoreFloat3(&m_eye_position, eye_position_xmv);
+    XMStoreFloat3(&m_eye_direction, eye_direction_xmv);
 }
 
 void Camera::translate(KeyState keys, float delta_time)
 {
     XMVECTOR world_up = XMVectorSet(0, 1, 0, 0);
-    XMVECTOR eye_position_xmv = XMLoadFloat3(&eye_position);
-    XMVECTOR eye_direction_xmv = XMLoadFloat3(&eye_direction);
+    XMVECTOR eye_position_xmv = XMLoadFloat3(&m_eye_position);
+    XMVECTOR eye_direction_xmv = XMLoadFloat3(&m_eye_direction);
     
     XMVECTOR right = XMVector3Normalize(XMVector3Cross(eye_direction_xmv, world_up));
     XMVECTOR up = XMVector3Normalize(XMVector3Cross(eye_direction_xmv, right));
 
-    const float ms_v = movement_speed * delta_time;
+    const float ms_v = m_movement_speed * delta_time;
     XMVECTOR ms = XMVectorSet(ms_v, ms_v, ms_v, ms_v);
     
     if(keys['W'])  // 'W'
@@ -75,20 +75,20 @@ void Camera::translate(KeyState keys, float delta_time)
     
     view = XMMatrixLookAtLH(eye_position_xmv, eye_position_xmv + eye_direction_xmv, world_up);
 
-    XMStoreFloat3(&eye_position, eye_position_xmv);
-    XMStoreFloat3(&eye_direction, eye_direction_xmv);
+    XMStoreFloat3(&m_eye_position, eye_position_xmv);
+    XMStoreFloat3(&m_eye_direction, eye_direction_xmv);
 }
 
 void Camera::translate(DirectX::XMVECTOR pos_offset)
 {
     XMVECTOR world_up = XMVectorSet(0, 1, 0, 0);
-    XMVECTOR eye_direction_xmv = XMLoadFloat3(&eye_direction);
-    XMVECTOR eye_position_xmv = XMLoadFloat3(&eye_position);
+    XMVECTOR eye_direction_xmv = XMLoadFloat3(&m_eye_direction);
+    XMVECTOR eye_position_xmv = XMLoadFloat3(&m_eye_position);
     eye_position_xmv = XMVectorAdd(eye_position_xmv, pos_offset);
 
     view = XMMatrixLookAtLH(eye_position_xmv, eye_position_xmv + eye_direction_xmv, world_up);
 
-    XMStoreFloat3(&eye_position, eye_position_xmv);
+    XMStoreFloat3(&m_eye_position, eye_position_xmv);
 }
 
 
