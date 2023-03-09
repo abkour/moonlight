@@ -35,43 +35,43 @@ struct RenderTexture
 
     float* get_clear_color() 
     {
-        return clear_color;
+        return m_clear_color;
     }
 
     D3D12_CPU_DESCRIPTOR_HANDLE get_rtv_descriptor() const
     {
-        return rtv_descriptor;
+        return m_rtv_descriptor;
     }
 
     D3D12_CPU_DESCRIPTOR_HANDLE get_srv_descriptor() const
     {
-        return srv_descriptor;
+        return m_srv_descriptor;
     }
 
     ID3D12Resource* get_resource()
     {
-        return resource.Get();
+        return m_resource.Get();
     }
 
     D3D12_RESOURCE_STATES get_state() const
     {
-        return resource_state;
+        return m_resource_state;
     }
 
     void set_clear_color(DirectX::XMFLOAT4 clear_color)
     { 
-        memcpy(this->clear_color, &clear_color.x, sizeof(float) * 4);
+        memcpy(m_clear_color, &clear_color.x, sizeof(float) * 4);
     }
 
 private:
 
-    Microsoft::WRL::ComPtr<ID3D12Device2> device;
-    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-    DXGI_FORMAT format;
-    float clear_color[4];
-    D3D12_RESOURCE_STATES resource_state;
-    D3D12_CPU_DESCRIPTOR_HANDLE rtv_descriptor;
-    D3D12_CPU_DESCRIPTOR_HANDLE srv_descriptor;
+    Microsoft::WRL::ComPtr<ID3D12Device2> m_device;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_resource;
+    DXGI_FORMAT m_format;
+    float m_clear_color[4];
+    D3D12_RESOURCE_STATES m_resource_state;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_rtv_descriptor;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_srv_descriptor;
 };
 
 }
