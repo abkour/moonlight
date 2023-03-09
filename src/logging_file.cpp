@@ -7,43 +7,43 @@ LoggingFile::LoggingFile()
 {}
 
 LoggingFile::LoggingFile(const char* filename, OpenMode open_mode)
-    : filename(filename)
+    : m_filename(filename)
 {
     switch (open_mode)
     {
     case Append:
-        ofile.open(filename, std::ios::app);
+        m_ofile.open(filename, std::ios::app);
         break;
     case SeekEnd:
-        ofile.open(filename, std::ios::ate);
+        m_ofile.open(filename, std::ios::ate);
         break;
     case Truncate:
-        ofile.open(filename, std::ios::trunc);
+        m_ofile.open(filename, std::ios::trunc);
         break;
     default:
-        ofile.open(filename, std::ios::app);
+        m_ofile.open(filename, std::ios::app);
         break;
     }
 }
 
 LoggingFile::~LoggingFile()
 {
-    ofile.close();
+    m_ofile.close();
 }
 
 void LoggingFile::close()
 {
-    ofile.close();
+    m_ofile.close();
 }
 
 void LoggingFile::open(const char* filename, OpenMode open_mode)
 {
-    ofile.open(filename, open_mode);
+    m_ofile.open(filename, open_mode);
 }
 
 void LoggingFile::open(OpenMode open_mode)
 {
-    ofile.open(filename, open_mode);
+    m_ofile.open(m_filename, open_mode);
 }
 
 }

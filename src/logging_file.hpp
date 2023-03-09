@@ -26,14 +26,14 @@ public:
     template<typename T>
     LoggingFile& operator<<(T input)
     {
-        ofile << input;
+        m_ofile << input;
         return *this;
     }
 
 private:
 
-    const char* filename;
-    std::ofstream ofile;
+    const char* m_filename;
+    std::ofstream m_ofile;
 };
 
 }
