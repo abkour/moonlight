@@ -9,7 +9,7 @@ public:
     MoonLight() = delete;
     MoonLight(Config config);
 private:
-    std::unique_ptr<Application> application;
+    std::unique_ptr<Application> m_application;
 };
 
 }

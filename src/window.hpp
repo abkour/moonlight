@@ -22,10 +22,10 @@ struct Window {
             WNDPROC wndproc,
             void* parent_pointer);
 
-    bool is_fullscreen_on() const { return fullscreen; }
+    bool is_fullscreen_on() const { return m_fullscreen; }
     void flip_fullscreen();
 
-    bool is_vsync_on() const { return vsync; }
+    bool is_vsync_on() const { return m_vsync; }
     void flip_vsync();
 
     bool resize();
@@ -53,12 +53,12 @@ private:
 
 private:
 
-    uint32_t window_width;
-    uint32_t window_height;
-    RECT window_rect;
+    uint32_t m_window_width;
+    uint32_t m_window_height;
+    RECT m_window_rect;
 
-    bool fullscreen;
-    bool vsync;
+    bool m_fullscreen;
+    bool m_vsync;
 };
 
 }

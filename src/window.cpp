@@ -22,8 +22,8 @@ Window::Window( HINSTANCE hinstance,
     register_window_class(hinstance, window_class_name, wndproc);
     create_window(hinstance, window_class_name, window_title, width, height, parent_pointer);
 
-    fullscreen = false;
-    vsync = true;
+    m_fullscreen = false;
+    m_vsync = true;
 }
 
 //
@@ -103,12 +103,12 @@ void Window::create_window(
     RECT window_rect = { 0, 0, static_cast<LONG>(width), static_cast<LONG>(height) };
     ::AdjustWindowRect(&window_rect, WS_OVERLAPPEDWINDOW, FALSE);
 
-    window_width = window_rect.right - window_rect.left;
-    window_height = window_rect.bottom - window_rect.top;
+    m_window_width = window_rect.right - window_rect.left;
+    m_window_height = window_rect.bottom - window_rect.top;
 
     // Center the window, and clamp to the top-left corner if necessary.
-    const int window_x = std::max<int>(0, (screen_width - window_width) / 2);
-    const int window_y = std::max<int>(0, (screen_height - window_height) / 2);
+    const int window_x = std::max<int>(0, (screen_width - m_window_width) / 2);
+    const int window_y = std::max<int>(0, (screen_height - m_window_height) / 2);
 
     handle = CreateWindowExW(
         NULL,
@@ -117,16 +117,16 @@ void Window::create_window(
         WS_OVERLAPPEDWINDOW,
         window_x,
         window_y,
-        window_width,
-        window_height,
+        m_window_width,
+        m_window_height,
         NULL,
         NULL,
         hinstance,
         parent_pointer
     );
 
-    window_width = width;
-    window_height = height;
+    m_window_width = width;
+    m_window_height = height;
 
     assert(handle && "Failed to create window");
 }
@@ -142,12 +142,12 @@ bool Window::resize()
     uint32_t new_width = client_rect.right - client_rect.left;
     uint32_t new_height = client_rect.bottom - client_rect.top;
 
-    window_width = window_rect.right - window_rect.left;
-    window_height = window_rect.bottom - window_rect.top;
+    m_window_width = m_window_rect.right - m_window_rect.left;
+    m_window_height = m_window_rect.bottom - m_window_rect.top;
 
-    if (new_width != window_width || new_height != window_height){
-        window_width = std::max(1u, new_width);
-        window_height = std::max(1u, new_height);
+    if (new_width != m_window_width || new_height != m_window_height){
+        m_window_width = std::max(1u, new_width);
+        m_window_height = std::max(1u, new_height);
         return true;
     }
 
@@ -156,12 +156,12 @@ bool Window::resize()
 
 void Window::flip_fullscreen() 
 {
-    fullscreen = !fullscreen;
+    m_fullscreen = !m_fullscreen;
         
-    if (fullscreen) {
-        ::GetWindowRect(handle, &window_rect);
-        window_width = window_rect.right - window_rect.left;
-        window_height = window_rect.bottom - window_rect.top;
+    if (m_fullscreen) {
+        ::GetWindowRect(handle, &m_window_rect);
+        m_window_width = m_window_rect.right - m_window_rect.left;
+        m_window_height = m_window_rect.bottom - m_window_rect.top;
 
         UINT window_style = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
 
@@ -188,10 +188,10 @@ void Window::flip_fullscreen()
         ::SetWindowPos(
             handle,
             HWND_NOTOPMOST,
-            window_rect.left,
-            window_rect.top,
-            window_rect.right - window_rect.left,
-            window_rect.bottom - window_rect.top,
+            m_window_rect.left,
+            m_window_rect.top,
+            m_window_rect.right - m_window_rect.left,
+            m_window_rect.bottom - m_window_rect.top,
             SWP_FRAMECHANGED | SWP_NOACTIVATE);
 
         ::ShowWindow(handle, SW_NORMAL);
@@ -199,15 +199,15 @@ void Window::flip_fullscreen()
 }
 
 void Window::flip_vsync() {
-    vsync = !vsync;
+    m_vsync = !m_vsync;
 }
 
 uint32_t Window::height() {
-    return window_height;
+    return m_window_height;
 }
 
 uint32_t Window::width() {
-    return window_width;
+    return m_window_width;
 }
 
 }
