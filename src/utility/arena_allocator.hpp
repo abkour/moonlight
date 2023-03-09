@@ -19,9 +19,9 @@ private:
 
     void* _pimpl_allocate(std::size_t n_bytes, std::size_t align_diff);
 
-    void* data;
-    void* current;
-    std::size_t available_bytes;
+    void* m_data;
+    void* m_current;
+    std::size_t m_available_bytes;
 };
 
 }
