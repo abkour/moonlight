@@ -6,14 +6,6 @@
 namespace moonlight
 {
 
-struct Triangle
-{
-    Vector3<float> v0;
-    Vector3<float> v1;
-    Vector3<float> v2;
-    Vector3<float> centroid;
-};
-
 struct BVHNode
 {
     BVHNode()
@@ -48,13 +40,15 @@ public:
     ~BVH();
 
     void build_bvh(
-        const Triangle* tris,
+        const float* tris,
+        const uint64_t stride_in_bytes,
         uint32_t n_triangles
     );
 
     void intersect(
         Ray& ray, 
-        const Triangle* tris, 
+        const float* tris,
+        const uint64_t stride_in_bytes,
         IntersectionParams& intersect
     );
 
@@ -66,15 +60,23 @@ public:
 
 private:
 
-    void update_node_bounds(uint32_t node_idx, const Triangle* tris);
+    void update_node_bounds(uint32_t node_idx, const float* tris, const uint64_t stride);
 
-    void sub_divide(uint32_t node_idx, const Triangle* tris);
+    void sub_divide(uint32_t node_idx, const float* tris, const uint64_t stride);
 
     float compute_sah(
-        const BVHNode& node, const Triangle* tris, int axis, float pos);
+        const BVHNode& node, const float* tris, 
+        const uint64_t stride, int axis, float pos
+    );
 
     bool compute_optimal_split(
-        const BVHNode& node, const Triangle* tris, int& axis, float& split_pos);
+        const BVHNode& node, const float* tris, 
+        const uint64_t stride, int& axis, float& split_pos
+    );
+
+    unsigned compute_triangle_pos(
+        unsigned triangle_pos, unsigned stride
+    );
 
 private:
 

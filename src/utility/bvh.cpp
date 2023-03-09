@@ -7,7 +7,23 @@
 namespace moonlight
 {
 
-void BVH::build_bvh(const Triangle* tris, uint32_t n_triangles)
+constexpr unsigned VERT_PER_TRIANGLE = 3;
+
+using vec3f = Vector3<float>;
+
+// It is assumed that the triangle also contains a vec3f centroid at the
+// end of the three vertices
+unsigned BVH::compute_triangle_pos(
+    unsigned triangle_pos, unsigned stride)
+{
+    return tri_idx[triangle_pos] 
+        * (stride * VERT_PER_TRIANGLE + VERT_PER_TRIANGLE);
+}
+
+void BVH::build_bvh(
+    const float* tris, 
+    const uint64_t stride_in_bytes,
+    uint32_t n_triangles)
 {
     n_nodes = n_triangles * 2 - 1;
 
@@ -23,46 +39,51 @@ void BVH::build_bvh(const Triangle* tris, uint32_t n_triangles)
     root.left_first = 0;
     root.tri_count = n_triangles;
 
-    update_node_bounds(0, tris);
-    sub_divide(0, tris);
+    update_node_bounds(0, tris, stride_in_bytes);
+    sub_divide(0, tris, stride_in_bytes);
 }
 
 BVH::~BVH()
 {
 }
 
-void BVH::update_node_bounds(uint32_t node_idx, const Triangle* tris)
+void BVH::update_node_bounds(
+    uint32_t node_idx, 
+    const float* tris,
+    const uint64_t stride)
 {
     BVHNode& node = m_bvh_nodes[node_idx];
     
-    for (int i = 0; i < node.tri_count; ++i) 
+    for (int i = 0; i < node.tri_count; ++i)
     {
-        unsigned leaf_tri_idx = tri_idx[node.left_first + i];
-        const Triangle& leaf_tri = tris[leaf_tri_idx];
-        node.aabbmin = cwise_min(node.aabbmin, leaf_tri.v0);
-        node.aabbmin = cwise_min(node.aabbmin, leaf_tri.v1);
-        node.aabbmin = cwise_min(node.aabbmin, leaf_tri.v2);
-        node.aabbmax = cwise_max(node.aabbmax, leaf_tri.v0);
-        node.aabbmax = cwise_max(node.aabbmax, leaf_tri.v1);
-        node.aabbmax = cwise_max(node.aabbmax, leaf_tri.v2);
+        unsigned idx = compute_triangle_pos(i + node.left_first, stride);
+        const float* leaf_tri = &tris[idx];
+        node.aabbmin = cwise_min(&node.aabbmin, (vec3f*)&leaf_tri[0]);
+        node.aabbmin = cwise_min(&node.aabbmin, (vec3f*)&leaf_tri[stride]);
+        node.aabbmin = cwise_min(&node.aabbmin, (vec3f*)&leaf_tri[stride * 2]);
+        node.aabbmax = cwise_max(&node.aabbmax, (vec3f*)&leaf_tri[0]);
+        node.aabbmax = cwise_max(&node.aabbmax, (vec3f*)&leaf_tri[stride]);
+        node.aabbmax = cwise_max(&node.aabbmax, (vec3f*)&leaf_tri[stride * 2]);
     }
 }
 
-void BVH::sub_divide(uint32_t node_idx, const Triangle* tris)
+void BVH::sub_divide(uint32_t node_idx, const float* tris, const uint64_t stride)
 {
     BVHNode& node = m_bvh_nodes[node_idx];
     int axis;
     float split_pos;
-    if (!compute_optimal_split(node, tris, axis, split_pos))
+    if (!compute_optimal_split(node, tris, stride, axis, split_pos))
         return;
 
+    unsigned centroid_off = stride * VERT_PER_TRIANGLE;
     // Sort the primitives, such that primitives belonging to
     // group A are all in consecutive order.
     int i = node.left_first;
     int j = node.left_first + node.tri_count - 1;
     while (i <= j)
     {
-        if (tris[tri_idx[i]].centroid[axis] < split_pos)
+        unsigned centroid_pos = compute_triangle_pos(i, stride) + centroid_off;
+        if (tris[centroid_pos + axis] < split_pos)
         {
             ++i;
         } 
@@ -87,16 +108,22 @@ void BVH::sub_divide(uint32_t node_idx, const Triangle* tris)
     node.left_first = left_child_idx;
     node.tri_count = 0;
 
-    update_node_bounds(left_child_idx, tris);
-    update_node_bounds(right_child_idx, tris);
+    update_node_bounds(left_child_idx, tris, stride);
+    update_node_bounds(right_child_idx, tris, stride);
 
-    sub_divide(left_child_idx, tris);
-    sub_divide(right_child_idx, tris);
+    sub_divide(left_child_idx, tris, stride);
+    sub_divide(right_child_idx, tris, stride);
 }
 
 bool BVH::compute_optimal_split(
-    const BVHNode& node, const Triangle* tris, int& axis, float& split_pos)
+    const BVHNode& node, 
+    const float* tris, 
+    const uint64_t stride,
+    int& axis, 
+    float& split_pos)
 {
+    const unsigned centroid_off = stride * VERT_PER_TRIANGLE;
+
     Vector3<float> e = node.aabbmax - node.aabbmin; // extent of parent
     float parent_area = e.x * e.y + e.y * e.z + e.z * e.x;
     float parent_cost = node.tri_count * parent_area;
@@ -109,9 +136,11 @@ bool BVH::compute_optimal_split(
     {
         for (unsigned i = 0; i < node.tri_count; ++i)
         {
-            unsigned idx = tri_idx[node.left_first + i];
-            float candidate_pos = tris[idx].centroid[axis];
-            float cost = compute_sah(node, tris, axis, candidate_pos);
+            unsigned centroid_pos = 
+                compute_triangle_pos(i + node.left_first, stride) + centroid_off;
+
+            float candidate_pos = tris[centroid_pos + axis];
+            float cost = compute_sah(node, tris, stride, axis, candidate_pos);
             if (cost < best_cost)
             {
                 best_pos = candidate_pos;
@@ -169,11 +198,16 @@ static float IntersectAABB_SSE(const __m128 bmin4, const __m128 bmax4, const Ray
 }
 
 void BVH::intersect(
-    Ray& ray, const Triangle* tris, IntersectionParams& intersect)
+    Ray& ray, 
+    const float* tris, 
+    const uint64_t stride,
+    IntersectionParams& intersect)
 {
     const BVHNode* node = &m_bvh_nodes[0];
     BVHNode* stack[64];
     unsigned stack_ptr = 0;
+
+    const unsigned triangle_size = stride * VERT_PER_TRIANGLE + VERT_PER_TRIANGLE;
 
     while (true)
     {
@@ -181,9 +215,11 @@ void BVH::intersect(
         {
             for (unsigned i = 0; i < node->tri_count; ++i)
             {
+                unsigned triangle_pos =
+                    compute_triangle_pos(i + node->left_first, stride);
+
                 IntersectionParams new_intersect = ray_hit_triangle(
-                    ray, 
-                    (Vector3<float>*)&tris[tri_idx[node->left_first + i]]
+                    ray, &tris[triangle_pos], stride
                 );
 
                 if (new_intersect.t < ray.t)
@@ -256,31 +292,35 @@ void BVH::intersect(
 }
 
 float BVH::compute_sah(
-    const BVHNode& node, const Triangle* tris, int axis, float pos)
+    const BVHNode& node, const float* tris, 
+    const uint64_t stride,
+    int axis, float pos)
 {
+    const unsigned centroid_offset = stride * VERT_PER_TRIANGLE;
+
     AABB left_box;
     AABB right_box;
     int left_count = 0; 
     int right_count = 0;
-
-    unsigned idx = 0;
+    
     for (unsigned i = 0; i < node.tri_count; ++i)
     {
-        idx = tri_idx[node.left_first + i];
-        const Triangle& triangle = tris[idx];
-        if (triangle.centroid[axis] < pos)
+        unsigned triangle_pos =
+            compute_triangle_pos(i + node.left_first, stride);
+        const float* triangle = &tris[triangle_pos];
+        if (triangle[centroid_offset + axis] < pos)
         {
             left_count++;
-            aabb_extend(left_box, triangle.v0);
-            aabb_extend(left_box, triangle.v1);
-            aabb_extend(left_box, triangle.v2);
+            aabb_extend(&left_box, (Vector3<float>*)&triangle[0]);
+            aabb_extend(&left_box, (Vector3<float>*)&triangle[stride]);
+            aabb_extend(&left_box, (Vector3<float>*)&triangle[stride * 2]);
         }
         else
         {
             right_count++;
-            aabb_extend(right_box, triangle.v0);
-            aabb_extend(right_box, triangle.v1);
-            aabb_extend(right_box, triangle.v2);
+            aabb_extend(&right_box, (Vector3<float>*)&triangle[0]);
+            aabb_extend(&right_box, (Vector3<float>*)&triangle[stride]);
+            aabb_extend(&right_box, (Vector3<float>*)&triangle[stride * 2]);
         }
     }
 
