@@ -16,7 +16,7 @@ using vec3f = Vector3<float>;
 unsigned BVH::compute_triangle_pos(
     unsigned triangle_pos, unsigned stride)
 {
-    return tri_idx[triangle_pos] 
+    return m_tri_idx[triangle_pos] 
         * (stride * VERT_PER_TRIANGLE + VERT_PER_TRIANGLE);
 }
 
@@ -25,14 +25,14 @@ void BVH::build_bvh(
     const uint64_t stride_in_bytes,
     uint32_t n_triangles)
 {
-    n_nodes = n_triangles * 2 - 1;
+    m_num_nodes = n_triangles * 2 - 1;
 
-    m_bvh_nodes = std::make_unique<BVHNode[]>(n_nodes);
-    tri_idx     = std::make_unique<uint32_t[]>(n_triangles);
+    m_bvh_nodes = std::make_unique<BVHNode[]>(m_num_nodes);
+    m_tri_idx     = std::make_unique<uint32_t[]>(n_triangles);
 
     for (uint32_t i = 0; i < n_triangles; ++i)
     {
-        tri_idx[i] = i;
+        m_tri_idx[i] = i;
     }
     
     BVHNode& root = m_bvh_nodes[0];
@@ -41,10 +41,6 @@ void BVH::build_bvh(
 
     update_node_bounds(0, tris, stride_in_bytes);
     sub_divide(0, tris, stride_in_bytes);
-}
-
-BVH::~BVH()
-{
 }
 
 void BVH::update_node_bounds(
@@ -89,7 +85,7 @@ void BVH::sub_divide(uint32_t node_idx, const float* tris, const uint64_t stride
         } 
         else
         {
-            std::swap(tri_idx[i], tri_idx[j--]);
+            std::swap(m_tri_idx[i], m_tri_idx[j--]);
         }
     }
 
@@ -99,8 +95,8 @@ void BVH::sub_divide(uint32_t node_idx, const float* tris, const uint64_t stride
         return;
     }
 
-    int left_child_idx = nodes_used++;
-    int right_child_idx = nodes_used++;
+    int left_child_idx = m_nodes_used++;
+    int right_child_idx = m_nodes_used++;
     m_bvh_nodes[left_child_idx].left_first = node.left_first;
     m_bvh_nodes[left_child_idx].tri_count = left_count;
     m_bvh_nodes[right_child_idx].left_first = i;
@@ -330,7 +326,7 @@ float BVH::compute_sah(
 
 bool BVH::validate_parent_bigger_than_child()
 {
-    for (int i = 0; i < nodes_used; ++i)
+    for (int i = 0; i < m_nodes_used; ++i)
     {
         const BVHNode* node = &m_bvh_nodes[i];
         if (!node->is_leaf())
@@ -355,10 +351,8 @@ bool BVH::validate_parent_bigger_than_child()
 
 bool BVH::validate_all_bvs_well_defined()
 {
-    const unsigned n_interiors = n_nodes;
-    
     const Vector3<float> empty_vector(0.f);
-    for (int i = 0; i < n_nodes; ++i)
+    for (int i = 0; i < m_num_nodes; ++i)
     {
         const BVHNode* node = &m_bvh_nodes[i];
         if (node->aabbmin == node->aabbmax)
@@ -375,26 +369,26 @@ void BVH::deserialize(const char* filename)
 {
     std::ifstream file(filename, std::ios::binary);
 
-    file.read((char*)&n_nodes, sizeof(unsigned));
-    const unsigned n_triangles = (n_nodes + 1) / 2;
+    file.read((char*)&m_num_nodes, sizeof(unsigned));
+    const unsigned n_triangles = (m_num_nodes + 1) / 2;
     
-    tri_idx = std::make_unique<unsigned[]>(n_triangles);
-    m_bvh_nodes = std::make_unique<BVHNode[]>(n_nodes);
+    m_tri_idx = std::make_unique<unsigned[]>(n_triangles);
+    m_bvh_nodes = std::make_unique<BVHNode[]>(m_num_nodes);
 
-    file.read((char*)tri_idx.get(), sizeof(unsigned) * n_triangles);
-    file.read((char*)m_bvh_nodes.get(), sizeof(BVHNode) * n_nodes);
-    file.read((char*)&nodes_used, sizeof(unsigned));
+    file.read((char*)m_tri_idx.get(), sizeof(unsigned) * n_triangles);
+    file.read((char*)m_bvh_nodes.get(), sizeof(BVHNode) * m_num_nodes);
+    file.read((char*)&m_nodes_used, sizeof(unsigned));
 }
 
 void BVH::serialize(const char* filename)
 {
-    const unsigned n_triangles = (n_nodes + 1) / 2;
+    const unsigned n_triangles = (m_num_nodes + 1) / 2;
 
     std::ofstream file(filename, std::ios::binary);
-    file.write((char*)&n_nodes, sizeof(unsigned));
-    file.write((char*)tri_idx.get(), sizeof(unsigned) * n_triangles);
-    file.write((char*)m_bvh_nodes.get(), sizeof(BVHNode) * n_nodes);
-    file.write((char*)&nodes_used, sizeof(unsigned));
+    file.write((char*)&m_num_nodes, sizeof(unsigned));
+    file.write((char*)m_tri_idx.get(), sizeof(unsigned) * n_triangles);
+    file.write((char*)m_bvh_nodes.get(), sizeof(BVHNode) * m_num_nodes);
+    file.write((char*)&m_nodes_used, sizeof(unsigned));
 }
 
 }

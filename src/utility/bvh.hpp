@@ -37,8 +37,6 @@ class BVH
 {
 public:
 
-    ~BVH();
-
     void build_bvh(
         const float* tris,
         const uint64_t stride_in_bytes,
@@ -80,11 +78,10 @@ private:
 
 private:
 
-    std::unique_ptr<uint32_t[]> tri_idx;
+    std::unique_ptr<uint32_t[]> m_tri_idx;
     std::unique_ptr<BVHNode[]> m_bvh_nodes;
-    unsigned n_nodes;
-    unsigned nodes_used = 1;
-    unsigned loopc = 0;
+    unsigned m_num_nodes;
+    unsigned m_nodes_used = 1;
 };
 
 }
