@@ -29,10 +29,10 @@ struct GlyphRenderer
 
 private:
 
-	std::unique_ptr<DirectX::SpriteBatch> sprite_batch;
-	std::unique_ptr<DirectX::SpriteFont> sprite_font;
-	std::unique_ptr<DirectX::DescriptorHeap> font_descriptor_heap;
-	D3D12_VIEWPORT viewport;
+	std::unique_ptr<DirectX::SpriteBatch> m_sprite_batch;
+	std::unique_ptr<DirectX::SpriteFont> m_sprite_font;
+	std::unique_ptr<DirectX::DescriptorHeap> m_font_descriptor_heap;
+	D3D12_VIEWPORT m_viewport;
 
 	enum Descriptors
 	{

@@ -16,7 +16,7 @@ GlyphRenderer::GlyphRenderer(
     //
     // Initialize descriptor heap for font
     {
-        font_descriptor_heap = std::make_unique<DescriptorHeap>(
+        m_font_descriptor_heap = std::make_unique<DescriptorHeap>(
             device,
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
@@ -33,13 +33,13 @@ GlyphRenderer::GlyphRenderer(
         RenderTargetState rt_state(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT);
         SpriteBatchPipelineStateDescription pps(rt_state);
 
-        sprite_batch = std::make_unique<SpriteBatch>(device, resource_upload, pps);;
+        m_sprite_batch = std::make_unique<SpriteBatch>(device, resource_upload, pps);;
 
         auto upload_resource_finished = resource_upload.End(command_queue);
         upload_resource_finished.wait();
 
-        this->viewport = viewport;
-        sprite_batch->SetViewport(viewport);
+        m_viewport = viewport;
+        m_sprite_batch->SetViewport(viewport);
     }
 
     //
@@ -48,12 +48,12 @@ GlyphRenderer::GlyphRenderer(
         ResourceUploadBatch resource_upload(device);
         resource_upload.Begin();
 
-        sprite_font = std::make_unique<SpriteFont>(
+        m_sprite_font = std::make_unique<SpriteFont>(
             device,
             resource_upload,
             font_filepath,
-            font_descriptor_heap->GetCpuHandle(Descriptors::CourierFont),
-            font_descriptor_heap->GetGpuHandle(Descriptors::CourierFont)
+            m_font_descriptor_heap->GetCpuHandle(Descriptors::CourierFont),
+            m_font_descriptor_heap->GetGpuHandle(Descriptors::CourierFont)
         );
 
         auto upload_resource_finished = resource_upload.End(command_queue);
@@ -64,9 +64,9 @@ GlyphRenderer::GlyphRenderer(
 GlyphRenderer::~GlyphRenderer()
 {
     m_graphicsMemory.reset();
-    sprite_batch.reset();
-    sprite_font.reset();
-    font_descriptor_heap.reset();
+    m_sprite_batch.reset();
+    m_sprite_font.reset();
+    m_font_descriptor_heap.reset();
 }
 
 void GlyphRenderer::render_text(
@@ -75,15 +75,15 @@ void GlyphRenderer::render_text(
     const wchar_t* text,
     const XMFLOAT2 text_pos)
 {
-    command_list->RSSetViewports(1, &viewport);
-    ID3D12DescriptorHeap* font_heaps[] = { font_descriptor_heap->Heap() };
+    command_list->RSSetViewports(1, &m_viewport);
+    ID3D12DescriptorHeap* font_heaps[] = { m_font_descriptor_heap->Heap() };
     command_list->SetDescriptorHeaps(1, font_heaps);
 
     XMFLOAT2 origin;
-    XMStoreFloat2(&origin, sprite_font->MeasureString(text) / 2.f);
-    sprite_batch->Begin(command_list);
-    sprite_font->DrawString(sprite_batch.get(), text, text_pos, Colors::White, 0.f, origin);
-    sprite_batch->End();
+    XMStoreFloat2(&origin, m_sprite_font->MeasureString(text) / 2.f);
+    m_sprite_batch->Begin(command_list);
+    m_sprite_font->DrawString(m_sprite_batch.get(), text, text_pos, Colors::White, 0.f, origin);
+    m_sprite_batch->End();
 
     m_graphicsMemory->Commit(command_queue);
 }
