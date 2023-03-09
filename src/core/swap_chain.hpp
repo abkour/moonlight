@@ -35,10 +35,10 @@ private:
 
 private:
 
-    unsigned n_backbuffers = 3;
-    Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain;
-    Microsoft::WRL::ComPtr<ID3D12Resource> backbuffers[3];
-    std::unique_ptr<DescriptorHeap> rtv_descriptor_heap;
+    unsigned m_num_backbuffers = 3;
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swap_chain;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_backbuffers[3];
+    std::unique_ptr<DescriptorHeap> m_rtv_descriptor_heap;
 };
 
 }
