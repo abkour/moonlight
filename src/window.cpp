@@ -146,8 +146,8 @@ bool Window::resize()
     window_height = window_rect.bottom - window_rect.top;
 
     if (new_width != window_width || new_height != window_height){
-        window_width = std::max(1u, window_width);
-        window_height = std::max(1u, window_height);
+        window_width = std::max(1u, new_width);
+        window_height = std::max(1u, new_height);
         return true;
     }
 

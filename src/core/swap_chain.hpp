@@ -23,6 +23,7 @@ public:
     void transition_to_present(ID3D12GraphicsCommandList* command_list);
     void transition_to_rtv(ID3D12GraphicsCommandList* command_list);
     void present();
+    void resize(ID3D12Device2* device, uint32_t width, uint32_t height);
 
     uint8_t current_backbuffer_index();
 

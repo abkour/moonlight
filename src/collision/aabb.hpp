@@ -25,7 +25,7 @@ float aabb_area(const AABB& aabb);
 
 Vector3<float> aabb_center(const AABB& aabb);
 
-void aabb_extend(AABB& aabb, const Vector3<float>& p);
+void aabb_extend(AABB* aabb, const Vector3<float>* p);
 
 bool aabb_empty(const AABB& x);
 

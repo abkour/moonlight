@@ -30,6 +30,10 @@ public:
         void* data, unsigned width, unsigned height, unsigned format_size
     );
 
+    void resize(
+        ID3D12Device2* device,
+        unsigned width, unsigned height, unsigned format_size);
+
     ID3D12Resource* get_underlying();
 
 private:

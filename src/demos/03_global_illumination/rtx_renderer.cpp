@@ -159,28 +159,29 @@ static bool ray_hit_circle(const Ray& ray, const float r)
 void RTX_Renderer::parse_files(const char* filename)
 {
     uint64_t n_bytes = 0;
-    uint64_t stride_in_32floats = 0;
+    uint64_t flags = 0;
 
     std::ifstream file(filename, std::ios::in | std::ios::binary);
 
     file.read((char*)&m_num_triangles, sizeof(uint64_t));
-    file.read((char*)&stride_in_32floats, sizeof(uint64_t));
+    file.read((char*)&m_stride_in_32floats, sizeof(uint64_t));
     file.read((char*)&n_bytes, sizeof(uint64_t));
+    file.read((char*)&flags, sizeof(uint64_t));
 
-    m_triangles = std::make_unique<Triangle[]>(m_num_triangles);
+    m_mesh = std::make_unique<float[]>(n_bytes / sizeof(float));
 
-    file.read((char*)m_triangles.get(), n_bytes);
+    file.read((char*)m_mesh.get(), n_bytes);
 }
 
 void RTX_Renderer::construct_bvh()
 {
     std::string asset_path =
-        std::string(ROOT_DIRECTORY_ASCII) + std::string("//assets//boxplane.bin");
+        std::string(ROOT_DIRECTORY_ASCII) + std::string("//assets//boxplane.mof");
 
     parse_files(asset_path.c_str());
 
     std::string binstr = std::string(ROOT_DIRECTORY_ASCII) + "//assets//boxplane.rawbin";
-    m_bvh.build_bvh(m_triangles.get(), m_num_triangles);
+    m_bvh.build_bvh(m_mesh.get(), m_stride_in_32floats, m_num_triangles);
 }
 
 void RTX_Renderer::generate_image()
@@ -197,11 +198,12 @@ void RTX_Renderer::generate_image()
                 for (uint16_t u = 0; u < 4; ++u)
                 {
                     std::size_t idx = ((y + v) * window->width()) + x + u;
+                    if (idx >= image.size()) break;
                     uint16_t px = x + u;
                     uint16_t py = y + v;
                     auto ray = ray_camera->getRay({ px, py });
                     IntersectionParams intersect;
-                    m_bvh.intersect(ray, m_triangles.get(), intersect);
+                    m_bvh.intersect(ray, m_mesh.get(), m_stride_in_32floats, intersect);
                     if (ray.t < std::numeric_limits<float>::max())
                     {
                         unsigned c = (int)(ray.t * 42);
@@ -475,6 +477,8 @@ void RTX_Renderer::render()
 
 void RTX_Renderer::resize()
 {
+    //window->resize();
+    //swap_chain->resize(device.Get(), window->width(), window->height());
 }
 
 void RTX_Renderer::update()
@@ -484,8 +488,14 @@ void RTX_Renderer::update()
     if (window->width()  != old_window_dimensions.x || 
         window->height() != old_window_dimensions.y)
     {
+        /*
         old_window_dimensions = { window->width(), window->height() };
         image.resize(window->width() * window->height());
+        scene_texture->resize(
+            device.Get(),
+            window->width(), window->height(), 
+            sizeof(u8_four)
+        );*/
     }
     
     if (keyboard_state.keys[KeyCode::Shift])

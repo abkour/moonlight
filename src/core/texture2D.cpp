@@ -133,6 +133,29 @@ void Texture2D::initialize_upload_buffer(ID3D12Device2* device, SIZE_T size)
     m_data_end = m_data_begin + size;
 }
 
+void Texture2D::resize(
+    ID3D12Device2* device,
+    unsigned width, unsigned height, unsigned format_size)
+{
+    const unsigned size = width * height * format_size;
+
+    ThrowIfFailed(device->CreateCommittedResource(
+        temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
+        D3D12_HEAP_FLAG_NONE,
+        temp_address(CD3DX12_RESOURCE_DESC::Buffer(size)),
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_upload_buffer)
+    ));
+
+    void* data;
+    CD3DX12_RANGE read_range(0, 0);
+    m_upload_buffer->Map(0, &read_range, &data);
+    m_data_cur = m_data_begin = reinterpret_cast<UINT8*>(data);
+    m_data_end = m_data_begin + size;
+}
+
+
 HRESULT Texture2D::suballocate_from_buffer(SIZE_T size, UINT align)
 {
     m_data_cur = reinterpret_cast<UINT8*>(

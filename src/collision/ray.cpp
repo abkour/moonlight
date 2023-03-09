@@ -28,16 +28,27 @@ Vector3<float> Ray::operator()(const float t) {
     return o + (t * d);
 }
 
-IntersectionParams ray_hit_triangle(const Ray& ray, const Vector3<float>* tris)
+IntersectionParams ray_hit_triangle(
+    const Ray& ray, 
+    const float* tris,
+    const unsigned stride)
 {
-    using Vector3f = Vector3<float>;
+    using vec3f = Vector3<float>;
 
     IntersectionParams intersect_params;
 
     const float epsilon = 1e-7;
-    const Vector3f e0 = tris[1] - tris[0];
-    const Vector3f e1 = tris[2] - tris[0];
-    const Vector3f q = cross(ray.d, e1);
+    const vec3f e0(tris[stride]     - tris[0],
+                   tris[stride + 1] - tris[1],
+                   tris[stride + 2] - tris[2]
+    );
+
+    const vec3f e1(tris[stride * 2]     - tris[0],
+                   tris[stride * 2 + 1] - tris[1],
+                   tris[stride * 2 + 2] - tris[2]
+    );
+
+    const vec3f q = cross(ray.d, e1);
     const float a = dot(e0, q);
 
     if (a > -epsilon && a < epsilon)
@@ -46,7 +57,11 @@ IntersectionParams ray_hit_triangle(const Ray& ray, const Vector3<float>* tris)
     }
 
     const float f = 1.f / a;
-    const Vector3f s = ray.o - tris[0];
+    const vec3f s(ray.o.x - tris[0],
+                  ray.o.y - tris[1],
+                  ray.o.z - tris[2]
+    );
+
     intersect_params.u = f * dot(s, q);
 
     if (intersect_params.u < 0.f)
@@ -54,7 +69,7 @@ IntersectionParams ray_hit_triangle(const Ray& ray, const Vector3<float>* tris)
         return intersect_params;
     }
 
-    const Vector3f r = cross(s, e0);
+    const vec3f r = cross(s, e0);
     intersect_params.v = f * dot(ray.d, r);
 
     if (intersect_params.v < 0.f || 

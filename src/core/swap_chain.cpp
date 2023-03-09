@@ -97,6 +97,23 @@ void SwapChain::present()
     swap_chain->Present(1, 0);
 }
 
+void SwapChain::resize(ID3D12Device2* device, uint32_t width, uint32_t height)
+{
+    for (int i = 0; i < n_backbuffers; ++i)
+    {
+        backbuffers[i]->Release();
+    }
+
+    ThrowIfFailed(swap_chain->ResizeBuffers(
+        n_backbuffers,
+        width, height,
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        0
+    ));
+
+    create_backbuffers(device);
+}
+
 uint8_t SwapChain::current_backbuffer_index()
 {
     return swap_chain->GetCurrentBackBufferIndex();

@@ -47,10 +47,10 @@ bool aabb_empty(const AABB& x)
     return x.bmin == x.bmax;
 }
 
-void aabb_extend(AABB& aabb, const Vector3<float>& p)
+void aabb_extend(AABB* aabb, const Vector3<float>* p)
 {
-    aabb.bmin = cwise_min(aabb.bmin, p);
-    aabb.bmax = cwise_max(aabb.bmax, p);
+    aabb->bmin = cwise_min(&aabb->bmin, p);
+    aabb->bmax = cwise_max(&aabb->bmax, p);
 }
 
 bool aabb_degenerate(const AABB& x)

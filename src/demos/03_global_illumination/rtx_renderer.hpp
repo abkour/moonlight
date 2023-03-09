@@ -100,7 +100,8 @@ private:
     std::vector<u8_four> image;
     BVH m_bvh;
     uint64_t m_num_triangles = 0;
-    std::unique_ptr<Triangle[]> m_triangles;
+    uint64_t m_stride_in_32floats = 0;
+    std::unique_ptr<float[]> m_mesh;
 
     Vector2<uint32_t> old_window_dimensions;
 };
