@@ -487,6 +487,13 @@ void RTX_Renderer::resize()
         sizeof(u8_four)
     );
 
+    m_viewport = CD3DX12_VIEWPORT(
+        0.f,
+        0.f,
+        static_cast<float>(m_window->width()),
+        static_cast<float>(m_window->height())
+    );
+
     D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
     srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;

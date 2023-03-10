@@ -67,7 +67,7 @@ void SwapChain::create_backbuffers(ID3D12Device2* device)
             nullptr,
             rtv_handle
         );
-        
+
         m_backbuffers[i] = backbuffer;
     }
 }
