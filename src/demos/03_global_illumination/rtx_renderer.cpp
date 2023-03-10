@@ -1,6 +1,10 @@
 #include "rtx_renderer.hpp"
 #include "../../utility/random_number.hpp"
 
+#include "tbb/blocked_range.h"
+#include "tbb/blocked_range2d.h"
+#include "tbb/parallel_for.h"
+
 #include <chrono>
 #include <numeric>  // for std::iota
 
@@ -186,9 +190,58 @@ void RTX_Renderer::construct_bvh()
 
 void RTX_Renderer::generate_image()
 {
+    if (rtx_use_multithreading)
+    {
+        generate_image_mt();
+    }
+    else
+    {
+        generate_image_st();
+    }
+
+    update_scene_texture();
+}
+
+void RTX_Renderer::generate_image_mt()
+{
     const Vector3<float> center(0.f, 0.f, 0.f);
     const float radius = 0.25f;
+    tbb::parallel_for(
+        tbb::blocked_range2d<int>(0, m_window->width(), 0, m_window->height()),
+        [&](tbb::blocked_range2d<int> r)
+        {
+            for (uint16_t y = r.cols().begin(); y < r.cols().end(); ++y)
+            {
+                for (uint16_t x = r.rows().begin(); x < r.rows().end(); ++x)
+                {
+                    std::size_t idx = y * m_window->width() + x;
+                    if (idx >= m_image.size()) break;
 
+                    auto ray = m_ray_camera->getRay({ x, y });
+                    IntersectionParams intersect;
+                    m_bvh.intersect(ray, m_mesh.get(), m_stride_in_32floats, intersect);
+                    if (ray.t < std::numeric_limits<float>::max())
+                    {
+                        unsigned c = (int)(ray.t * 4);
+                        m_image[idx].r = c;
+                        m_image[idx].g = c;
+                        m_image[idx].b = c;
+                        m_image[idx].a = c;
+                    } else
+                    {
+                        m_image[idx].r = 0;
+                        m_image[idx].g = 0;
+                        m_image[idx].b = 0;
+                        m_image[idx].a = 0;
+                    }
+                }
+            }
+        }
+    );
+}
+
+void RTX_Renderer::generate_image_st()
+{
     for (uint16_t y = 0; y < m_window->height(); y += 4)
     {
         for (uint16_t x = 0; x < m_window->width(); x += 4)
@@ -212,8 +265,7 @@ void RTX_Renderer::generate_image()
                         m_image[idx].g = c;
                         m_image[idx].b = c;
                         m_image[idx].a = c;
-                    } 
-                    else
+                    } else
                     {
                         m_image[idx].r = 0;
                         m_image[idx].g = 0;
@@ -224,7 +276,10 @@ void RTX_Renderer::generate_image()
             }
         }
     }
+}
 
+void RTX_Renderer::update_scene_texture()
+{
     if (m_scene_texture != nullptr)
     {
         m_command_allocator->Reset();
@@ -274,8 +329,7 @@ void RTX_Renderer::generate_image()
         m_command_queue->execute_command_list(command_lists, 1);
         m_command_queue->signal();
         m_command_queue->wait_for_fence();
-    }
-    else
+    } else
     {
         m_scene_texture = std::make_unique<Texture2D>(
             m_device.Get(),
@@ -285,7 +339,7 @@ void RTX_Renderer::generate_image()
             m_window->width(),
             m_window->height(),
             sizeof(u8_four)
-        );
+            );
 
         transition_resource(
             m_command_list_direct.Get(),
@@ -419,6 +473,56 @@ void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
     command_list->DrawInstanced(sizeof(quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
 }
 
+void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
+{
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+    // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+    if (show_demo_window)
+        ImGui::ShowDemoWindow(&show_demo_window);
+
+    // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+    {
+        static float f = 0.0f;
+        static int counter = 0;
+
+        ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+
+        ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+        ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+        ImGui::Checkbox("Another Window", &show_another_window);
+        ImGui::Checkbox("Use multithreading: ", &rtx_use_multithreading);
+
+        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+        ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+
+        if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+            counter++;
+        ImGui::SameLine();
+        ImGui::Text("counter = %d", counter);
+
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        ImGui::End();
+    }
+
+    // 3. Show another simple window.
+    if (show_another_window)
+    {
+        ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+        ImGui::Text("Hello from another window!");
+        if (ImGui::Button("Close Me"))
+            show_another_window = false;
+        ImGui::End();
+    }
+
+    ImGui::Render();
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_command_list_direct.Get());
+}
+
 void RTX_Renderer::render()
 {
     ThrowIfFailed(m_command_allocator->Reset());
@@ -441,17 +545,7 @@ void RTX_Renderer::render()
     }
 
     record_command_list(m_command_list_direct.Get());
-
-    ImGui_ImplDX12_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
-
-    ImGui::ShowDemoWindow();
-
-    ImGui::Render();
-
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_command_list_direct.Get());
-    
+    record_gui_commands(m_command_list_direct.Get());
 
     // Present
     {

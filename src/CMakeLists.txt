@@ -48,6 +48,8 @@ if (CMAKE_VERSION VERSION_GREATER 3.13)
   set_property(TARGET moonlight PROPERTY CXX_STANDARD 20)
   add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX)
 
+  include_directories(moonlight "${CMAKE_SOURCE_DIR}/ext/oneTBB/include")
+  
   target_link_libraries(moonlight
 	d3dcompiler.lib    
     d3d12.lib 
@@ -61,5 +63,8 @@ if (CMAKE_VERSION VERSION_GREATER 3.13)
   target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/ext/DirectXTK12/build/bin/CMake/Debug/DirectXTK12.lib")
   target_link_libraries(moonlight optimized "${CMAKE_SOURCE_DIR}/ext/DirectXTK12/build/bin/CMake/Release/DirectXTK12.lib")
 
+  target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/out/build/x64-debug/msvc_19.34_cxx_64_md_debug/tbb12_debug.lib")
+  target_link_libraries(moonlight optimized "${CMAKE_SOURCE_DIR}/out/build/x64-release/msvc_19.34_cxx_64_md_release/tbb12.lib")
+ 
   add_compile_definitions(ROOT_DIRECTORY_ASCII="${CMAKE_SOURCE_DIR}")
 endif()

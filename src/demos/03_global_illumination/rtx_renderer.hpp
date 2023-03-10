@@ -56,6 +56,7 @@ public:
 private:
 
     void record_command_list(ID3D12GraphicsCommandList* command_list);
+    void record_gui_commands(ID3D12GraphicsCommandList* command_list);
     void load_assets();
     void load_scene_shader_assets();
     void initialize_raw_input_devices();
@@ -65,6 +66,11 @@ private:
     void parse_files(const char* filename);
     void construct_bvh();
     void generate_image();
+    void generate_image_mt();
+    void generate_image_st();
+    void update_scene_texture();
+
+    bool rtx_use_multithreading = false;
 
 private:
 
@@ -104,6 +110,11 @@ private:
     std::unique_ptr<float[]> m_mesh;
 
     Vector2<uint32_t> m_old_window_dimensions;
+
+private:
+    // GUI related
+    bool show_demo_window = true;
+    bool show_another_window = true;
 };
 
 }
