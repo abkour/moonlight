@@ -22,7 +22,7 @@ ConstantBuffer<CB_Input> CB : register(b0);
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(CS_Input IN)
 {
-    float2 UV = CB.texel_size * (IN.DispatchThreadID.xy * 0.5f);
+    float2 UV = CB.texel_size * (IN.DispatchThreadID.xy);
 
     float4 texel = src_texture.SampleLevel(LinearClampSampler, UV, 0);
     dst_texture[IN.DispatchThreadID.xy] = float4(float3(1.f, 1.f, 1.f) - texel.xyz, 1.f);
