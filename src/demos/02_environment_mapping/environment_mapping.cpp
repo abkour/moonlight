@@ -95,7 +95,7 @@ EnvironmentMapping::EnvironmentMapping(HINSTANCE hinstance)
 
     ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
     device              = _pimpl_create_device(most_sutiable_adapter);
-    command_queue       = std::make_unique<CommandQueue>(device.Get());
+    command_queue       = std::make_unique<CommandQueue>(device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
     command_allocator   = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
     command_list_direct = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
 

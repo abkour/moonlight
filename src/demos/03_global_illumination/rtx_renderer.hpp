@@ -66,8 +66,9 @@ private:
     void parse_files(const char* filename);
     void construct_bvh();
     void generate_image();
-    void generate_image_mt();
-    void generate_image_st();
+    void generate_image_cs();   // compute shader
+    void generate_image_mt();   // multi-threaded cpu
+    void generate_image_st();   // single-threaded cpu
     void update_scene_texture();
 
     bool rtx_use_multithreading = false;
@@ -112,9 +113,25 @@ private:
     Vector2<uint32_t> m_old_window_dimensions;
 
 private:
+
     // GUI related
     bool show_demo_window = true;
     bool show_another_window = true;
+
+private:
+
+    // Compute shader related
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_cs_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_cs_pso;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_dst_texture;
+
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_compute_command_allocator;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_compute_command_list;
+    std::unique_ptr<CommandQueue>   m_compute_command_queue;
+
+    void initialize_cs_pipeline();
+    void dispatch_compute_shader();
 };
 
 }

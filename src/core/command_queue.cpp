@@ -6,7 +6,7 @@ namespace moonlight
 
 using namespace Microsoft::WRL;
 
-CommandQueue::CommandQueue(ID3D12Device2* device)
+CommandQueue::CommandQueue(ID3D12Device2* device, D3D12_COMMAND_LIST_TYPE queue_type)
     : m_fence_value(0)
     , m_fence_event(::CreateEvent(NULL, FALSE, FALSE, NULL))
 {
@@ -20,7 +20,7 @@ CommandQueue::CommandQueue(ID3D12Device2* device)
     queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
     queue_desc.NodeMask = 0;
     queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-    queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    queue_desc.Type = queue_type;
 
     ThrowIfFailed(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&m_command_queue)));
 }
@@ -30,7 +30,6 @@ void CommandQueue::execute_command_list(
 {
     m_command_queue->ExecuteCommandLists(n_lists, command_lists);
 }
-
 
 void CommandQueue::flush()
 {
