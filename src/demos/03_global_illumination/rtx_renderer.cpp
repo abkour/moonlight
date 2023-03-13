@@ -21,12 +21,6 @@ namespace moonlight {
 #define UAV_RWTEXTURE_INDEX         5
 #define NUM_DESCRIPTORS             6
 
-struct CS_RayFormat
-{
-    Vector3<float> o, d, invd;
-    float t;
-};
-
 struct CS_RayCameraFormat
 {
     Vector2<uint32_t> resolution;
@@ -412,11 +406,6 @@ void RTX_Renderer::update_scene_texture()
     }
 }
 
-bool RTX_Renderer::is_gui_enabled()
-{
-    return true;
-}
-
 bool RTX_Renderer::is_application_initialized()
 {
     return app_initialized;
@@ -483,10 +472,12 @@ void RTX_Renderer::on_mouse_move(LPARAM lparam)
         case RI_MOUSE_BUTTON_1_UP:
             io.MouseDown[0] = false;
             break;
+        case RI_MOUSE_WHEEL:
+            io.MouseWheel = (float)(short)raw->data.mouse.usButtonData / WHEEL_DELTA;
+            break;
         default:
             break;
         }
-        
         if (m_keyboard_state.keys[KeyCode::Shift])
         {
             m_ray_camera->rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
@@ -540,11 +531,11 @@ void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
 void RTX_Renderer::dispatch_compute_shader()
 {
     constexpr uint32_t BLOCK_SIZE = 8;
-    uint32_t thread_x = m_window->width() / BLOCK_SIZE;
-    uint32_t thread_y = m_window->height() / BLOCK_SIZE;
-    uint32_t thread_z = 1;
+    const uint32_t thread_x = m_window->width() / BLOCK_SIZE;
+    const uint32_t thread_y = m_window->height() / BLOCK_SIZE;
+    const uint32_t thread_z = 1;
     
-    Vector2<float> texel_size(1.f / m_window->width(), 1.f / m_window->height());
+    const Vector2<float> texel_size(1.f / m_window->width(), 1.f / m_window->height());
 
     ThrowIfFailed(m_compute_command_allocator->Reset());
     ThrowIfFailed(m_compute_command_list->Reset(m_compute_command_allocator.Get(), nullptr));
@@ -1063,7 +1054,7 @@ void RTX_Renderer::initialize_cs_pipeline()
     CD3DX12_ROOT_PARAMETER1 root_parameters[4];
     root_parameters[0].InitAsDescriptorTable(1, &srv_range);
     root_parameters[1].InitAsDescriptorTable(1, &uav_range);
-    root_parameters[2].InitAsConstants(sizeof(CS_RayFormat) / sizeof(float), 0);
+    root_parameters[2].InitAsConstants(sizeof(unsigned), 0);
     root_parameters[3].InitAsConstants(sizeof(CS_RayCameraFormat) / sizeof(float), 1);
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;

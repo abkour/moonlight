@@ -44,7 +44,6 @@ public:
     ~RTX_Renderer();
 
     bool is_application_initialized() override;
-    bool is_gui_enabled() override;
 
     void flush() override;
     void on_key_event(const PackedKeyArguments) override;
@@ -117,6 +116,15 @@ private:
     // GUI related
     bool show_demo_window = true;
     bool show_another_window = true;
+
+    enum class TracingMethod
+    {
+        SingleThreaded = 0,
+        MultiThreaded  = 1,
+        ComputeShader  = 2
+    };
+
+    TracingMethod m_tracing_method;
 
 private:
 

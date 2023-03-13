@@ -28,16 +28,16 @@ void BVH::build_bvh(
     m_num_nodes = n_triangles * 2 - 1;
 
     m_bvh_nodes = std::make_unique<BVHNode[]>(m_num_nodes);
-    m_tri_idx     = std::make_unique<uint32_t[]>(n_triangles);
+    m_tri_idx   = std::make_unique<uint32_t[]>(n_triangles);
 
     for (uint32_t i = 0; i < n_triangles; ++i)
     {
         m_tri_idx[i] = i;
     }
     
-    BVHNode& root = m_bvh_nodes[0];
+    BVHNode& root   = m_bvh_nodes[0];
     root.left_first = 0;
-    root.tri_count = n_triangles;
+    root.tri_count  = n_triangles;
 
     update_node_bounds(0, tris, stride_in_bytes);
     sub_divide(0, tris, stride_in_bytes);

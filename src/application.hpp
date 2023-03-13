@@ -34,8 +34,6 @@ public:
 
     virtual bool is_application_initialized() = 0;
 
-    virtual bool is_gui_enabled() = 0;
-
     virtual void flush() = 0;
 
     virtual void on_key_event(const PackedKeyArguments key_state) = 0;
