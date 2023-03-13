@@ -11,7 +11,7 @@ struct RayCamera {
     RayCamera() = default;
 
     // Initialize the virtual camera
-    RayCamera(const Vector2<uint16_t> resolution);
+    RayCamera(const Vector2<uint32_t> resolution);
 
     // Compute the top-left pixel location of the virtual camera in addition to 
     // the shifting vectors used to shift the top-left pixel.
@@ -32,10 +32,10 @@ struct RayCamera {
 
     // Compute a ray originating from the eye position towards the pixelLocation
     // in world space.
-    Ray getRay(const Vector2<uint16_t>& pixelLocation);
+    Ray getRay(const Vector2<uint32_t>& pixelLocation);
 
     void set_movement_speed(const float movement_speed);
-    void setResolution(Vector2<uint16_t> newResolution);
+    void setResolution(Vector2<uint32_t> newResolution);
     unsigned resx() const;
     unsigned resy() const;
 
@@ -44,11 +44,12 @@ struct RayCamera {
         return eyepos;
     }
 
-protected:
-
-    Vector2<uint16_t> resolution;
-    Vector3<float> eyepos, eyedir;
-    Vector3<float> shiftx, shifty, topLeftPixel;
+    Vector2<uint32_t> resolution;
+    Vector3<float> eyepos;
+    Vector3<float> eyedir;
+    Vector3<float> shiftx;
+    Vector3<float> shifty; 
+    Vector3<float> topLeftPixel;
 
     float half_fov_in_radians;
     float yaw; 

@@ -4,7 +4,7 @@ using namespace DirectX;
 
 namespace moonlight {
 
-using Vector2s = Vector2<uint16_t>;
+using Vector2s = Vector2<uint32_t>;
 using Vector3f = Vector3<float>;
 
 RayCamera::RayCamera(const Vector2s resolution)

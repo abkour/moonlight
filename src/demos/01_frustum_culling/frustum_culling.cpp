@@ -439,7 +439,8 @@ void FrustumCulling::update()
     // Update the contents of the offset buffer
     instance_id_buffer->update(
         device.Get(), command_list_direct.Get(), 
-        instance_ids.get(), sizeof(UINT) * n_visible_instances
+        instance_ids.get(), sizeof(UINT) * n_visible_instances,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
 
     text_output.resize(128);
@@ -517,7 +518,8 @@ void FrustumCulling::load_scene_shader_assets()
     {
         vertex_buffer = std::make_unique<DX12Resource>();
         vertex_buffer->upload(device.Get(), command_list_direct.Get(), 
-            interleaved_cube_vertices, sizeof(interleaved_cube_vertices)
+            interleaved_cube_vertices, sizeof(interleaved_cube_vertices),
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
         vertex_buffer_view.BufferLocation = vertex_buffer->gpu_virtual_address();
@@ -530,7 +532,8 @@ void FrustumCulling::load_scene_shader_assets()
         instance_id_buffer = std::make_unique<DX12Resource>();
         instance_id_buffer->upload(
             device.Get(), command_list_direct.Get(),
-            instance_ids.get(), sizeof(UINT) * n_instances
+            instance_ids.get(), sizeof(UINT) * n_instances,
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
         
         D3D12_BUFFER_SRV buffer_desc = {};
@@ -556,7 +559,8 @@ void FrustumCulling::load_scene_shader_assets()
         instance_data_buffer = std::make_unique<DX12Resource>();
         instance_data_buffer->upload(
             device.Get(), command_list_direct.Get(),
-            instance_vertex_offsets.get(), sizeof(InstanceAttributes) * n_instances
+            instance_vertex_offsets.get(), sizeof(InstanceAttributes) * n_instances,
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
         D3D12_BUFFER_SRV buffer_desc = {};
@@ -666,7 +670,8 @@ void FrustumCulling::load_quad_shader_assets()
         quad_vertex_buffer = std::make_unique<DX12Resource>();
         quad_vertex_buffer->upload(
             device.Get(), command_list_direct.Get(), 
-            interleaved_quad_vertices, sizeof(interleaved_quad_vertices)
+            interleaved_quad_vertices, sizeof(interleaved_quad_vertices),
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
         quad_vertex_buffer_view.BufferLocation = quad_vertex_buffer->gpu_virtual_address();

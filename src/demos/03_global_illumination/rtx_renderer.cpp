@@ -13,16 +13,39 @@ using namespace Microsoft::WRL;
 
 namespace moonlight {
 
-#define SRC_TEXTURE_INDEX       0
-#define IMGUI_DESC_INDEX        1
-#define SRV_DST_TEXTURE_INDEX   2
-#define UAV_DST_TEXTURE_INDEX   3
-#define NUM_DESCRIPTORS         4
+#define IMGUI_DESC_INDEX            0
+#define SRV_BVHNODES_INDEX          1
+#define SRV_TRIANGLES_INDEX         2
+#define SRV_TRIANGLE_INDICES_INDEX  3
+#define SRV_RWTEXTURE_INDEX         4
+#define UAV_RWTEXTURE_INDEX         5
+#define NUM_DESCRIPTORS             6
+
+struct CS_RayFormat
+{
+    Vector3<float> o, d, invd;
+    float t;
+};
+
+struct CS_RayCameraFormat
+{
+    Vector2<uint32_t> resolution;
+    float dummy0, dummy1;
+    Vector3<float> eyepos;
+    float dummy2;
+    Vector3<float> eyedir;
+    float dummy3;
+    Vector3<float> shiftx;
+    float dummy4;
+    Vector3<float>shifty;
+    float dummy5;
+    Vector3<float>topLeftPixel;
+    float dummy6;
+};
 
 struct RTX_Renderer::u8_four
 {
     u8_four() = default;
-
     u8_four(unsigned char aa, unsigned char bb, unsigned char cc, unsigned char dd)
         : r(aa), g(bb), b(cc), a(dd)
     {}
@@ -57,12 +80,6 @@ static struct ScenePipelineStateStream
     CD3DX12_PIPELINE_STATE_STREAM_PS ps;
     CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtv_formats;
 } scene_pipeline_state_stream;
-
-static struct ComputePipeleineStateStream
-{
-    CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
-    CD3DX12_PIPELINE_STATE_STREAM_CS cs;
-} compute_pipeline_state_stream;
 
 RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     : IApplication(hinstance)
@@ -103,11 +120,14 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         static_cast<float>(m_window->height())
     );
 
-    m_srv_descriptor_heap = 
-        std::make_unique<DescriptorHeap>(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NUM_DESCRIPTORS);
+    m_srv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        m_device.Get(), 
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 
+        NUM_DESCRIPTORS
+    );
 
     m_ray_camera = std::make_unique<RayCamera>(
-        Vector2<uint16_t>(m_window->width(), m_window->height())
+        Vector2<uint32_t>(m_window->width(), m_window->height())
     );
 
     m_ray_camera->initializeVariables(
@@ -116,6 +136,8 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         45,
         1
     );
+
+    m_ray_camera->set_movement_speed(10.f);
 
     m_old_window_dimensions = { m_window->width(), m_window->height() };
     m_image.resize(m_old_window_dimensions.x * m_old_window_dimensions.y);
@@ -132,7 +154,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     m_compute_command_list->Close();
 
     construct_bvh();
-    generate_image();
+    //generate_image();
 
     load_assets();
 
@@ -345,7 +367,7 @@ void RTX_Renderer::update_scene_texture()
         m_device->CreateShaderResourceView(
             m_scene_texture->get_underlying(),
             &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRC_TEXTURE_INDEX)
+            m_srv_descriptor_heap->cpu_handle(SRV_RWTEXTURE_INDEX)
         );
 
         m_command_list_direct->Close();
@@ -385,7 +407,7 @@ void RTX_Renderer::update_scene_texture()
         m_device->CreateShaderResourceView(
             m_scene_texture->get_underlying(),
             &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRC_TEXTURE_INDEX)
+            m_srv_descriptor_heap->cpu_handle(SRV_RWTEXTURE_INDEX)
         );
     }
 }
@@ -496,7 +518,7 @@ void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
     command_list->SetDescriptorHeaps(1, heaps);
     command_list->SetGraphicsRootDescriptorTable(
         0,
-        m_srv_descriptor_heap->gpu_handle(SRV_DST_TEXTURE_INDEX)
+        m_srv_descriptor_heap->gpu_handle(SRV_RWTEXTURE_INDEX)
     );
 
     D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer_view };
@@ -521,6 +543,8 @@ void RTX_Renderer::dispatch_compute_shader()
     uint32_t thread_x = m_window->width() / BLOCK_SIZE;
     uint32_t thread_y = m_window->height() / BLOCK_SIZE;
     uint32_t thread_z = 1;
+    
+    Vector2<float> texel_size(1.f / m_window->width(), 1.f / m_window->height());
 
     ThrowIfFailed(m_compute_command_allocator->Reset());
     ThrowIfFailed(m_compute_command_list->Reset(m_compute_command_allocator.Get(), nullptr));
@@ -532,16 +556,28 @@ void RTX_Renderer::dispatch_compute_shader()
         m_srv_descriptor_heap->get_underlying(),
     };
     m_compute_command_list->SetDescriptorHeaps(_countof(heaps), heaps);
+
     m_compute_command_list->SetComputeRootDescriptorTable(
-        0,
-        m_srv_descriptor_heap->gpu_handle(SRC_TEXTURE_INDEX)
+        0, m_srv_descriptor_heap->gpu_handle(SRV_BVHNODES_INDEX)
     );
     m_compute_command_list->SetComputeRootDescriptorTable(
-        1,
-        m_srv_descriptor_heap->gpu_handle(UAV_DST_TEXTURE_INDEX)
+        1, m_srv_descriptor_heap->gpu_handle(UAV_RWTEXTURE_INDEX)
     );
-    Vector2<float> texel_size(1.f / m_window->width(), 1.f / m_window->height());
-    m_compute_command_list->SetComputeRoot32BitConstants(2, sizeof(Vector2<float>) / sizeof(float), &texel_size, 0);
+    m_compute_command_list->SetComputeRoot32BitConstants(
+        2, 1, &m_stride_in_32floats, 0
+    );
+
+    CS_RayCameraFormat sub_raycamera;
+    sub_raycamera.resolution = m_ray_camera->resolution;
+    sub_raycamera.eyepos = m_ray_camera->eyepos;
+    sub_raycamera.eyedir = m_ray_camera->eyedir;
+    sub_raycamera.shiftx = m_ray_camera->shiftx;
+    sub_raycamera.shifty = m_ray_camera->shifty;
+    sub_raycamera.topLeftPixel = m_ray_camera->topLeftPixel;
+
+    m_compute_command_list->SetComputeRoot32BitConstants(
+        3, sizeof(CS_RayCameraFormat) / sizeof(float), &sub_raycamera, 0
+    );
 
     m_compute_command_list->Dispatch(thread_x, thread_y, thread_z);
     m_compute_command_list->Close();
@@ -553,6 +589,30 @@ void RTX_Renderer::dispatch_compute_shader()
     m_compute_command_queue->execute_command_list(command_lists, 1);
     m_compute_command_queue->signal();
     m_compute_command_queue->wait_for_fence();
+    
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+    uav_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+
+    m_device->CreateUnorderedAccessView(
+        m_dst_texture.Get(),
+        nullptr,
+        &uav_desc,
+        m_srv_descriptor_heap->cpu_handle(UAV_RWTEXTURE_INDEX)
+    );
+    
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+    srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv_desc.Texture2D.MostDetailedMip = 0;
+    srv_desc.Texture2D.MipLevels = 1;
+
+    m_device->CreateShaderResourceView(
+        m_dst_texture.Get(),
+        &srv_desc,
+        m_srv_descriptor_heap->cpu_handle(SRV_RWTEXTURE_INDEX)
+    );
 }
 
 void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
@@ -610,8 +670,6 @@ void RTX_Renderer::render()
     ThrowIfFailed(m_command_allocator->Reset());
     ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
 
-    uint8_t backbuffer_idx = m_swap_chain->current_backbuffer_index();
-
     // Clear
     {
         m_swap_chain->transition_to_rtv(m_command_list_direct.Get());
@@ -619,9 +677,10 @@ void RTX_Renderer::render()
         // Clear backbuffer
         const FLOAT clear_color[] = { 0.05f, 0.05f, 0.05f, 1.f };
         m_command_list_direct->ClearRenderTargetView(
-            m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx),
-            clear_color,
-            0,
+            m_swap_chain->backbuffer_rtv_descriptor_handle(
+                m_swap_chain->current_backbuffer_index()),
+            clear_color, 
+            0, 
             NULL
         );
     }
@@ -658,11 +717,48 @@ void RTX_Renderer::resize()
     m_swap_chain->resize(m_device.Get(), m_window->width(), m_window->height());
 
     m_image.resize(m_window->width() * m_window->height());
-    m_scene_texture->resize(
-        m_device.Get(),
-        m_window->width(), m_window->height(),
-        sizeof(u8_four)
-    );
+    if (m_scene_texture)
+    {
+        m_scene_texture->resize(
+            m_device.Get(),
+            m_window->width(), m_window->height(),
+            sizeof(u8_four)
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv_desc.Texture2D.MipLevels = 1;
+        srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+        m_device->CreateShaderResourceView(
+            m_scene_texture->get_underlying(),
+            &srv_desc,
+            m_srv_descriptor_heap->cpu_handle(SRV_RWTEXTURE_INDEX)
+        );
+    }
+
+    {
+        // resize the dst_texture
+        D3D12_RESOURCE_DESC rsc_desc = {};
+        rsc_desc.DepthOrArraySize = 1;
+        rsc_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        rsc_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        rsc_desc.MipLevels = 1;
+        rsc_desc.Width = m_window->width();
+        rsc_desc.Height = m_window->height();
+        rsc_desc.SampleDesc = { 1, 0 };
+        rsc_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        ThrowIfFailed(m_device->CreateCommittedResource(
+            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+            D3D12_HEAP_FLAG_NONE,
+            &rsc_desc,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            nullptr,
+            IID_PPV_ARGS(&m_dst_texture)
+        ));
+    }
 
     m_viewport = CD3DX12_VIEWPORT(
         0.f,
@@ -676,19 +772,6 @@ void RTX_Renderer::resize()
     srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srv_desc.Texture2D.MipLevels = 1;
     srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-    m_device->CreateShaderResourceView(
-        m_scene_texture->get_underlying(),
-        &srv_desc,
-        m_srv_descriptor_heap->cpu_handle(SRC_TEXTURE_INDEX)
-    );
-
-    transition_resource(
-        m_command_list_direct.Get(),
-        m_scene_texture->get_underlying(),
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-    );
 
     m_command_list_direct->Close();
     // Execute eall command now
@@ -713,7 +796,7 @@ void RTX_Renderer::update()
     if (m_ray_camera->camera_variables_need_updating())
     {
         m_ray_camera->reinitialize_camera_variables();
-        generate_image();
+        //generate_image();
     }
 }
 
@@ -730,7 +813,8 @@ void RTX_Renderer::load_scene_shader_assets()
         m_vertex_buffer = std::make_unique<DX12Resource>();
         m_vertex_buffer->upload(m_device.Get(), m_command_list_direct.Get(),
             (float*)quad_vertices,
-            sizeof(quad_vertices)
+            sizeof(quad_vertices),
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
         m_vertex_buffer_view.BufferLocation = m_vertex_buffer->gpu_virtual_address();
@@ -833,7 +917,85 @@ void RTX_Renderer::load_scene_shader_assets()
 
 void RTX_Renderer::initialize_cs_pipeline()
 {
-    // Allocate memory for DstTexture
+    // Initialize m_uav_bvhnodes_rsc
+    {
+        m_uav_bvhnodes_rsc = std::make_unique<DX12Resource>();
+        m_uav_bvhnodes_rsc->upload(
+            m_device.Get(),
+            m_command_list_direct.Get(),
+            m_bvh.get_raw_nodes(),
+            sizeof(BVHNode) * m_bvh.get_nodes_used(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer.NumElements = m_bvh.get_nodes_used();
+        srv_desc.Buffer.StructureByteStride = sizeof(BVHNode);
+
+        m_device->CreateShaderResourceView(
+            m_uav_bvhnodes_rsc->get_underlying(),
+            &srv_desc,
+            m_srv_descriptor_heap->cpu_handle(SRV_BVHNODES_INDEX)
+        );
+    }
+
+    // Initialize m_uav_tris_rsc
+    {
+        m_uav_tris_rsc = std::make_unique<DX12Resource>();
+        m_uav_tris_rsc->upload(
+            m_device.Get(),
+            m_command_list_direct.Get(),
+            m_mesh.get(),
+            sizeof(float) * m_num_triangles * m_stride_in_32floats * 3,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer.NumElements = m_num_triangles * m_stride_in_32floats * 3;
+        srv_desc.Buffer.StructureByteStride = sizeof(float);
+        
+        m_device->CreateShaderResourceView(
+            m_uav_tris_rsc->get_underlying(),
+            &srv_desc,
+            m_srv_descriptor_heap->cpu_handle(SRV_TRIANGLES_INDEX)
+        );
+    }
+
+    // Initialize m_uav_tris_indices_rsc
+    {
+        m_uav_tris_indices_rsc = std::make_unique<DX12Resource>();
+        m_uav_tris_indices_rsc->upload(
+            m_device.Get(),
+            m_command_list_direct.Get(),
+            m_bvh.get_raw_indices(),
+            sizeof(uint32_t) * m_num_triangles,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer.NumElements = m_num_triangles;
+        srv_desc.Buffer.StructureByteStride = sizeof(uint32_t);
+
+        m_device->CreateShaderResourceView(
+            m_uav_tris_indices_rsc->get_underlying(),
+            &srv_desc,
+            m_srv_descriptor_heap->cpu_handle(SRV_TRIANGLE_INDICES_INDEX)
+        );
+    }
+
+    // Initialize m_dst_texture
     {
         D3D12_RESOURCE_DESC rsc_desc = {};
         rsc_desc.DepthOrArraySize = 1;
@@ -858,12 +1020,12 @@ void RTX_Renderer::initialize_cs_pipeline()
         D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
         uav_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-
+        
         m_device->CreateUnorderedAccessView(
             m_dst_texture.Get(),
             nullptr,
             &uav_desc,
-            m_srv_descriptor_heap->cpu_handle(UAV_DST_TEXTURE_INDEX)
+            m_srv_descriptor_heap->cpu_handle(UAV_RWTEXTURE_INDEX)
         );
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
@@ -876,13 +1038,13 @@ void RTX_Renderer::initialize_cs_pipeline()
         m_device->CreateShaderResourceView(
             m_dst_texture.Get(),
             &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_DST_TEXTURE_INDEX)
+            m_srv_descriptor_heap->cpu_handle(SRV_RWTEXTURE_INDEX)
         );
     }
 
     ComPtr<ID3DBlob> cs_blob;
     {
-        std::wstring cspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/03_global_illumination/shaders/raytracer_cs.cso";
+        std::wstring cspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/03_global_illumination/shaders/bvh_intersect_cs_v100.cso";
         ThrowIfFailed(D3DReadFileToBlob(cspath.c_str(), &cs_blob));
     }
 
@@ -895,35 +1057,23 @@ void RTX_Renderer::initialize_cs_pipeline()
 
     D3D12_ROOT_SIGNATURE_FLAGS root_signature_flags =
         D3D12_ROOT_SIGNATURE_FLAG_NONE;
-
-    CD3DX12_DESCRIPTOR_RANGE1 srv_range{ D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE };
+    
+    CD3DX12_DESCRIPTOR_RANGE1 srv_range{ D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE };
     CD3DX12_DESCRIPTOR_RANGE1 uav_range{ D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE };
-    CD3DX12_ROOT_PARAMETER1 root_parameters[3];
-    // Three float4x4
+    CD3DX12_ROOT_PARAMETER1 root_parameters[4];
     root_parameters[0].InitAsDescriptorTable(1, &srv_range);
     root_parameters[1].InitAsDescriptorTable(1, &uav_range);
-    root_parameters[2].InitAsConstants(sizeof(XMFLOAT2) / sizeof(float), 0);
-
-    D3D12_STATIC_SAMPLER_DESC samplers[1];
-    samplers[0] = {};
-    samplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    samplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    samplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    samplers[0].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
-    samplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    samplers[0].Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-    samplers[0].MaxLOD = D3D12_FLOAT32_MAX;
+    root_parameters[2].InitAsConstants(sizeof(CS_RayFormat) / sizeof(float), 0);
+    root_parameters[3].InitAsConstants(sizeof(CS_RayCameraFormat) / sizeof(float), 1);
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-    // TODO: Is this call correct, if the highest supported version is 1_0?
     root_signature_desc.Init_1_1(
         _countof(root_parameters), root_parameters,
-        _countof(samplers), samplers,
+        0, nullptr,
         root_signature_flags
     );
 
     ComPtr<ID3DBlob> root_signature_blob;
-    // TODO: What is the error blob=
     ComPtr<ID3DBlob> error_blob;
     ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
         &root_signature_desc,
@@ -931,7 +1081,7 @@ void RTX_Renderer::initialize_cs_pipeline()
         &root_signature_blob,
         &error_blob
     ));
-
+    
     ThrowIfFailed(m_device->CreateRootSignature(
         0,
         root_signature_blob->GetBufferPointer(),
@@ -939,15 +1089,11 @@ void RTX_Renderer::initialize_cs_pipeline()
         IID_PPV_ARGS(&m_cs_root_signature)
     ));
 
-    compute_pipeline_state_stream.root_signature = m_cs_root_signature.Get();
-    compute_pipeline_state_stream.cs = CD3DX12_SHADER_BYTECODE(cs_blob.Get());
+    D3D12_COMPUTE_PIPELINE_STATE_DESC pss_desc = {};
+    pss_desc.CS = CD3DX12_SHADER_BYTECODE(cs_blob.Get());
+    pss_desc.pRootSignature = m_cs_root_signature.Get();
 
-    D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {
-        sizeof(ComputePipeleineStateStream),
-        &compute_pipeline_state_stream
-    };
-    
-    ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_cs_pso)));
+    ThrowIfFailed(m_device->CreateComputePipelineState(&pss_desc, IID_PPV_ARGS(&m_cs_pso)));
 }
 
 }

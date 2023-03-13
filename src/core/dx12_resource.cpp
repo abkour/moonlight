@@ -12,7 +12,7 @@ T* temp_address(T&& rvalue)
 }
 
 DX12Resource::DX12Resource()
-    : m_state(D3D12_RESOURCE_STATE_COMMON)
+    : m_state(D3D12_RESOURCE_STATE_COPY_DEST)
 {
 }
 
@@ -39,7 +39,8 @@ void DX12Resource::update(
     ID3D12Device* device,
     ID3D12GraphicsCommandList* command_list,
     void* data,
-    size_t size_in_bytes)
+    size_t size_in_bytes,
+    D3D12_RESOURCE_STATES new_state)
 {
     // the DEFAULT_HEAP resource needs to be in the COPY_DEST state, before it can be copied into.
     transition(command_list, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -65,21 +66,23 @@ void DX12Resource::update(
     UpdateSubresources(command_list, m_resource.Get(), m_intermediate_buffer.Get(), 0, 0, 1, &data_desc);
 
     // Finally, transition the resource into the VCB state
-    transition(command_list, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+    transition(command_list, new_state);
 }
 
 void DX12Resource::upload(
     ID3D12Device2* device,
     ID3D12GraphicsCommandList* command_list,
     void* data,
-    size_t size_in_bytes)
+    size_t size_in_bytes,
+    D3D12_RESOURCE_STATES new_state,
+    D3D12_HEAP_FLAGS heap_flags,
+    D3D12_RESOURCE_FLAGS resource_flags)
 {
-    m_state = D3D12_RESOURCE_STATE_COPY_DEST;
     ThrowIfFailed(device->CreateCommittedResource(
         temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-        D3D12_HEAP_FLAG_NONE,
-        temp_address(CD3DX12_RESOURCE_DESC::Buffer(size_in_bytes)),
-        D3D12_RESOURCE_STATE_COPY_DEST,
+        heap_flags,
+        temp_address(CD3DX12_RESOURCE_DESC::Buffer(size_in_bytes, resource_flags)),
+        m_state,
         nullptr,
         IID_PPV_ARGS(&m_resource)
     ));
@@ -102,9 +105,8 @@ void DX12Resource::upload(
 
     UpdateSubresources(command_list, m_resource.Get(), m_intermediate_buffer.Get(), 0, 0, 1, &data_desc);
 
-    // Create the CBV view
-    transition(command_list, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+    // Create the descriptor view
+    transition(command_list, new_state);
 }
-
 
 }

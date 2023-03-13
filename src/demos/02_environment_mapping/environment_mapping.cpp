@@ -380,7 +380,8 @@ void EnvironmentMapping::load_scene_shader_assets()
         vertex_buffer = std::make_unique<DX12Resource>();
         vertex_buffer->upload(device.Get(), command_list_direct.Get(),
             (float*)interleaved_cube_vn,
-            sizeof(interleaved_cube_vn)
+            sizeof(interleaved_cube_vn),
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
         vertex_buffer_view.BufferLocation = vertex_buffer->gpu_virtual_address();

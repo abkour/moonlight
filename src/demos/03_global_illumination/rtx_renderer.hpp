@@ -124,6 +124,9 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_cs_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_cs_pso;
 
+    std::unique_ptr<DX12Resource> m_uav_bvhnodes_rsc;
+    std::unique_ptr<DX12Resource> m_uav_tris_rsc;
+    std::unique_ptr<DX12Resource> m_uav_tris_indices_rsc;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_dst_texture;
 
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_compute_command_allocator;

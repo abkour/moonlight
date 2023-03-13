@@ -55,14 +55,13 @@ StructuredBuffer<TriangleIndexFormat> TriangleIndices : register(t2);
 
 // Output RWTexture2D
 RWTexture2D<float4> output_texture : register(u0);
-SamplerState LinearClampSampler : register(s0);
 
 Ray generate_ray(uint x, uint y)
 {
-    float3 direction = float3(
+    float3 direction = 
         RayCamera.topLeftPixel +
         (RayCamera.shiftx * (float(x) - 1.f)) +
-        (RayCamera.shifty * (float(y) - 1.f)));
+        (RayCamera.shifty * (float(y) - 1.f));
 
     Ray ray;
     ray.o = RayCamera.eyepos;
@@ -259,7 +258,8 @@ void main(CS_Input IN)
 {
     const uint idx_cutoff = RayCamera.resolution.x * RayCamera.resolution.y;
     const uint global_threadID = IN.DispatchThreadID.x * IN.DispatchThreadID.y;
-    if (idx_cutoff > global_threadID)
+
+    if (idx_cutoff < global_threadID)
     {
         return;
     }
@@ -270,7 +270,7 @@ void main(CS_Input IN)
     if (t < FLOAT32_INVALID)
     {
         float s = 2.f;
-        output_texture[IN.DispatchThreadID.xy] = float4(t * s, t * s, t * s, 1.f);
+        output_texture[IN.DispatchThreadID.xy] = float4(t, t, 0.f, 1.f);
     }
     else
     {

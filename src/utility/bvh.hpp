@@ -56,6 +56,26 @@ public:
     bool validate_parent_bigger_than_child();
     bool validate_all_bvs_well_defined();
 
+    BVHNode* get_raw_nodes()
+    {
+        return m_bvh_nodes.get();
+    }
+
+    uint32_t* get_raw_indices()
+    {
+        return m_tri_idx.get();
+    }
+
+    unsigned get_nodes_used() const
+    {
+        return m_nodes_used;
+    }
+
+    unsigned get_num_nodes() const
+    {
+        return m_num_nodes;
+    }
+
 private:
 
     void update_node_bounds(uint32_t node_idx, const float* tris, const uint64_t stride);

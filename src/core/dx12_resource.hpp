@@ -35,14 +35,18 @@ struct DX12Resource
         ID3D12Device* device,
         ID3D12GraphicsCommandList* command_list,
         void* data,
-        size_t size_in_bytes
+        size_t size_in_bytes,
+        D3D12_RESOURCE_STATES new_state
     );
 
     void upload(
         ID3D12Device2* device,
         ID3D12GraphicsCommandList* command_list,
         void* data,
-        size_t size_in_bytes
+        size_t size_in_bytes,
+        D3D12_RESOURCE_STATES new_state,
+        D3D12_HEAP_FLAGS heap_flags = D3D12_HEAP_FLAG_NONE,
+        D3D12_RESOURCE_FLAGS resource_flags = D3D12_RESOURCE_FLAG_NONE
     );
 
     void transition(
