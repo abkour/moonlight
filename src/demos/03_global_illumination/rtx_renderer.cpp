@@ -507,21 +507,6 @@ void RTX_Renderer::on_switch_tracing_method(TracingMethod prev_tracing_method)
 
         m_dst_texture_state = cpu_state;
     }
-    /*
-    if (resource_transition_required)
-    {
-        flush();
-
-        m_command_list_direct->Close();
-        // Execute eall command now
-        ID3D12CommandList* command_lists[] =
-        {
-            m_command_list_direct.Get()
-        };
-        m_command_queue->execute_command_list(command_lists, 1);
-        m_command_queue->signal();
-        m_command_queue->wait_for_fence();
-    }*/
 }
 
 void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
