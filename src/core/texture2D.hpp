@@ -18,6 +18,15 @@ class Texture2D
 public:
 
     Texture2D(
+        ID3D12Device2* device,
+        ID3D12GraphicsCommandList* command_list,
+        ID3D12Resource* texture,
+        D3D12_RESOURCE_STATES resource_state,
+        DXGI_FORMAT format,
+        void* data, unsigned width, unsigned height, unsigned format_size
+    );
+
+    Texture2D(
         ID3D12Device2* device, 
         ID3D12GraphicsCommandList* command_list, 
         DXGI_FORMAT format,

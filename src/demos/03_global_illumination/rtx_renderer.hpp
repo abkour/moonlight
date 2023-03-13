@@ -6,6 +6,7 @@
 #include "../../camera.hpp"
 #include "../../simple_math.hpp"
 #include "../../core/command_queue.hpp"
+#include "../../core/cpu_gpu_texture2d.hpp"
 #include "../../core/descriptor_heap.hpp"
 #include "../../core/dx12_resource.hpp"
 #include "../../core/render_texture.hpp"
@@ -68,7 +69,7 @@ private:
     void generate_image_cs();   // compute shader
     void generate_image_mt();   // multi-threaded cpu
     void generate_image_st();   // single-threaded cpu
-    void update_scene_texture();
+    void upload_to_texture();
 
     bool rtx_use_multithreading = false;
 
@@ -96,7 +97,7 @@ private:
 
     std::unique_ptr<RayCamera> m_ray_camera;
     std::unique_ptr<DescriptorHeap> m_srv_descriptor_heap;
-    std::unique_ptr<Texture2D> m_scene_texture;
+    std::unique_ptr<CPUGPUTexture2D> m_texture_cpu_uploader;
 
 private:
 
@@ -117,7 +118,7 @@ private:
     bool show_demo_window = true;
     bool show_another_window = true;
 
-    enum class TracingMethod
+    enum TracingMethod
     {
         SingleThreaded = 0,
         MultiThreaded  = 1,
@@ -125,6 +126,8 @@ private:
     };
 
     TracingMethod m_tracing_method;
+    void on_resource_invalidation();
+    void on_switch_tracing_method(TracingMethod prev_tracing_method);
 
 private:
 
@@ -136,6 +139,7 @@ private:
     std::unique_ptr<DX12Resource> m_uav_tris_rsc;
     std::unique_ptr<DX12Resource> m_uav_tris_indices_rsc;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_dst_texture;
+    D3D12_RESOURCE_STATES m_dst_texture_state;
 
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_compute_command_allocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_compute_command_list;

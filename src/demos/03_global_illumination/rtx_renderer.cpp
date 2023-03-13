@@ -132,6 +132,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     );
 
     m_ray_camera->set_movement_speed(10.f);
+    m_tracing_method = MultiThreaded;
 
     m_old_window_dimensions = { m_window->width(), m_window->height() };
     m_image.resize(m_old_window_dimensions.x * m_old_window_dimensions.y);
@@ -146,21 +147,11 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
 
     // Manual close
     m_compute_command_list->Close();
+    m_command_list_direct->Close();
 
     construct_bvh();
-    //generate_image();
-
     load_assets();
-
-    m_command_list_direct->Close();
-    // Execute eall command now
-    ID3D12CommandList* command_lists[] =
-    {
-        m_command_list_direct.Get()
-    };
-    m_command_queue->execute_command_list(command_lists, 1);
-    m_command_queue->signal();
-    m_command_queue->wait_for_fence();
+    generate_image();
 
     {
         // IMGUI initialization
@@ -229,16 +220,35 @@ void RTX_Renderer::construct_bvh()
 
 void RTX_Renderer::generate_image()
 {
-    if (rtx_use_multithreading)
+    if (m_tracing_method == TracingMethod::ComputeShader)
+    {
+        dispatch_compute_shader();
+        return;
+    }
+
+    ThrowIfFailed(m_command_allocator->Reset());
+    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
+    
+    if (m_tracing_method == TracingMethod::SingleThreaded)
+    {
+        generate_image_st();
+    } 
+    else if(m_tracing_method == TracingMethod::MultiThreaded)
     {
         generate_image_mt();
     }
-    else
-    {
-        generate_image_st();
-    }
+    
+    upload_to_texture();
 
-    update_scene_texture();
+    m_command_list_direct->Close();
+    ID3D12CommandList* command_lists[] =
+    {
+        m_command_list_direct.Get()
+    };
+
+    m_command_queue->execute_command_list(command_lists, 1);
+    m_command_queue->signal();
+    m_command_queue->wait_for_fence();
 }
 
 void RTX_Renderer::generate_image_cs()
@@ -322,86 +332,30 @@ void RTX_Renderer::generate_image_st()
     }
 }
 
-void RTX_Renderer::update_scene_texture()
+void RTX_Renderer::upload_to_texture()
 {
-    if (m_scene_texture != nullptr)
+    if (m_texture_cpu_uploader != nullptr)
     {
-        m_command_allocator->Reset();
-        m_command_list_direct->Reset(m_command_allocator.Get(), nullptr);
-
-        transition_resource(
-            m_command_list_direct.Get(),
-            m_scene_texture->get_underlying(),
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_COPY_DEST
-        );
-
-        m_scene_texture->update(
-            m_command_list_direct.Get(),
-            DXGI_FORMAT_R8G8B8A8_UNORM,
-            m_image.data(),
-            m_window->width(),
-            m_window->height(),
-            sizeof(u8_four)
-        );
-
-        transition_resource(
-            m_command_list_direct.Get(),
-            m_scene_texture->get_underlying(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-        );
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srv_desc.Texture2D.MipLevels = 1;
-        srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-        m_device->CreateShaderResourceView(
-            m_scene_texture->get_underlying(),
-            &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_RWTEXTURE_INDEX)
-        );
-
-        m_command_list_direct->Close();
-        // Execute eall command now
-        ID3D12CommandList* command_lists[] =
-        {
-            m_command_list_direct.Get()
-        };
-        m_command_queue->execute_command_list(command_lists, 1);
-        m_command_queue->signal();
-        m_command_queue->wait_for_fence();
-    } else
-    {
-        m_scene_texture = std::make_unique<Texture2D>(
+        m_texture_cpu_uploader->upload(
             m_device.Get(),
             m_command_list_direct.Get(),
-            DXGI_FORMAT_R8G8B8A8_UNORM,
+            m_dst_texture_state,
             m_image.data(),
             m_window->width(),
             m_window->height(),
             sizeof(u8_four)
         );
-
-        transition_resource(
-            m_command_list_direct.Get(),
-            m_scene_texture->get_underlying(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+    } 
+    else
+    {
+        m_texture_cpu_uploader = std::make_unique<CPUGPUTexture2D>(
+            m_dst_texture.Get(),
+            DXGI_FORMAT_R8G8B8A8_UNORM
         );
 
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srv_desc.Texture2D.MipLevels = 1;
-        srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-        m_device->CreateShaderResourceView(
-            m_scene_texture->get_underlying(),
-            &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_RWTEXTURE_INDEX)
+        m_texture_cpu_uploader->initialize(
+            m_device.Get(),
+            m_window->width(), m_window->height(), sizeof(u8_four)
         );
     }
 }
@@ -487,6 +441,89 @@ void RTX_Renderer::on_mouse_move(LPARAM lparam)
     delete[] lpb;
 }
 
+void RTX_Renderer::on_resource_invalidation()
+{
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+    uav_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+
+    m_device->CreateUnorderedAccessView(
+        m_dst_texture.Get(),
+        nullptr,
+        &uav_desc,
+        m_srv_descriptor_heap->cpu_handle(UAV_RWTEXTURE_INDEX)
+    );
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+    srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv_desc.Texture2D.MostDetailedMip = 0;
+    srv_desc.Texture2D.MipLevels = 1;
+
+    m_device->CreateShaderResourceView(
+        m_dst_texture.Get(),
+        &srv_desc,
+        m_srv_descriptor_heap->cpu_handle(SRV_RWTEXTURE_INDEX)
+    );
+}
+
+void RTX_Renderer::on_switch_tracing_method(TracingMethod prev_tracing_method)
+{
+    constexpr D3D12_RESOURCE_STATES cpu_state = D3D12_RESOURCE_STATE_COPY_DEST;
+    constexpr D3D12_RESOURCE_STATES gpu_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    // In the case that the prev and new tracing methods are both CPU methods
+    // the resource doesn't have to be transitioned.
+    bool resource_transition_required = false;
+
+    if ((prev_tracing_method == TracingMethod::SingleThreaded ||
+        prev_tracing_method == TracingMethod::MultiThreaded)  &&
+        m_tracing_method == TracingMethod::ComputeShader)
+    {
+        resource_transition_required = true;
+
+        transition_resource(
+            m_command_list_direct.Get(),
+            m_dst_texture.Get(),
+            cpu_state,
+            gpu_state
+        );
+
+        m_dst_texture_state = gpu_state;
+    }
+    else if (prev_tracing_method == TracingMethod::ComputeShader  &&
+            (m_tracing_method    == TracingMethod::SingleThreaded ||
+            m_tracing_method     == TracingMethod::MultiThreaded))
+    {
+        resource_transition_required = true;
+
+        transition_resource(
+            m_command_list_direct.Get(),
+            m_dst_texture.Get(),
+            gpu_state,
+            cpu_state
+        );
+
+        m_dst_texture_state = cpu_state;
+    }
+    /*
+    if (resource_transition_required)
+    {
+        flush();
+
+        m_command_list_direct->Close();
+        // Execute eall command now
+        ID3D12CommandList* command_lists[] =
+        {
+            m_command_list_direct.Get()
+        };
+        m_command_queue->execute_command_list(command_lists, 1);
+        m_command_queue->signal();
+        m_command_queue->wait_for_fence();
+    }*/
+}
+
 void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
 {
     uint8_t backbuffer_idx = m_swap_chain->current_backbuffer_index();
@@ -501,7 +538,7 @@ void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
     transition_resource(
         command_list,
         m_dst_texture.Get(),
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        m_dst_texture_state,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
     );
 
@@ -519,12 +556,12 @@ void RTX_Renderer::record_command_list(ID3D12GraphicsCommandList* command_list)
     command_list->RSSetScissorRects(1, &m_scissor_rect);
     command_list->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, nullptr);
     command_list->DrawInstanced(sizeof(quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
-    
+
     transition_resource(
         command_list,
         m_dst_texture.Get(),
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+        m_dst_texture_state
     );
 }
 
@@ -539,7 +576,7 @@ void RTX_Renderer::dispatch_compute_shader()
 
     ThrowIfFailed(m_compute_command_allocator->Reset());
     ThrowIfFailed(m_compute_command_list->Reset(m_compute_command_allocator.Get(), nullptr));
-
+    
     m_compute_command_list->SetPipelineState(m_cs_pso.Get());
     m_compute_command_list->SetComputeRootSignature(m_cs_root_signature.Get());
     
@@ -571,6 +608,7 @@ void RTX_Renderer::dispatch_compute_shader()
     );
 
     m_compute_command_list->Dispatch(thread_x, thread_y, thread_z);
+
     m_compute_command_list->Close();
     ID3D12CommandList* command_lists[] =
     {
@@ -625,10 +663,29 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
 
         ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
 
-        ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-        ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-        ImGui::Checkbox("Another Window", &show_another_window);
-        ImGui::Checkbox("Use multithreading: ", &rtx_use_multithreading);
+        ImGui::Text("Choose a threading model");               // Display some text (you can use a format strings too)
+        {
+            // Choose threading model
+            static bool selection[3] = { false, false, true };
+            const char* threading_names[] =
+            {
+                "\tCPU-ST", 
+                "\tCPU-MT",
+                "\tGPU-CS"
+            };
+            
+            TracingMethod prev_tracing_method = m_tracing_method;
+            for (unsigned int n = 0; n < _countof(selection); n++)
+            {
+                if (ImGui::Selectable(threading_names[n], m_tracing_method == n))
+                    m_tracing_method = TracingMethod(n);
+            }
+
+            if (prev_tracing_method != m_tracing_method)
+            {
+                on_switch_tracing_method(prev_tracing_method);
+            }
+        }
 
         ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
         ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
@@ -676,7 +733,6 @@ void RTX_Renderer::render()
         );
     }
 
-    dispatch_compute_shader();
     record_command_list(m_command_list_direct.Get());
     record_gui_commands(m_command_list_direct.Get());
 
@@ -701,34 +757,9 @@ void RTX_Renderer::resize()
 {
     flush();
     
-    ThrowIfFailed(m_command_allocator->Reset());
-    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
-
     m_window->resize();
     m_swap_chain->resize(m_device.Get(), m_window->width(), m_window->height());
-
     m_image.resize(m_window->width() * m_window->height());
-    if (m_scene_texture)
-    {
-        m_scene_texture->resize(
-            m_device.Get(),
-            m_window->width(), m_window->height(),
-            sizeof(u8_four)
-        );
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srv_desc.Texture2D.MipLevels = 1;
-        srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-        m_device->CreateShaderResourceView(
-            m_scene_texture->get_underlying(),
-            &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_RWTEXTURE_INDEX)
-        );
-    }
-
     {
         // resize the dst_texture
         D3D12_RESOURCE_DESC rsc_desc = {};
@@ -749,6 +780,44 @@ void RTX_Renderer::resize()
             nullptr,
             IID_PPV_ARGS(&m_dst_texture)
         ));
+
+        on_resource_invalidation();
+        
+        if (m_tracing_method == TracingMethod::SingleThreaded ||
+            m_tracing_method == TracingMethod::MultiThreaded)
+        {
+            ThrowIfFailed(m_command_allocator->Reset());
+            ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
+
+            transition_resource(
+                m_command_list_direct.Get(),
+                m_dst_texture.Get(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_STATE_COPY_DEST
+            );
+
+            m_command_list_direct->Close();
+            // Execute eall command now
+            ID3D12CommandList* command_lists[] =
+            {
+                m_command_list_direct.Get()
+            };
+            m_command_queue->execute_command_list(command_lists, 1);
+            m_command_queue->signal();
+            m_command_queue->wait_for_fence();
+
+            D3D12_RESOURCE_STATE_COPY_DEST;
+        }
+    }
+    
+    if (m_texture_cpu_uploader)
+    {
+        m_texture_cpu_uploader->resize(
+            m_device.Get(),
+            m_dst_texture.Get(),
+            m_window->width(), m_window->height(),
+            sizeof(u8_four)
+        );
     }
 
     m_viewport = CD3DX12_VIEWPORT(
@@ -758,21 +827,8 @@ void RTX_Renderer::resize()
         static_cast<float>(m_window->height())
     );
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srv_desc.Texture2D.MipLevels = 1;
-    srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-    m_command_list_direct->Close();
-    // Execute eall command now
-    ID3D12CommandList* command_lists[] =
-    {
-        m_command_list_direct.Get()
-    };
-    m_command_queue->execute_command_list(command_lists, 1);
-    m_command_queue->signal();
-    m_command_queue->wait_for_fence();
+    // Resizing requires retracing the scene
+    generate_image();
 }
 
 void RTX_Renderer::update()
@@ -787,14 +843,30 @@ void RTX_Renderer::update()
     if (m_ray_camera->camera_variables_need_updating())
     {
         m_ray_camera->reinitialize_camera_variables();
-        //generate_image();
+        generate_image();
     }
 }
 
 void RTX_Renderer::load_assets()
 {
+    //
+    // Initialize Compute/Rasterization Pipeline
+    //
+    ThrowIfFailed(m_command_allocator->Reset());
+    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
+
     load_scene_shader_assets();
     initialize_cs_pipeline();
+
+    m_command_list_direct->Close();
+    ID3D12CommandList* command_lists[] =
+    {
+        m_command_list_direct.Get()
+    };
+
+    m_command_queue->execute_command_list(command_lists, 1);
+    m_command_queue->signal();
+    m_command_queue->wait_for_fence();
 }
 
 void RTX_Renderer::load_scene_shader_assets()
@@ -1007,30 +1079,24 @@ void RTX_Renderer::initialize_cs_pipeline()
             IID_PPV_ARGS(&m_dst_texture)
         ));
 
-        //D3D12_SHADER_RESOURCE_VIEW_DESC
-        D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
-        uav_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-        
-        m_device->CreateUnorderedAccessView(
-            m_dst_texture.Get(),
-            nullptr,
-            &uav_desc,
-            m_srv_descriptor_heap->cpu_handle(UAV_RWTEXTURE_INDEX)
-        );
+        on_resource_invalidation();
+    
+        if (m_tracing_method == TracingMethod::SingleThreaded ||
+            m_tracing_method == TracingMethod::MultiThreaded)
+        {
+            transition_resource(
+                m_command_list_direct.Get(),
+                m_dst_texture.Get(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_STATE_COPY_DEST
+            );
 
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.Texture2D.MostDetailedMip = 0;
-        srv_desc.Texture2D.MipLevels = 1;
-
-        m_device->CreateShaderResourceView(
-            m_dst_texture.Get(),
-            &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_RWTEXTURE_INDEX)
-        );
+            m_dst_texture_state = D3D12_RESOURCE_STATE_COPY_DEST;
+        }
+        else
+        {
+            m_dst_texture_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        }
     }
 
     ComPtr<ID3DBlob> cs_blob;

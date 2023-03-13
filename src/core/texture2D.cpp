@@ -6,6 +6,66 @@ namespace moonlight
 {
 
 Texture2D::Texture2D(
+    ID3D12Device2* device,
+    ID3D12GraphicsCommandList* command_list,
+    ID3D12Resource* texture,
+    D3D12_RESOURCE_STATES resource_state,
+    DXGI_FORMAT format,
+    void* data, unsigned width, unsigned height, unsigned format_size)
+{
+    D3D12_SUBRESOURCE_FOOTPRINT pitched_desc = {};
+    pitched_desc.Format = format;
+    pitched_desc.Width = width;
+    pitched_desc.Height = height;
+    pitched_desc.Depth = 1;
+    pitched_desc.RowPitch = Align(width * format_size, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+
+    initialize_upload_buffer(device, pitched_desc.RowPitch * height);
+
+    suballocate_from_buffer(
+        pitched_desc.Height * pitched_desc.RowPitch,
+        D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT
+    );
+
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT placed_texture2D = {};
+    placed_texture2D.Offset = m_data_cur - m_data_begin; // Offset to valid data
+    placed_texture2D.Footprint = pitched_desc;
+
+    for (UINT y = 0; y < height; ++y)
+    {
+        UINT8* data_u8 = reinterpret_cast<UINT8*>(data);
+        UINT8* scanline = m_data_begin + placed_texture2D.Offset + y * pitched_desc.RowPitch;
+        memcpy(scanline, data_u8 + y * width * format_size, format_size * width);
+    }
+
+    // Unmap after finished copying data into upload heap
+    m_upload_buffer->Unmap(0, nullptr);
+
+    m_texture = texture;
+
+    transition_resource(
+        command_list,
+        m_texture.Get(),
+        resource_state,
+        D3D12_RESOURCE_STATE_COPY_DEST
+    );
+
+    command_list->CopyTextureRegion(
+        temp_address(CD3DX12_TEXTURE_COPY_LOCATION(m_texture.Get(), 0)),
+        0, 0, 0,
+        temp_address(CD3DX12_TEXTURE_COPY_LOCATION(m_upload_buffer.Get(), placed_texture2D)),
+        nullptr
+    );
+
+    transition_resource(
+        command_list,
+        m_texture.Get(),
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        resource_state
+    );
+}
+
+Texture2D::Texture2D(
     ID3D12Device2* device, 
     ID3D12GraphicsCommandList* command_list,
     DXGI_FORMAT format, 
@@ -172,7 +232,6 @@ void Texture2D::resize(
     m_data_cur = m_data_begin = reinterpret_cast<UINT8*>(data);
     m_data_end = m_data_begin + size;
 }
-
 
 HRESULT Texture2D::suballocate_from_buffer(SIZE_T size, UINT align)
 {
