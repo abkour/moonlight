@@ -234,11 +234,6 @@ void RTX_Renderer::generate_image()
     upload_to_texture();
 }
 
-void RTX_Renderer::generate_image_cs()
-{
-
-}
-
 void RTX_Renderer::generate_image_mt()
 {
     const Vector3<float> center(0.f, 0.f, 0.f);
@@ -531,7 +526,6 @@ void RTX_Renderer::dispatch_compute_shader()
     const uint32_t thread_x = m_window->width() / BLOCK_SIZE;
     const uint32_t thread_y = m_window->height() / BLOCK_SIZE;
     const uint32_t thread_z = 1;
-    
     const Vector2<float> texel_size(1.f / m_window->width(), 1.f / m_window->height());
     
     m_compute_command_list->SetPipelineState(m_cs_pso.Get());

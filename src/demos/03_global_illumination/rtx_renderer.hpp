@@ -70,7 +70,6 @@ private:
     void parse_files(const char* asset_path);
     void construct_bvh(const char* asset_path);
     void generate_image();
-    void generate_image_cs();   // compute shader
     void generate_image_mt();   // multi-threaded cpu
     void generate_image_st();   // single-threaded cpu
     void upload_to_texture();
