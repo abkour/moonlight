@@ -149,10 +149,6 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     m_compute_command_list->Close();
     m_command_list_direct->Close();
 
-    construct_bvh();
-    load_assets();
-    generate_image();
-
     {
         // IMGUI initialization
         IMGUI_CHECKVERSION();
@@ -190,12 +186,12 @@ static bool ray_hit_circle(const Ray& ray, const float r)
     return length(P) <= r;
 }
 
-void RTX_Renderer::parse_files(const char* filename)
+void RTX_Renderer::parse_files(const char* asset_path)
 {
     uint64_t n_bytes = 0;
     uint64_t flags = 0;
 
-    std::ifstream file(filename, std::ios::in | std::ios::binary);
+    std::ifstream file(asset_path, std::ios::in | std::ios::binary);
 
     file.read((char*)&m_num_triangles, sizeof(uint64_t));
     file.read((char*)&m_stride_in_32floats, sizeof(uint64_t));
@@ -205,21 +201,22 @@ void RTX_Renderer::parse_files(const char* filename)
     m_mesh = std::make_unique<float[]>(n_bytes / sizeof(float));
 
     file.read((char*)m_mesh.get(), n_bytes);
+    m_mesh_num_elements = n_bytes / sizeof(float);
 }
 
-void RTX_Renderer::construct_bvh()
+void RTX_Renderer::construct_bvh(const char* asset_path)
 {
-    std::string asset_path =
-        std::string(ROOT_DIRECTORY_ASCII) + std::string("//assets//boxplane.mof");
-
-    parse_files(asset_path.c_str());
-
-    std::string binstr = std::string(ROOT_DIRECTORY_ASCII) + "//assets//boxplane.rawbin";
+    parse_files(asset_path);
     m_bvh.build_bvh(m_mesh.get(), m_stride_in_32floats, m_num_triangles);
 }
 
 void RTX_Renderer::generate_image()
 {
+    if (!m_asset_loaded)
+    {
+        return;
+    }
+
     if (m_tracing_method == TracingMethod::ComputeShader)
     {
         dispatch_compute_shader();
@@ -473,16 +470,10 @@ void RTX_Renderer::on_switch_tracing_method(TracingMethod prev_tracing_method)
     constexpr D3D12_RESOURCE_STATES cpu_state = D3D12_RESOURCE_STATE_COPY_DEST;
     constexpr D3D12_RESOURCE_STATES gpu_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
-    // In the case that the prev and new tracing methods are both CPU methods
-    // the resource doesn't have to be transitioned.
-    bool resource_transition_required = false;
-
     if ((prev_tracing_method == TracingMethod::SingleThreaded ||
         prev_tracing_method == TracingMethod::MultiThreaded)  &&
         m_tracing_method == TracingMethod::ComputeShader)
     {
-        resource_transition_required = true;
-
         transition_resource(
             m_command_list_direct.Get(),
             m_dst_texture.Get(),
@@ -496,8 +487,6 @@ void RTX_Renderer::on_switch_tracing_method(TracingMethod prev_tracing_method)
             (m_tracing_method    == TracingMethod::SingleThreaded ||
             m_tracing_method     == TracingMethod::MultiThreaded))
     {
-        resource_transition_required = true;
-
         transition_resource(
             m_command_list_direct.Get(),
             m_dst_texture.Get(),
@@ -637,21 +626,19 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
 
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-    if (show_demo_window)
-        ImGui::ShowDemoWindow(&show_demo_window);
-
-    // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
     {
-        static float f = 0.0f;
-        static int counter = 0;
+        static int open_file_browser = 0;
 
-        ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+        ImGui::Begin("Moonlight");
+        if (ImGui::Button("Open/Close File Browser"))
+        {
+            open_file_browser++;
+        }
 
-        ImGui::Text("Choose a threading model");               // Display some text (you can use a format strings too)
+        ImGui::Text("Choose a threading model");
         {
             // Choose threading model
-            static bool selection[3] = { false, false, true };
+            static bool selection[3] = { false, true, false };
             const char* threading_names[] =
             {
                 "\tCPU-ST", 
@@ -672,26 +659,16 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
             }
         }
 
-        ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-        ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-        if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-            counter++;
-        ImGui::SameLine();
-        ImGui::Text("counter = %d", counter);
-
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        ImGui::Text("\nApplication average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
         ImGui::End();
-    }
 
-    // 3. Show another simple window.
-    if (show_another_window)
-    {
-        ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-        ImGui::Text("Hello from another window!");
-        if (ImGui::Button("Close Me"))
-            show_another_window = false;
-        ImGui::End();
+        // 3. Show another simple window.
+        if (open_file_browser & 1)
+        {
+            std::string default_path = std::string(ROOT_DIRECTORY_ASCII) + "/assets";
+            static AssetFileBrowser file_browser(default_path.c_str());
+            m_asset_path = file_browser.display();
+        }
     }
 
     ImGui::Render();
@@ -718,7 +695,23 @@ void RTX_Renderer::render()
         );
     }
 
-    record_command_list(m_command_list_direct.Get());
+    if (m_asset_loaded)
+    {
+        record_command_list(m_command_list_direct.Get());
+    }
+    else
+    {
+        uint8_t backbuffer_idx = m_swap_chain->current_backbuffer_index();
+        D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle =
+            m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
+
+        ID3D12DescriptorHeap* heaps[] = { m_srv_descriptor_heap->get_underlying() };
+        m_command_list_direct->SetDescriptorHeaps(1, heaps);
+
+        m_command_list_direct->RSSetViewports(1, &m_viewport);
+        m_command_list_direct->RSSetScissorRects(1, &m_scissor_rect);
+        m_command_list_direct->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, nullptr);
+    }
     record_gui_commands(m_command_list_direct.Get());
 
     // Present
@@ -818,6 +811,16 @@ void RTX_Renderer::resize()
 
 void RTX_Renderer::update()
 {
+    if (m_asset_path != nullptr)
+    {
+        construct_bvh(m_asset_path);
+        load_assets();
+        generate_image();
+
+        m_asset_loaded = true;
+        m_asset_path = nullptr;
+    }
+
     compute_delta_time(m_elapsed_time);
 
     if (m_keyboard_state.keys[KeyCode::Shift])
@@ -830,6 +833,128 @@ void RTX_Renderer::update()
         m_ray_camera->reinitialize_camera_variables();
         generate_image();
     }
+}
+
+void RTX_Renderer::upload_resources_to_gpu()
+{
+    // Initialize m_uav_bvhnodes_rsc
+    {
+        m_uav_bvhnodes_rsc = std::make_unique<DX12Resource>();
+        m_uav_bvhnodes_rsc->upload(
+            m_device.Get(),
+            m_command_list_direct.Get(),
+            m_bvh.get_raw_nodes(),
+            sizeof(BVHNode) * m_bvh.get_nodes_used(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer.NumElements = m_bvh.get_nodes_used();
+        srv_desc.Buffer.StructureByteStride = sizeof(BVHNode);
+
+        m_device->CreateShaderResourceView(
+            m_uav_bvhnodes_rsc->get_underlying(),
+            &srv_desc,
+            m_srv_descriptor_heap->cpu_handle(SRV_BVHNODES_INDEX)
+        );
+    }
+
+    // Initialize m_uav_tris_rsc
+    {
+        m_uav_tris_rsc = std::make_unique<DX12Resource>();
+        m_uav_tris_rsc->upload(
+            m_device.Get(),
+            m_command_list_direct.Get(),
+            m_mesh.get(),
+            sizeof(float) * m_mesh_num_elements,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer.NumElements = m_mesh_num_elements;
+        srv_desc.Buffer.StructureByteStride = sizeof(float);
+
+        m_device->CreateShaderResourceView(
+            m_uav_tris_rsc->get_underlying(),
+            &srv_desc,
+            m_srv_descriptor_heap->cpu_handle(SRV_TRIANGLES_INDEX)
+        );
+    }
+
+    // Initialize m_uav_tris_indices_rsc
+    {
+        m_uav_tris_indices_rsc = std::make_unique<DX12Resource>();
+        m_uav_tris_indices_rsc->upload(
+            m_device.Get(),
+            m_command_list_direct.Get(),
+            m_bvh.get_raw_indices(),
+            sizeof(uint32_t) * m_num_triangles,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer.NumElements = m_num_triangles;
+        srv_desc.Buffer.StructureByteStride = sizeof(uint32_t);
+
+        m_device->CreateShaderResourceView(
+            m_uav_tris_indices_rsc->get_underlying(),
+            &srv_desc,
+            m_srv_descriptor_heap->cpu_handle(SRV_TRIANGLE_INDICES_INDEX)
+        );
+    }
+
+    // Initialize m_dst_texture
+    {
+        D3D12_RESOURCE_DESC rsc_desc = {};
+        rsc_desc.DepthOrArraySize = 1;
+        rsc_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        rsc_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        rsc_desc.MipLevels = 1;
+        rsc_desc.Width = m_window->width();
+        rsc_desc.Height = m_window->height();
+        rsc_desc.SampleDesc = { 1, 0 };
+        rsc_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        ThrowIfFailed(m_device->CreateCommittedResource(
+            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+            D3D12_HEAP_FLAG_NONE,
+            &rsc_desc,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            nullptr,
+            IID_PPV_ARGS(&m_dst_texture)
+        ));
+
+        on_resource_invalidation();
+
+        if (m_tracing_method == TracingMethod::SingleThreaded ||
+            m_tracing_method == TracingMethod::MultiThreaded)
+        {
+            transition_resource(
+                m_command_list_direct.Get(),
+                m_dst_texture.Get(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_STATE_COPY_DEST
+            );
+
+            m_dst_texture_state = D3D12_RESOURCE_STATE_COPY_DEST;
+        } else
+        {
+            m_dst_texture_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        }
+    }
+
 }
 
 void RTX_Renderer::load_assets()
@@ -998,7 +1123,7 @@ void RTX_Renderer::initialize_cs_pipeline()
             m_device.Get(),
             m_command_list_direct.Get(),
             m_mesh.get(),
-            sizeof(float) * m_num_triangles * m_stride_in_32floats * 3,
+            sizeof(float) * m_mesh_num_elements,
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
         );
@@ -1007,7 +1132,7 @@ void RTX_Renderer::initialize_cs_pipeline()
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.Format = DXGI_FORMAT_UNKNOWN;
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_num_triangles * m_stride_in_32floats * 3;
+        srv_desc.Buffer.NumElements = m_mesh_num_elements;
         srv_desc.Buffer.StructureByteStride = sizeof(float);
         
         m_device->CreateShaderResourceView(

@@ -16,6 +16,7 @@
 #include "../../collision/primitive_tests.hpp"
 #include "../../utility/arena_allocator.hpp"
 #include "../../utility/bvh.hpp"
+#include "../../utility/file_browser.hpp"
 #include "../../utility/glyph_renderer.hpp"
 #include "../../../ext/DirectXTK12/Inc/DescriptorHeap.h"
 #include "../../../ext/DirectXTK12/Inc/ResourceUploadBatch.h"
@@ -34,7 +35,8 @@ class RTX_Renderer : public IApplication
 *       - Camera        [x]
 *       - PBR           [ ]
 *       - File Loading  [X]
-*
+*       - GUI
+* 
 *   Approach:
 *       Get Camera/PBR done first, then worry about file loading, then worry about BVH
 */
@@ -63,19 +65,18 @@ private:
 
 private:
 
-    void parse_files(const char* filename);
-    void construct_bvh();
+    char* m_asset_path = nullptr;
+
+    void parse_files(const char* asset_path);
+    void construct_bvh(const char* asset_path);
     void generate_image();
     void generate_image_cs();   // compute shader
     void generate_image_mt();   // multi-threaded cpu
     void generate_image_st();   // single-threaded cpu
     void upload_to_texture();
-
-    bool rtx_use_multithreading = false;
+    void upload_resources_to_gpu();
 
 private:
-
-    bool app_initialized;
 
     Microsoft::WRL::ComPtr<ID3D12Device2>             m_device;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    m_command_allocator;
@@ -109,12 +110,16 @@ private:
     uint64_t m_num_triangles = 0;
     uint64_t m_stride_in_32floats = 0;
     std::unique_ptr<float[]> m_mesh;
+    std::size_t m_mesh_num_elements = 0;
 
     Vector2<uint32_t> m_old_window_dimensions;
 
 private:
 
-    // GUI related
+    // GUI related#
+    bool rtx_use_multithreading = false;
+    bool app_initialized;
+    bool m_asset_loaded = false;
     bool show_demo_window = true;
     bool show_another_window = true;
 

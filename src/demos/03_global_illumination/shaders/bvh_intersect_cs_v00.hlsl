@@ -269,11 +269,12 @@ void main(CS_Input IN)
 
     if (t < FLOAT32_INVALID)
     {
-        float s = 2.f;
-        output_texture[IN.DispatchThreadID.xy] = float4(t, t, 0.f, 1.f);
+        float s = 4.f * 0.00392;
+        t *= s;
+        output_texture[IN.DispatchThreadID.xy] = float4(t, t, t, 1.f);
     }
     else
     {
-        output_texture[IN.DispatchThreadID.xy] = float4(0.7f, 0.f, 0.7f, 1.f);
+        output_texture[IN.DispatchThreadID.xy] = float4(0.f, 0.f, 0.f, 1.f);
     }
 }
