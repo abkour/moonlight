@@ -145,9 +145,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     m_compute_command_list = 
         _pimpl_create_command_list(m_device, m_compute_command_allocator, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 
-    // Manual close
-    m_compute_command_list->Close();
-    m_command_list_direct->Close();
+    load_assets();
 
     {
         // IMGUI initialization
@@ -224,9 +222,6 @@ void RTX_Renderer::generate_image()
         return;
     }
 
-    ThrowIfFailed(m_command_allocator->Reset());
-    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
-    
     if (m_tracing_method == TracingMethod::SingleThreaded)
     {
         generate_image_st();
@@ -237,16 +232,6 @@ void RTX_Renderer::generate_image()
     }
     
     upload_to_texture();
-
-    m_command_list_direct->Close();
-    ID3D12CommandList* command_lists[] =
-    {
-        m_command_list_direct.Get()
-    };
-
-    m_command_queue->execute_command_list(command_lists, 1);
-    m_command_queue->signal();
-    m_command_queue->wait_for_fence();
 }
 
 void RTX_Renderer::generate_image_cs()
@@ -548,9 +533,6 @@ void RTX_Renderer::dispatch_compute_shader()
     const uint32_t thread_z = 1;
     
     const Vector2<float> texel_size(1.f / m_window->width(), 1.f / m_window->height());
-
-    ThrowIfFailed(m_compute_command_allocator->Reset());
-    ThrowIfFailed(m_compute_command_list->Reset(m_compute_command_allocator.Get(), nullptr));
     
     m_compute_command_list->SetPipelineState(m_cs_pso.Get());
     m_compute_command_list->SetComputeRootSignature(m_cs_root_signature.Get());
@@ -593,6 +575,9 @@ void RTX_Renderer::dispatch_compute_shader()
     m_compute_command_queue->execute_command_list(command_lists, 1);
     m_compute_command_queue->signal();
     m_compute_command_queue->wait_for_fence();
+
+    ThrowIfFailed(m_compute_command_allocator->Reset());
+    ThrowIfFailed(m_compute_command_list->Reset(m_compute_command_allocator.Get(), nullptr));
     
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
     uav_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -678,9 +663,6 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
 
 void RTX_Renderer::render()
 {
-    ThrowIfFailed(m_command_allocator->Reset());
-    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
-
     // Clear
     {
         m_swap_chain->transition_to_rtv(m_command_list_direct.Get());
@@ -730,6 +712,10 @@ void RTX_Renderer::render()
         m_command_queue->wait_for_fence();
         m_swap_chain->present();
     }
+
+    ThrowIfFailed(m_command_allocator->Reset());
+    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
+
 }
 
 void RTX_Renderer::resize()
@@ -765,27 +751,12 @@ void RTX_Renderer::resize()
         if (m_tracing_method == TracingMethod::SingleThreaded ||
             m_tracing_method == TracingMethod::MultiThreaded)
         {
-            ThrowIfFailed(m_command_allocator->Reset());
-            ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
-
             transition_resource(
                 m_command_list_direct.Get(),
                 m_dst_texture.Get(),
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                 D3D12_RESOURCE_STATE_COPY_DEST
             );
-
-            m_command_list_direct->Close();
-            // Execute eall command now
-            ID3D12CommandList* command_lists[] =
-            {
-                m_command_list_direct.Get()
-            };
-            m_command_queue->execute_command_list(command_lists, 1);
-            m_command_queue->signal();
-            m_command_queue->wait_for_fence();
-
-            D3D12_RESOURCE_STATE_COPY_DEST;
         }
     }
     
@@ -815,7 +786,7 @@ void RTX_Renderer::update()
     if (m_asset_path != nullptr)
     {
         construct_bvh(m_asset_path);
-        load_assets();
+        initialize_shader_resources();
         generate_image();
 
         m_asset_loaded = true;
@@ -960,27 +931,12 @@ void RTX_Renderer::upload_resources_to_gpu()
 
 void RTX_Renderer::load_assets()
 {
-    //
-    // Initialize Compute/Rasterization Pipeline
-    //
-    ThrowIfFailed(m_command_allocator->Reset());
-    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
-
+    //initialize_shader_resources();
     load_scene_shader_assets();
     initialize_cs_pipeline();
-
-    m_command_list_direct->Close();
-    ID3D12CommandList* command_lists[] =
-    {
-        m_command_list_direct.Get()
-    };
-
-    m_command_queue->execute_command_list(command_lists, 1);
-    m_command_queue->signal();
-    m_command_queue->wait_for_fence();
 }
 
-void RTX_Renderer::load_scene_shader_assets()
+void RTX_Renderer::initialize_shader_resources()
 {
     // Vertex buffer uploading
     {
@@ -996,6 +952,127 @@ void RTX_Renderer::load_scene_shader_assets()
         m_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
+    // Initialize m_uav_bvhnodes_rsc
+    {
+        m_uav_bvhnodes_rsc = std::make_unique<DX12Resource>();
+        m_uav_bvhnodes_rsc->upload(
+            m_device.Get(),
+            m_command_list_direct.Get(),
+            m_bvh->get_raw_nodes(),
+            sizeof(BVHNode) * m_bvh->get_nodes_used(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer.NumElements = m_bvh->get_nodes_used();
+        srv_desc.Buffer.StructureByteStride = sizeof(BVHNode);
+
+        m_device->CreateShaderResourceView(
+            m_uav_bvhnodes_rsc->get_underlying(),
+            &srv_desc,
+            m_srv_descriptor_heap->cpu_handle(SRV_BVHNODES_INDEX)
+        );
+    }
+
+    // Initialize m_uav_tris_rsc
+    {
+        m_uav_tris_rsc = std::make_unique<DX12Resource>();
+        m_uav_tris_rsc->upload(
+            m_device.Get(),
+            m_command_list_direct.Get(),
+            m_mesh.get(),
+            sizeof(float) * m_mesh_num_elements,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer.NumElements = m_mesh_num_elements;
+        srv_desc.Buffer.StructureByteStride = sizeof(float);
+
+        m_device->CreateShaderResourceView(
+            m_uav_tris_rsc->get_underlying(),
+            &srv_desc,
+            m_srv_descriptor_heap->cpu_handle(SRV_TRIANGLES_INDEX)
+        );
+    }
+
+    // Initialize m_uav_tris_indices_rsc
+    {
+        m_uav_tris_indices_rsc = std::make_unique<DX12Resource>();
+        m_uav_tris_indices_rsc->upload(
+            m_device.Get(),
+            m_command_list_direct.Get(),
+            m_bvh->get_raw_indices(),
+            sizeof(uint32_t) * m_num_triangles,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
+        );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Buffer.NumElements = m_num_triangles;
+        srv_desc.Buffer.StructureByteStride = sizeof(uint32_t);
+
+        m_device->CreateShaderResourceView(
+            m_uav_tris_indices_rsc->get_underlying(),
+            &srv_desc,
+            m_srv_descriptor_heap->cpu_handle(SRV_TRIANGLE_INDICES_INDEX)
+        );
+    }
+
+    // Initialize m_dst_texture
+    {
+        D3D12_RESOURCE_DESC rsc_desc = {};
+        rsc_desc.DepthOrArraySize = 1;
+        rsc_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        rsc_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        rsc_desc.MipLevels = 1;
+        rsc_desc.Width = m_window->width();
+        rsc_desc.Height = m_window->height();
+        rsc_desc.SampleDesc = { 1, 0 };
+        rsc_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        ThrowIfFailed(m_device->CreateCommittedResource(
+            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
+            D3D12_HEAP_FLAG_NONE,
+            &rsc_desc,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            nullptr,
+            IID_PPV_ARGS(&m_dst_texture)
+        ));
+
+        on_resource_invalidation();
+
+        if (m_tracing_method == TracingMethod::SingleThreaded ||
+            m_tracing_method == TracingMethod::MultiThreaded)
+        {
+            transition_resource(
+                m_command_list_direct.Get(),
+                m_dst_texture.Get(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_STATE_COPY_DEST
+            );
+
+            m_dst_texture_state = D3D12_RESOURCE_STATE_COPY_DEST;
+        } else
+        {
+            m_dst_texture_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        }
+    }
+}
+
+void RTX_Renderer::load_scene_shader_assets()
+{
     ComPtr<ID3DBlob> vs_blob;
     ComPtr<ID3DBlob> ps_blob;
     {
@@ -1091,125 +1168,6 @@ void RTX_Renderer::load_scene_shader_assets()
 
 void RTX_Renderer::initialize_cs_pipeline()
 {
-    // Initialize m_uav_bvhnodes_rsc
-    {
-        m_uav_bvhnodes_rsc = std::make_unique<DX12Resource>();
-        m_uav_bvhnodes_rsc->upload(
-            m_device.Get(),
-            m_command_list_direct.Get(),
-            m_bvh->get_raw_nodes(),
-            sizeof(BVHNode) * m_bvh->get_nodes_used(),
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
-        );
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_bvh->get_nodes_used();
-        srv_desc.Buffer.StructureByteStride = sizeof(BVHNode);
-
-        m_device->CreateShaderResourceView(
-            m_uav_bvhnodes_rsc->get_underlying(),
-            &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_BVHNODES_INDEX)
-        );
-    }
-
-    // Initialize m_uav_tris_rsc
-    {
-        m_uav_tris_rsc = std::make_unique<DX12Resource>();
-        m_uav_tris_rsc->upload(
-            m_device.Get(),
-            m_command_list_direct.Get(),
-            m_mesh.get(),
-            sizeof(float) * m_mesh_num_elements,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
-        );
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_mesh_num_elements;
-        srv_desc.Buffer.StructureByteStride = sizeof(float);
-        
-        m_device->CreateShaderResourceView(
-            m_uav_tris_rsc->get_underlying(),
-            &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_TRIANGLES_INDEX)
-        );
-    }
-
-    // Initialize m_uav_tris_indices_rsc
-    {
-        m_uav_tris_indices_rsc = std::make_unique<DX12Resource>();
-        m_uav_tris_indices_rsc->upload(
-            m_device.Get(),
-            m_command_list_direct.Get(),
-            m_bvh->get_raw_indices(),
-            sizeof(uint32_t) * m_num_triangles,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
-        );
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_num_triangles;
-        srv_desc.Buffer.StructureByteStride = sizeof(uint32_t);
-
-        m_device->CreateShaderResourceView(
-            m_uav_tris_indices_rsc->get_underlying(),
-            &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_TRIANGLE_INDICES_INDEX)
-        );
-    }
-
-    // Initialize m_dst_texture
-    {
-        D3D12_RESOURCE_DESC rsc_desc = {};
-        rsc_desc.DepthOrArraySize = 1;
-        rsc_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        rsc_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        rsc_desc.MipLevels = 1;
-        rsc_desc.Width = m_window->width();
-        rsc_desc.Height = m_window->height();
-        rsc_desc.SampleDesc = { 1, 0 };
-        rsc_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-        ThrowIfFailed(m_device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-            D3D12_HEAP_FLAG_NONE,
-            &rsc_desc,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            nullptr,
-            IID_PPV_ARGS(&m_dst_texture)
-        ));
-
-        on_resource_invalidation();
-    
-        if (m_tracing_method == TracingMethod::SingleThreaded ||
-            m_tracing_method == TracingMethod::MultiThreaded)
-        {
-            transition_resource(
-                m_command_list_direct.Get(),
-                m_dst_texture.Get(),
-                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                D3D12_RESOURCE_STATE_COPY_DEST
-            );
-
-            m_dst_texture_state = D3D12_RESOURCE_STATE_COPY_DEST;
-        }
-        else
-        {
-            m_dst_texture_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        }
-    }
-
     ComPtr<ID3DBlob> cs_blob;
     {
         std::wstring cspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/03_global_illumination/shaders/bvh_intersect_cs_v100.cso";

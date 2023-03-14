@@ -151,6 +151,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_compute_command_list;
     std::unique_ptr<CommandQueue>   m_compute_command_queue;
 
+    void initialize_shader_resources();
     void initialize_cs_pipeline();
     void dispatch_compute_shader();
 };
