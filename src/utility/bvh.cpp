@@ -391,4 +391,9 @@ void BVH::serialize(const char* filename)
     file.write((char*)&m_nodes_used, sizeof(unsigned));
 }
 
+void BVH::to_file_ascii(const char* filename)
+{
+
+}
+
 }

@@ -50,6 +50,8 @@ public:
         IntersectionParams& intersect
     );
 
+    void to_file_ascii(const char* filename);
+
     void deserialize(const char* filename);
     void serialize(const char* filename);
 

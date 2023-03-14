@@ -105,11 +105,12 @@ private:
     struct u8_four;
 
     // BVH related
+    std::unique_ptr<BVH> m_bvh;
+    std::unique_ptr<float[]> m_mesh;
+
     std::vector<u8_four> m_image;
-    BVH m_bvh;
     uint64_t m_num_triangles = 0;
     uint64_t m_stride_in_32floats = 0;
-    std::unique_ptr<float[]> m_mesh;
     std::size_t m_mesh_num_elements = 0;
 
     Vector2<uint32_t> m_old_window_dimensions;

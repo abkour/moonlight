@@ -27,15 +27,13 @@ char* AssetFileBrowser::display()
 
     ImGui::Begin("File Browser");
     
-    const ImGuiWindowFlags child_flags = ImGuiWindowFlags_MenuBar;
-    const ImGuiID child_id = ImGui::GetID((void*)(intptr_t)0);
-
     ImGui::BeginChild(
-        child_id, 
+        ImGui::GetID((void*)(intptr_t)0),
         ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y),
         true, 
-        child_flags
+        ImGuiWindowFlags_MenuBar
     );
+
     if (ImGui::BeginMenuBar())
     {
         ImGui::PushButtonRepeat(true);

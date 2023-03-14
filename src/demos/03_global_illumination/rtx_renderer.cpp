@@ -207,7 +207,8 @@ void RTX_Renderer::parse_files(const char* asset_path)
 void RTX_Renderer::construct_bvh(const char* asset_path)
 {
     parse_files(asset_path);
-    m_bvh.build_bvh(m_mesh.get(), m_stride_in_32floats, m_num_triangles);
+    m_bvh = std::make_unique<BVH>();
+    m_bvh->build_bvh(m_mesh.get(), m_stride_in_32floats, m_num_triangles);
 }
 
 void RTX_Renderer::generate_image()
@@ -270,7 +271,7 @@ void RTX_Renderer::generate_image_mt()
 
                     auto ray = m_ray_camera->getRay({ x, y });
                     IntersectionParams intersect;
-                    m_bvh.intersect(ray, m_mesh.get(), m_stride_in_32floats, intersect);
+                    m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats, intersect);
                     if (ray.t < std::numeric_limits<float>::max())
                     {
                         unsigned c = (int)(ray.t * 4);
@@ -307,7 +308,7 @@ void RTX_Renderer::generate_image_st()
                     uint16_t py = y + v;
                     auto ray = m_ray_camera->getRay({ px, py });
                     IntersectionParams intersect;
-                    m_bvh.intersect(ray, m_mesh.get(), m_stride_in_32floats, intersect);
+                    m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats, intersect);
                     if (ray.t < std::numeric_limits<float>::max())
                     {
                         unsigned c = (int)(ray.t * 42);
@@ -843,8 +844,8 @@ void RTX_Renderer::upload_resources_to_gpu()
         m_uav_bvhnodes_rsc->upload(
             m_device.Get(),
             m_command_list_direct.Get(),
-            m_bvh.get_raw_nodes(),
-            sizeof(BVHNode) * m_bvh.get_nodes_used(),
+            m_bvh->get_raw_nodes(),
+            sizeof(BVHNode) * m_bvh->get_nodes_used(),
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
         );
@@ -853,7 +854,7 @@ void RTX_Renderer::upload_resources_to_gpu()
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.Format = DXGI_FORMAT_UNKNOWN;
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_bvh.get_nodes_used();
+        srv_desc.Buffer.NumElements = m_bvh->get_nodes_used();
         srv_desc.Buffer.StructureByteStride = sizeof(BVHNode);
 
         m_device->CreateShaderResourceView(
@@ -895,7 +896,7 @@ void RTX_Renderer::upload_resources_to_gpu()
         m_uav_tris_indices_rsc->upload(
             m_device.Get(),
             m_command_list_direct.Get(),
-            m_bvh.get_raw_indices(),
+            m_bvh->get_raw_indices(),
             sizeof(uint32_t) * m_num_triangles,
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
@@ -1096,8 +1097,8 @@ void RTX_Renderer::initialize_cs_pipeline()
         m_uav_bvhnodes_rsc->upload(
             m_device.Get(),
             m_command_list_direct.Get(),
-            m_bvh.get_raw_nodes(),
-            sizeof(BVHNode) * m_bvh.get_nodes_used(),
+            m_bvh->get_raw_nodes(),
+            sizeof(BVHNode) * m_bvh->get_nodes_used(),
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
         );
@@ -1106,7 +1107,7 @@ void RTX_Renderer::initialize_cs_pipeline()
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.Format = DXGI_FORMAT_UNKNOWN;
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_bvh.get_nodes_used();
+        srv_desc.Buffer.NumElements = m_bvh->get_nodes_used();
         srv_desc.Buffer.StructureByteStride = sizeof(BVHNode);
 
         m_device->CreateShaderResourceView(
@@ -1148,7 +1149,7 @@ void RTX_Renderer::initialize_cs_pipeline()
         m_uav_tris_indices_rsc->upload(
             m_device.Get(),
             m_command_list_direct.Get(),
-            m_bvh.get_raw_indices(),
+            m_bvh->get_raw_indices(),
             sizeof(uint32_t) * m_num_triangles,
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
