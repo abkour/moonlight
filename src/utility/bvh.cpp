@@ -8,6 +8,7 @@ namespace moonlight
 {
 
 constexpr unsigned VERT_PER_TRIANGLE = 3;
+constexpr unsigned MATERIAL_INDEX_SIZE = 1;
 
 using vec3f = Vector3<float>;
 
@@ -17,7 +18,7 @@ unsigned BVH::compute_triangle_pos(
     unsigned triangle_pos, unsigned stride)
 {
     return m_tri_idx[triangle_pos] 
-        * (stride * VERT_PER_TRIANGLE + VERT_PER_TRIANGLE);
+        * (stride * VERT_PER_TRIANGLE + VERT_PER_TRIANGLE + MATERIAL_INDEX_SIZE);
 }
 
 void BVH::build_bvh(
@@ -220,6 +221,8 @@ void BVH::intersect(
 
                 if (new_intersect.t < ray.t)
                 {
+                    intersect.material_idx = 
+                        tris[triangle_pos + stride * VERT_PER_TRIANGLE + VERT_PER_TRIANGLE];
                     ray.t = new_intersect.t;
                 }
             }
@@ -286,6 +289,7 @@ void BVH::intersect(
         }
     }
 }
+
 
 float BVH::compute_sah(
     const BVHNode& node, const float* tris, 

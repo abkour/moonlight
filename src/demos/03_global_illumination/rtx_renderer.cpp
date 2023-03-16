@@ -134,8 +134,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     m_ray_camera->set_movement_speed(10.f);
     m_tracing_method = MultiThreaded;
 
-    m_old_window_dimensions = { m_window->width(), m_window->height() };
-    m_image.resize(m_old_window_dimensions.x * m_old_window_dimensions.y);
+    m_image.resize(m_window->width() * m_window->height());
 
     // Compute related
     m_compute_command_queue =
@@ -200,6 +199,13 @@ void RTX_Renderer::parse_files(const char* asset_path)
 
     file.read((char*)m_mesh.get(), n_bytes);
     m_mesh_num_elements = n_bytes / sizeof(float);
+
+    if (flags & ML_MISC_FLAG_MATERIALS_APPENDED)
+    {
+        file.read((char*)&m_num_materials, sizeof(uint64_t));
+        m_mat_diffuse_colors = std::make_unique<Vector3<float>[]>(m_num_materials);
+        file.read((char*)m_mat_diffuse_colors.get(), sizeof(Vector3<float>) * m_num_materials);
+    }
 }
 
 void RTX_Renderer::construct_bvh(const char* asset_path)
@@ -251,14 +257,18 @@ void RTX_Renderer::generate_image_mt()
 
                     auto ray = m_ray_camera->getRay({ x, y });
                     IntersectionParams intersect;
-                    m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats, intersect);
+                    m_bvh->intersect(ray, m_mesh.get(),
+                        m_stride_in_32floats, intersect);
                     if (ray.t < std::numeric_limits<float>::max())
                     {
-                        unsigned c = (int)(ray.t * 4);
-                        m_image[idx].r = c;
-                        m_image[idx].g = c;
-                        m_image[idx].b = c;
-                        m_image[idx].a = c;
+                        Vector3<float> diffuse_color
+                            = m_mat_diffuse_colors[intersect.material_idx];
+                        diffuse_color *= 255.f;
+
+                        m_image[idx].r = diffuse_color.x;
+                        m_image[idx].g = diffuse_color.y;
+                        m_image[idx].b = diffuse_color.z;
+                        m_image[idx].a = 255;
                     } else
                     {
                         m_image[idx].r = 0;
@@ -312,19 +322,7 @@ void RTX_Renderer::generate_image_st()
 
 void RTX_Renderer::upload_to_texture()
 {
-    if (m_texture_cpu_uploader != nullptr)
-    {
-        m_texture_cpu_uploader->upload(
-            m_device.Get(),
-            m_command_list_direct.Get(),
-            m_dst_texture_state,
-            m_image.data(),
-            m_window->width(),
-            m_window->height(),
-            sizeof(u8_four)
-        );
-    } 
-    else
+    if (m_texture_cpu_uploader == nullptr)
     {
         m_texture_cpu_uploader = std::make_unique<CPUGPUTexture2D>(
             m_dst_texture.Get(),
@@ -336,6 +334,16 @@ void RTX_Renderer::upload_to_texture()
             m_window->width(), m_window->height(), sizeof(u8_four)
         );
     }
+
+    m_texture_cpu_uploader->upload(
+        m_device.Get(),
+        m_command_list_direct.Get(),
+        m_dst_texture_state,
+        m_image.data(),
+        m_window->width(),
+        m_window->height(),
+        sizeof(u8_four)
+    );
 }
 
 bool RTX_Renderer::is_application_initialized()
@@ -618,7 +626,6 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
         ImGui::Text("Choose a threading model");
         {
             // Choose threading model
-            static bool selection[3] = { false, true, false };
             const char* threading_names[] =
             {
                 "\tCPU-ST", 
@@ -627,7 +634,7 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
             };
             
             TracingMethod prev_tracing_method = m_tracing_method;
-            for (unsigned int n = 0; n < _countof(selection); n++)
+            for (unsigned int n = 0; n < _countof(threading_names); n++)
             {
                 if (ImGui::Selectable(threading_names[n], m_tracing_method == n))
                     m_tracing_method = TracingMethod(n);
@@ -777,17 +784,20 @@ void RTX_Renderer::resize()
 
 void RTX_Renderer::update()
 {
+    compute_delta_time(m_elapsed_time);
+
     if (m_asset_path != nullptr)
     {
         construct_bvh(m_asset_path);
         initialize_shader_resources();
-        generate_image();
-
+        
         m_asset_loaded = true;
         m_asset_path = nullptr;
-    }
 
-    compute_delta_time(m_elapsed_time);
+        generate_image();
+
+        return;
+    }
 
     if (m_keyboard_state.keys[KeyCode::Shift])
     {
@@ -799,128 +809,6 @@ void RTX_Renderer::update()
         m_ray_camera->reinitialize_camera_variables();
         generate_image();
     }
-}
-
-void RTX_Renderer::upload_resources_to_gpu()
-{
-    // Initialize m_uav_bvhnodes_rsc
-    {
-        m_uav_bvhnodes_rsc = std::make_unique<DX12Resource>();
-        m_uav_bvhnodes_rsc->upload(
-            m_device.Get(),
-            m_command_list_direct.Get(),
-            m_bvh->get_raw_nodes(),
-            sizeof(BVHNode) * m_bvh->get_nodes_used(),
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
-        );
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_bvh->get_nodes_used();
-        srv_desc.Buffer.StructureByteStride = sizeof(BVHNode);
-
-        m_device->CreateShaderResourceView(
-            m_uav_bvhnodes_rsc->get_underlying(),
-            &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_BVHNODES_INDEX)
-        );
-    }
-
-    // Initialize m_uav_tris_rsc
-    {
-        m_uav_tris_rsc = std::make_unique<DX12Resource>();
-        m_uav_tris_rsc->upload(
-            m_device.Get(),
-            m_command_list_direct.Get(),
-            m_mesh.get(),
-            sizeof(float) * m_mesh_num_elements,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
-        );
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_mesh_num_elements;
-        srv_desc.Buffer.StructureByteStride = sizeof(float);
-
-        m_device->CreateShaderResourceView(
-            m_uav_tris_rsc->get_underlying(),
-            &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_TRIANGLES_INDEX)
-        );
-    }
-
-    // Initialize m_uav_tris_indices_rsc
-    {
-        m_uav_tris_indices_rsc = std::make_unique<DX12Resource>();
-        m_uav_tris_indices_rsc->upload(
-            m_device.Get(),
-            m_command_list_direct.Get(),
-            m_bvh->get_raw_indices(),
-            sizeof(uint32_t) * m_num_triangles,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
-        );
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_num_triangles;
-        srv_desc.Buffer.StructureByteStride = sizeof(uint32_t);
-
-        m_device->CreateShaderResourceView(
-            m_uav_tris_indices_rsc->get_underlying(),
-            &srv_desc,
-            m_srv_descriptor_heap->cpu_handle(SRV_TRIANGLE_INDICES_INDEX)
-        );
-    }
-
-    // Initialize m_dst_texture
-    {
-        D3D12_RESOURCE_DESC rsc_desc = {};
-        rsc_desc.DepthOrArraySize = 1;
-        rsc_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        rsc_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        rsc_desc.MipLevels = 1;
-        rsc_desc.Width = m_window->width();
-        rsc_desc.Height = m_window->height();
-        rsc_desc.SampleDesc = { 1, 0 };
-        rsc_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-        ThrowIfFailed(m_device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
-            D3D12_HEAP_FLAG_NONE,
-            &rsc_desc,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            nullptr,
-            IID_PPV_ARGS(&m_dst_texture)
-        ));
-
-        on_resource_invalidation();
-
-        if (m_tracing_method == TracingMethod::SingleThreaded ||
-            m_tracing_method == TracingMethod::MultiThreaded)
-        {
-            transition_resource(
-                m_command_list_direct.Get(),
-                m_dst_texture.Get(),
-                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                D3D12_RESOURCE_STATE_COPY_DEST
-            );
-
-            m_dst_texture_state = D3D12_RESOURCE_STATE_COPY_DEST;
-        } else
-        {
-            m_dst_texture_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        }
-    }
-
 }
 
 void RTX_Renderer::load_assets()

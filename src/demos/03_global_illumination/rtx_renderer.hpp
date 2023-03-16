@@ -73,7 +73,6 @@ private:
     void generate_image_mt();   // multi-threaded cpu
     void generate_image_st();   // single-threaded cpu
     void upload_to_texture();
-    void upload_resources_to_gpu();
 
 private:
 
@@ -111,8 +110,8 @@ private:
     uint64_t m_num_triangles = 0;
     uint64_t m_stride_in_32floats = 0;
     std::size_t m_mesh_num_elements = 0;
-
-    Vector2<uint32_t> m_old_window_dimensions;
+    uint64_t m_num_materials = 0;
+    std::unique_ptr<Vector3<float>[]> m_mat_diffuse_colors;
 
 private:
 
