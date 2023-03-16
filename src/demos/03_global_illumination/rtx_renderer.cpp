@@ -242,24 +242,21 @@ void RTX_Renderer::generate_image()
 
 void RTX_Renderer::generate_image_mt()
 {
-    const Vector3<float> center(0.f, 0.f, 0.f);
-    const float radius = 0.25f;
     tbb::parallel_for(
-        tbb::blocked_range2d<int>(0, m_window->width(), 0, m_window->height()),
-        [&](tbb::blocked_range2d<int> r)
+        tbb::blocked_range2d<uint32_t>(0, m_window->height(), 0, m_window->width()),
+            [this](tbb::blocked_range2d<uint32_t> r)
         {
-            for (uint16_t y = r.cols().begin(); y < r.cols().end(); ++y)
+            for (uint32_t x = r.cols().begin(); x < r.cols().end(); ++x)
             {
-                for (uint16_t x = r.rows().begin(); x < r.rows().end(); ++x)
+                for (uint32_t y = r.rows().begin(); y < r.rows().end(); ++y)
                 {
-                    std::size_t idx = y * m_window->width() + x;
-                    if (idx >= m_image.size()) break;
-
+                    std::size_t idx = y * m_window->width();
+                    idx += (m_window->width() - 1) - x;
+                    
                     auto ray = m_ray_camera->getRay({ x, y });
-                    IntersectionParams intersect;
-                    m_bvh->intersect(ray, m_mesh.get(),
-                        m_stride_in_32floats, intersect);
-                    if (ray.t < std::numeric_limits<float>::max())
+                    IntersectionParams intersect = 
+                        m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
+                    if (intersect.t < std::numeric_limits<float>::max())
                     {
                         Vector3<float> diffuse_color
                             = m_mat_diffuse_colors[intersect.material_idx];
@@ -271,10 +268,7 @@ void RTX_Renderer::generate_image_mt()
                         m_image[idx].a = 255;
                     } else
                     {
-                        m_image[idx].r = 0;
-                        m_image[idx].g = 0;
-                        m_image[idx].b = 0;
-                        m_image[idx].a = 0;
+                        m_image[idx] = u8_four(0, 0, 0, 0);
                     }
                 }
             }
@@ -292,21 +286,26 @@ void RTX_Renderer::generate_image_st()
             {
                 for (uint16_t u = 0; u < 4; ++u)
                 {
-                    std::size_t idx = ((y + v) * m_window->width()) + x + u;
+                    std::size_t idx = ((y + v) * m_window->width());
+                    idx += (m_window->width() - 1) - (x + u);
                     if (idx >= m_image.size()) break;
+                    
                     uint16_t px = x + u;
                     uint16_t py = y + v;
                     auto ray = m_ray_camera->getRay({ px, py });
-                    IntersectionParams intersect;
-                    m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats, intersect);
+                    
+                    IntersectionParams intersect = 
+                        m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
                     if (ray.t < std::numeric_limits<float>::max())
                     {
-                        unsigned c = (int)(ray.t * 42);
-                        c *= 0x10101;
-                        m_image[idx].r = c;
-                        m_image[idx].g = c;
-                        m_image[idx].b = c;
-                        m_image[idx].a = c;
+                        Vector3<float> diffuse_color
+                            = m_mat_diffuse_colors[intersect.material_idx];
+                        diffuse_color *= 255.f;
+
+                        m_image[idx].r = diffuse_color.x;
+                        m_image[idx].g = diffuse_color.y;
+                        m_image[idx].b = diffuse_color.z;
+                        m_image[idx].a = 255;
                     } else
                     {
                         m_image[idx].r = 0;
@@ -420,7 +419,7 @@ void RTX_Renderer::on_mouse_move(LPARAM lparam)
         }
         if (m_keyboard_state.keys[KeyCode::Shift])
         {
-            m_ray_camera->rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
+            m_ray_camera->rotate(raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
         }
     }
 

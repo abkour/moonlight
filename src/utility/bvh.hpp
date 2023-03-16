@@ -43,11 +43,10 @@ public:
         uint32_t n_triangles
     );
 
-    void intersect(
+    IntersectionParams intersect(
         Ray& ray, 
         const float* tris,
-        const uint64_t stride_in_bytes,
-        IntersectionParams& intersect
+        const uint64_t stride_in_bytes
     );
 
     void to_file_ascii(const char* filename);

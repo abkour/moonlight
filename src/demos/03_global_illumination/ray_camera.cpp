@@ -88,9 +88,9 @@ void RayCamera::translate(KeyState kd, const float dt)
         eyepos = eyepos + eyedir * ms_v;
     if (kd['S'])  // 'S'
         eyepos = eyepos - eyedir * ms_v;
-    if (kd['A'])  // 'A'
+    if (kd['D'])  // 'A'
         eyepos = eyepos + right * ms_v;
-    if (kd['D'])  // 'D'
+    if (kd['A'])  // 'D'
         eyepos = eyepos - right * ms_v;
 }
 

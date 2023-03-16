@@ -194,12 +194,13 @@ static float IntersectAABB_SSE(const __m128 bmin4, const __m128 bmax4, const Ray
         return std::numeric_limits<float>::max();
 }
 
-void BVH::intersect(
+IntersectionParams BVH::intersect(
     Ray& ray, 
     const float* tris, 
-    const uint64_t stride,
-    IntersectionParams& intersect)
+    const uint64_t stride)
 {
+    IntersectionParams intersect;
+
     const BVHNode* node = &m_bvh_nodes[0];
     BVHNode* stack[64];
     unsigned stack_ptr = 0;
@@ -219,8 +220,9 @@ void BVH::intersect(
                     ray, &tris[triangle_pos], stride
                 );
 
-                if (new_intersect.t < ray.t)
+                if (new_intersect.t < intersect.t)
                 {
+                    intersect = new_intersect;
                     intersect.material_idx = 
                         tris[triangle_pos + stride * VERT_PER_TRIANGLE + VERT_PER_TRIANGLE];
                     ray.t = new_intersect.t;
@@ -288,6 +290,8 @@ void BVH::intersect(
             }
         }
     }
+
+    return intersect;
 }
 
 
