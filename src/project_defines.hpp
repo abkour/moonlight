@@ -8,6 +8,8 @@
 
 #define ROOT_DIRECTORY_WIDE ML_L(ROOT_DIRECTORY_ASCII)
 
+#define ML_PI 3.1415926f
+
 #define ML_MISC_FLAGS_NONE                      0x00
 #define ML_MISC_FLAG_CENTROIDS_INCLUDED         0x01
 #define ML_MISC_FLAG_ATTR_VERTEX                0x02

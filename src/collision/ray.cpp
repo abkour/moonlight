@@ -83,6 +83,64 @@ IntersectionParams ray_hit_triangle(
     return intersect_params;
 }
 
+IntersectionParams ray_hit_triangle(
+    const Ray& ray,
+    const float* tri0, const float* tri1, const float* tri2,
+    const unsigned stride)
+{
+    using vec3f = Vector3<float>;
+
+    IntersectionParams intersect_params;
+
+    const float epsilon = 1e-7;
+    const vec3f e0(
+        tri1[0] - tri0[0],
+        tri1[1] - tri0[1],
+        tri1[2] - tri0[2]
+    );
+
+    const vec3f e1(
+        tri2[0] - tri0[0],
+        tri2[1] - tri0[1],
+        tri2[2] - tri0[2]
+    );
+
+    const vec3f q = cross(ray.d, e1);
+    const float a = dot(e0, q);
+
+    if (a > -epsilon && a < epsilon)
+    {
+        return intersect_params;
+    }
+
+    const float f = 1.f / a;
+    const vec3f s(
+        ray.o.x - tri0[0],
+        ray.o.y - tri0[1],
+        ray.o.z - tri0[2]
+    );
+
+    intersect_params.u = f * dot(s, q);
+
+    if (intersect_params.u < 0.f)
+    {
+        return intersect_params;
+    }
+
+    const vec3f r = cross(s, e0);
+    intersect_params.v = f * dot(ray.d, r);
+
+    if (intersect_params.v < 0.f ||
+        intersect_params.u + intersect_params.v > 1.f)
+    {
+        return intersect_params;
+    }
+
+    intersect_params.t = f * dot(e1, r);
+
+    return intersect_params;
+}
+
 std::ostream& operator<<(std::ostream& os, const Ray& ray) {
     return os << "origin: " << ray.o << ", direction: " << ray.d;
 }

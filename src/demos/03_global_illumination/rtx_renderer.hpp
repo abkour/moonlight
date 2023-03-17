@@ -1,4 +1,5 @@
 #pragma once
+#include "area_light.hpp"
 #include "ray_camera.hpp"
 #include "../common/scene.hpp"
 #include "../common/shader.hpp"
@@ -29,17 +30,23 @@ namespace moonlight
 class RTX_Renderer : public IApplication
 {
 
-/*
-*   Requires:
-*       - BVH           [x]
-*       - Camera        [x]
-*       - PBR           [ ]
-*       - File Loading  [X]
-*       - GUI
-* 
-*   Approach:
-*       Get Camera/PBR done first, then worry about file loading, then worry about BVH
-*/
+    enum TracingMethod
+    {
+        SingleThreaded = 0,
+        MultiThreaded = 1,
+        ComputeShader = 2
+    };
+
+    struct GUI_State
+    {
+        int m_enable_path_tracing = 0;
+        bool m_generate_new_image = 0;
+        bool m_asset_loaded = false;
+        TracingMethod m_tracing_method;
+
+        int m_spp = 16;
+        int m_num_bounces = 4;
+    };
 
 public:
 
@@ -71,8 +78,15 @@ private:
     void construct_bvh(const char* asset_path);
     void generate_image();
     void generate_image_mt();   // multi-threaded cpu
+    void generate_image_mt_pt();    // path traced multi-threaded cpu
     void generate_image_st();   // single-threaded cpu
     void upload_to_texture();
+
+    Vector3<float> trace_path(
+        Ray& ray,
+        ILight* light_source,
+        int traversal_depth
+    );
 
 private:
 
@@ -105,6 +119,7 @@ private:
     // BVH related
     std::unique_ptr<BVH> m_bvh;
     std::unique_ptr<float[]> m_mesh;
+    uint64_t m_mesh_flags = 0;
 
     std::vector<u8_four> m_image;
     uint64_t m_num_triangles = 0;
@@ -116,20 +131,11 @@ private:
 private:
 
     // GUI related#
+    GUI_State gui;
+
     bool rtx_use_multithreading = false;
     bool app_initialized;
-    bool m_asset_loaded = false;
-    bool show_demo_window = true;
-    bool show_another_window = true;
 
-    enum TracingMethod
-    {
-        SingleThreaded = 0,
-        MultiThreaded  = 1,
-        ComputeShader  = 2
-    };
-
-    TracingMethod m_tracing_method;
     void on_resource_invalidation();
     void on_switch_tracing_method(TracingMethod prev_tracing_method);
 

@@ -348,6 +348,12 @@ Vector3<T> operator*(const T t, const Vector3<T>& v)
 }
 
 template<typename T>
+Vector3<T> absolute(const Vector3<T>& v)
+{
+    return { std::abs(v.x), std::abs(v.y), std::abs(v.z) };
+}
+
+template<typename T>
 T dot(const Vector3<T>& v0, const Vector3<T>& v1)
 {
     return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
@@ -379,6 +385,12 @@ Vector3<T> cross(const Vector3<T>& v0, const Vector3<T>& v1)
         v0.z * v1.x - v0.x * v1.z,
         v0.x * v1.y - v0.y * v1.x
     };
+}
+
+template<typename T>
+Vector3<T> reflect(const Vector3<T>& v, const Vector3<T>& n)
+{
+    return 2 * dot(v, n) * (n - v);
 }
 
 template<typename T>

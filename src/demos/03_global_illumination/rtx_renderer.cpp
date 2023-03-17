@@ -132,7 +132,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     );
 
     m_ray_camera->set_movement_speed(10.f);
-    m_tracing_method = MultiThreaded;
+    gui.m_tracing_method = MultiThreaded;
 
     m_image.resize(m_window->width() * m_window->height());
 
@@ -186,21 +186,20 @@ static bool ray_hit_circle(const Ray& ray, const float r)
 void RTX_Renderer::parse_files(const char* asset_path)
 {
     uint64_t n_bytes = 0;
-    uint64_t flags = 0;
 
     std::ifstream file(asset_path, std::ios::in | std::ios::binary);
 
     file.read((char*)&m_num_triangles, sizeof(uint64_t));
     file.read((char*)&m_stride_in_32floats, sizeof(uint64_t));
     file.read((char*)&n_bytes, sizeof(uint64_t));
-    file.read((char*)&flags, sizeof(uint64_t));
+    file.read((char*)&m_mesh_flags, sizeof(uint64_t));
 
     m_mesh = std::make_unique<float[]>(n_bytes / sizeof(float));
 
     file.read((char*)m_mesh.get(), n_bytes);
     m_mesh_num_elements = n_bytes / sizeof(float);
 
-    if (flags & ML_MISC_FLAG_MATERIALS_APPENDED)
+    if (m_mesh_flags & ML_MISC_FLAG_MATERIALS_APPENDED)
     {
         file.read((char*)&m_num_materials, sizeof(uint64_t));
         m_mat_diffuse_colors = std::make_unique<Vector3<float>[]>(m_num_materials);
@@ -215,26 +214,116 @@ void RTX_Renderer::construct_bvh(const char* asset_path)
     m_bvh->build_bvh(m_mesh.get(), m_stride_in_32floats, m_num_triangles);
 }
 
+// spherical to cartesian coordinate translation
+Vector3<float> stc_coords(float theta, float phi)
+{
+    return Vector3<float>(
+        cos(phi) * sin(theta),
+        sin(phi) * sin(theta),
+        cos(theta)
+    );
+}
+
+// cosine-weighted reflection ray
+Ray cw_reflection_ray(
+    const Ray& incident_ray, 
+    const Vector3<float>& surface_point, 
+    const Vector3<float>& normal)
+{
+    Vector3<float> hemisphere_sample = random_unit_vector();
+    if (dot(incident_ray.d, normal) < 0.f)
+    {
+        hemisphere_sample = invert(hemisphere_sample);
+    }
+    Vector3<float> random_dir = normal + hemisphere_sample;
+    Ray reflection_ray(surface_point + (random_dir * 1e-4), normalize(random_dir));
+    return reflection_ray;
+    /*
+    const float e0 = random_normalized_float();
+    const float e1 = random_normalized_float();
+    
+    const float theta = acos(e0);   // uniform sampling over hemisphere
+    const float phi   = 2 * ML_PI * e1;
+
+    Vector3<float> hemisphere_sample = stc_coords(theta, phi);
+    bool negative_halfspace = dot(hemisphere_sample, normal) < 0.f;
+    if (negative_halfspace)
+    {
+        hemisphere_sample = invert(hemisphere_sample);
+    }
+
+    // Avoid self-intersection by translating the intersection point along the surface normal.
+    Vector3<float> dn = normal * 1e-4;
+    Ray reflection_ray(incident_ray.o + dn, normalize(hemisphere_sample));
+    return reflection_ray;
+    */
+}
+
+Vector3<float> RTX_Renderer::trace_path(
+    Ray& ray,
+    ILight* light_source,
+    int traversal_depth)
+{
+    if (traversal_depth <= 0)
+    {
+        return Vector3<float>(0.f);
+    }
+
+    IntersectionParams its = m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
+    IntersectionParams its_light = light_source->intersect(ray);
+
+    // The light source is hit before the scene geometry.
+    if (its_light.is_intersection())
+    {
+        if (its_light.t < its.t)
+        {
+            return light_source->albedo();
+        }
+    }
+
+    if (!its.is_intersection())
+    {
+        return Vector3<float>(0.f);
+    }
+
+    Vector3<float> sp = ray.o + (ray.t * ray.d);
+
+    // Material idx is triangle offset + attrib_size + centroid_size
+    uint32_t material_idx = m_mesh[its.triangle_idx + m_stride_in_32floats * 3 + 3];
+    Vector3<float> attenuation = *(Vector3<float>*)&m_mat_diffuse_colors[material_idx].x;
+    Vector3<float> normal = *(Vector3<float>*)&m_mesh[its.triangle_idx + 3];
+    Ray scattered = cw_reflection_ray(ray, sp, normal);
+    
+    return attenuation * trace_path(scattered, light_source, traversal_depth - 1);
+}
+
 void RTX_Renderer::generate_image()
 {
-    if (!m_asset_loaded)
+    if (!gui.m_asset_loaded)
     {
         return;
     }
 
-    if (m_tracing_method == TracingMethod::ComputeShader)
+    if (gui.m_tracing_method == TracingMethod::ComputeShader)
     {
         dispatch_compute_shader();
         return;
     }
 
-    if (m_tracing_method == TracingMethod::SingleThreaded)
+    if (gui.m_tracing_method == TracingMethod::SingleThreaded)
     {
         generate_image_st();
     } 
-    else if(m_tracing_method == TracingMethod::MultiThreaded)
+    else if(gui.m_tracing_method == TracingMethod::MultiThreaded)
     {
-        generate_image_mt();
+        if (gui.m_enable_path_tracing & 1)
+        {
+            generate_image_mt_pt();
+        }
+        else
+        {
+            generate_image_mt();
+        }
     }
     
     upload_to_texture();
@@ -258,8 +347,21 @@ void RTX_Renderer::generate_image_mt()
                         m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
                     if (intersect.t < std::numeric_limits<float>::max())
                     {
-                        Vector3<float> diffuse_color
-                            = m_mat_diffuse_colors[intersect.material_idx];
+                        uint32_t material_idx = 
+                            m_mesh[intersect.triangle_idx + m_stride_in_32floats * 3 + 3];
+
+                        Vector3<float> diffuse_color;
+                        
+                        if (m_mesh_flags & ML_MISC_FLAG_ATTR_VERTEX_NORMAL)
+                        {
+                            Vector3<float> mat_color = *(Vector3<float>*)&m_mesh[intersect.triangle_idx + 3];
+                            diffuse_color = absolute(mat_color);
+                        }
+                        else
+                        {
+                            diffuse_color = m_mat_diffuse_colors[material_idx];
+                        }
+
                         diffuse_color *= 255.f;
 
                         m_image[idx].r = diffuse_color.x;
@@ -274,6 +376,49 @@ void RTX_Renderer::generate_image_mt()
             }
         }
     );
+}
+
+void RTX_Renderer::generate_image_mt_pt()
+{
+    ILight* light_source = new AreaLight(
+        { 15, 15, 15 },
+        { 0.2300, 1.5800, -0.2200 },
+        { 0.2300, 1.5800, 0.1600 },
+        { -0.2400, 1.5800, 0.1600 },
+        { -0.2400, 1.5800, -0.2200 }
+    );
+
+    tbb::parallel_for(
+        tbb::blocked_range2d<uint32_t>(0, m_window->height(), 0, m_window->width()),
+        [&](tbb::blocked_range2d<uint32_t> r)
+        {
+            for (uint32_t x = r.cols().begin(); x < r.cols().end(); ++x)
+            {
+                for (uint32_t y = r.rows().begin(); y < r.rows().end(); ++y)
+                {
+                    std::size_t idx = y * m_window->width();
+                    idx += (m_window->width() - 1) - x;
+
+                    auto ray = m_ray_camera->getRay({ x, y });
+                    
+                    Vector3<float> albedo(0.f);
+                    for (int i = 0; i < gui.m_spp; ++i)
+                    {
+                        albedo += trace_path(ray, light_source, gui.m_num_bounces);
+                    }
+                    albedo /= gui.m_spp;
+                    albedo *= 255.f;
+
+                    m_image[idx].r = albedo.x;
+                    m_image[idx].g = albedo.y;
+                    m_image[idx].b = albedo.z;
+                    m_image[idx].a = 255;
+                }
+            }
+        }
+    );
+
+    delete light_source;
 }
 
 void RTX_Renderer::generate_image_st()
@@ -298,8 +443,11 @@ void RTX_Renderer::generate_image_st()
                         m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
                     if (ray.t < std::numeric_limits<float>::max())
                     {
+                        uint32_t material_idx =
+                            m_mesh[intersect.triangle_idx + m_stride_in_32floats * 3 + 3];
+
                         Vector3<float> diffuse_color
-                            = m_mat_diffuse_colors[intersect.material_idx];
+                            = m_mat_diffuse_colors[material_idx];
                         diffuse_color *= 255.f;
 
                         m_image[idx].r = diffuse_color.x;
@@ -308,10 +456,7 @@ void RTX_Renderer::generate_image_st()
                         m_image[idx].a = 255;
                     } else
                     {
-                        m_image[idx].r = 0;
-                        m_image[idx].g = 0;
-                        m_image[idx].b = 0;
-                        m_image[idx].a = 0;
+                        m_image[idx] = u8_four(0, 0, 0, 0);
                     }
                 }
             }
@@ -369,11 +514,10 @@ void RTX_Renderer::initialize_raw_input_devices()
 void RTX_Renderer::on_key_event(const PackedKeyArguments key_state)
 {
     ImGuiIO& io = ImGui::GetIO();
-    bool down = key_state.key_state == PackedKeyArguments::Pressed;
 
     if (key_state.key < 256)
     {
-        io.KeysDown[key_state.key] == down;
+        io.KeysDown[key_state.key] = key_state.key_state;
     }
 
     switch (key_state.key_state)
@@ -460,7 +604,7 @@ void RTX_Renderer::on_switch_tracing_method(TracingMethod prev_tracing_method)
 
     if ((prev_tracing_method == TracingMethod::SingleThreaded ||
         prev_tracing_method == TracingMethod::MultiThreaded)  &&
-        m_tracing_method == TracingMethod::ComputeShader)
+        gui.m_tracing_method == TracingMethod::ComputeShader)
     {
         transition_resource(
             m_command_list_direct.Get(),
@@ -472,8 +616,8 @@ void RTX_Renderer::on_switch_tracing_method(TracingMethod prev_tracing_method)
         m_dst_texture_state = gpu_state;
     }
     else if (prev_tracing_method == TracingMethod::ComputeShader  &&
-            (m_tracing_method    == TracingMethod::SingleThreaded ||
-            m_tracing_method     == TracingMethod::MultiThreaded))
+            (gui.m_tracing_method    == TracingMethod::SingleThreaded ||
+            gui.m_tracing_method     == TracingMethod::MultiThreaded))
     {
         transition_resource(
             m_command_list_direct.Get(),
@@ -611,8 +755,6 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-
     {
         static int open_file_browser = 0;
 
@@ -621,6 +763,16 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
         {
             open_file_browser++;
         }
+
+        if (open_file_browser & 1)
+        {
+            std::string default_path = std::string(ROOT_DIRECTORY_ASCII) + "/assets";
+            static AssetFileBrowser file_browser(default_path.c_str());
+            m_asset_path = file_browser.display();
+        }
+
+        ImGui::DragInt("spp", &gui.m_spp, 1, 1, 250);
+        ImGui::DragInt("bounces", &gui.m_num_bounces, 1, 1, 16);
 
         ImGui::Text("Choose a threading model");
         {
@@ -632,29 +784,35 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
                 "\tGPU-CS"
             };
             
-            TracingMethod prev_tracing_method = m_tracing_method;
+            TracingMethod prev_tracing_method = gui.m_tracing_method;
             for (unsigned int n = 0; n < _countof(threading_names); n++)
             {
-                if (ImGui::Selectable(threading_names[n], m_tracing_method == n))
-                    m_tracing_method = TracingMethod(n);
+                if (ImGui::Selectable(threading_names[n], gui.m_tracing_method == n))
+                    gui.m_tracing_method = TracingMethod(n);
             }
 
-            if (prev_tracing_method != m_tracing_method)
+            if (prev_tracing_method != gui.m_tracing_method)
             {
                 on_switch_tracing_method(prev_tracing_method);
             }
         }
 
+        if (ImGui::Button("Enable path tracing"))
+        {
+            gui.m_enable_path_tracing++;
+        }
+
+        if (gui.m_enable_path_tracing & 1)
+        {
+            ImGui::SameLine();
+            if(ImGui::Button("Generate New Image"))
+            {
+                gui.m_generate_new_image = true;
+            }
+        }
+
         ImGui::Text("\nApplication average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
         ImGui::End();
-
-        // 3. Show another simple window.
-        if (open_file_browser & 1)
-        {
-            std::string default_path = std::string(ROOT_DIRECTORY_ASCII) + "/assets";
-            static AssetFileBrowser file_browser(default_path.c_str());
-            m_asset_path = file_browser.display();
-        }
     }
 
     ImGui::Render();
@@ -678,7 +836,7 @@ void RTX_Renderer::render()
         );
     }
 
-    if (m_asset_loaded)
+    if (gui.m_asset_loaded)
     {
         record_command_list(m_command_list_direct.Get());
     }
@@ -748,8 +906,8 @@ void RTX_Renderer::resize()
 
         on_resource_invalidation();
         
-        if (m_tracing_method == TracingMethod::SingleThreaded ||
-            m_tracing_method == TracingMethod::MultiThreaded)
+        if (gui.m_tracing_method == TracingMethod::SingleThreaded ||
+            gui.m_tracing_method == TracingMethod::MultiThreaded)
         {
             transition_resource(
                 m_command_list_direct.Get(),
@@ -790,7 +948,7 @@ void RTX_Renderer::update()
         construct_bvh(m_asset_path);
         initialize_shader_resources();
         
-        m_asset_loaded = true;
+        gui.m_asset_loaded = true;
         m_asset_path = nullptr;
 
         generate_image();
@@ -801,6 +959,12 @@ void RTX_Renderer::update()
     if (m_keyboard_state.keys[KeyCode::Shift])
     {
         m_ray_camera->translate(m_keyboard_state, m_elapsed_time);
+    }
+
+    if (gui.m_generate_new_image)
+    {
+        generate_image();
+        gui.m_generate_new_image = false;
     }
 
     if (m_ray_camera->camera_variables_need_updating())
@@ -934,8 +1098,8 @@ void RTX_Renderer::initialize_shader_resources()
 
         on_resource_invalidation();
 
-        if (m_tracing_method == TracingMethod::SingleThreaded ||
-            m_tracing_method == TracingMethod::MultiThreaded)
+        if (gui.m_tracing_method == TracingMethod::SingleThreaded ||
+            gui.m_tracing_method == TracingMethod::MultiThreaded)
         {
             transition_resource(
                 m_command_list_direct.Get(),

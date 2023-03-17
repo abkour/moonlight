@@ -220,11 +220,10 @@ IntersectionParams BVH::intersect(
                     ray, &tris[triangle_pos], stride
                 );
 
-                if (new_intersect.t < intersect.t)
+                if (new_intersect.t < intersect.t && new_intersect.t > 0.f)
                 {
                     intersect = new_intersect;
-                    intersect.material_idx = 
-                        tris[triangle_pos + stride * VERT_PER_TRIANGLE + VERT_PER_TRIANGLE];
+                    intersect.triangle_idx = triangle_pos;
                     ray.t = new_intersect.t;
                 }
             }

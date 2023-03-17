@@ -19,4 +19,19 @@ float random_normalized_float()
     return dist(mt);
 }
 
+Vector3<float> random_unit_vector()
+{
+    static std::random_device rd;
+    static std::mt19937 mt(rd());
+    static std::uniform_real_distribution<float> dist(-1.f, 1.f);
+
+    while (true)
+    {
+        Vector3<float> p(dist(mt), dist(mt), dist(mt));
+        if (dot(p, p) >= 1) continue;
+        return p;
+    }
+}
+
+
 }

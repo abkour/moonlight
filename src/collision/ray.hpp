@@ -58,6 +58,13 @@ struct Ray {
 std::ostream& operator<<(std::ostream& os, const Ray& ray);
 
 IntersectionParams ray_hit_triangle(
-    const Ray& ray,  const float* tris, const unsigned stride);
+    const Ray& ray,  const float* tris, const unsigned stride
+);
+
+IntersectionParams ray_hit_triangle(
+    const Ray& ray, 
+    const float* tri0, const float* tri1, const float* tri2, 
+    const unsigned stride
+);
 
 }
