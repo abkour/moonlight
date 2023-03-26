@@ -37,7 +37,7 @@ IntersectionParams ray_hit_triangle(
 
     IntersectionParams intersect_params;
 
-    const float epsilon = 1e-7;
+    const float epsilon = 1e-4;
     const vec3f e0(tris[stride]     - tris[0],
                    tris[stride + 1] - tris[1],
                    tris[stride + 2] - tris[2]
@@ -79,6 +79,8 @@ IntersectionParams ray_hit_triangle(
     }
 
     intersect_params.t = f * dot(e1, r);
+    vec3f normal = normalize(cross(e0, e1));
+    intersect_params.set_face_normal(ray.d, normal);
 
     return intersect_params;
 }
@@ -137,6 +139,8 @@ IntersectionParams ray_hit_triangle(
     }
 
     intersect_params.t = f * dot(e1, r);
+    vec3f normal = normalize(cross(e0, e1));
+    intersect_params.set_face_normal(ray.d, normal);
 
     return intersect_params;
 }

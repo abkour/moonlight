@@ -51,7 +51,7 @@ void BVH::update_node_bounds(
 {
     BVHNode& node = m_bvh_nodes[node_idx];
     
-    for (int i = 0; i < node.tri_count; ++i)
+    for (unsigned int i = 0; i < node.tri_count; ++i)
     {
         unsigned idx = compute_triangle_pos(i + node.left_first, stride);
         const float* leaf_tri = &tris[idx];
@@ -154,6 +154,8 @@ bool BVH::compute_optimal_split(
     return true;
 }
 
+// This test suffers from precision problems.
+// 
 static float IntersectAABB(const Vector3<float> bmin, const Vector3<float> bmax, const Ray& ray)
 {
     float tx1 = (bmin.x - ray.o.x) * ray.invd.x;
@@ -169,7 +171,7 @@ static float IntersectAABB(const Vector3<float> bmin, const Vector3<float> bmax,
     tmin = std::max(tmin, std::min(tz1, tz2));
     tmax = std::min(tmax, std::max(tz1, tz2));
     
-    if (tmax >= tmin && tmin < ray.t && tmax > 0)
+    if (tmax >= tmin && tmin < ray.t && tmax > 0.f)
     {
         return tmin;
     }
@@ -249,9 +251,9 @@ IntersectionParams BVH::intersect(
         // over the IntersectAABB method. 
         // How can this behavior be explained? 
         //      - The number of loop iterations is not the culprit.
-        float dist1 = IntersectAABB(child1->aabbmin, child1->aabbmax, ray);
-        float dist2 = IntersectAABB(child2->aabbmin, child2->aabbmax, ray);
-        //float dist2 = ray_intersects_aabb(child2->aabbmin, child2->aabbmax, ray);
+        float dist1 = ray_intersects_aabb(child1->aabbmin, child1->aabbmax, ray);
+        //float dist2 = IntersectAABB(child2->aabbmin, child2->aabbmax, ray);
+        float dist2 = ray_intersects_aabb(child2->aabbmin, child2->aabbmax, ray);
 
         if (dist1 > dist2)
         {

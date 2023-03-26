@@ -1,5 +1,6 @@
 #pragma once
 #include "area_light.hpp"
+#include "coordinate_system.hpp"
 #include "ray_camera.hpp"
 #include "../common/scene.hpp"
 #include "../common/shader.hpp"

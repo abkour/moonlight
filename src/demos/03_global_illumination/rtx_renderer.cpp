@@ -125,8 +125,8 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     );
 
     m_ray_camera->initializeVariables(
-        Vector3<float>(-3.5f, 1.f, -2.5f),
-        normalize(Vector3<float>(0.f, 0.707f, 0.707)),
+        Vector3<float>(0.11f, 0.84f, 7.74),
+        normalize(Vector3<float>(0.03f, -0.07f, -1.00)),
         45,
         1
     );
@@ -230,33 +230,94 @@ Ray cw_reflection_ray(
     const Vector3<float>& surface_point, 
     const Vector3<float>& normal)
 {
-    Vector3<float> hemisphere_sample = random_unit_vector();
-    if (dot(incident_ray.d, normal) < 0.f)
+    Vector3<float> hemisphere_sample = normalize(random_unit_vector());
+    if (dot(hemisphere_sample, normal) < 0)
     {
-        hemisphere_sample = invert(hemisphere_sample);
+        //hemisphere_sample = invert(hemisphere_sample);
     }
-    Vector3<float> random_dir = normal + hemisphere_sample;
-    Ray reflection_ray(surface_point + (random_dir * 1e-4), normalize(random_dir));
-    return reflection_ray;
-    /*
-    const float e0 = random_normalized_float();
-    const float e1 = random_normalized_float();
+    Vector3<float> target = surface_point + normal + hemisphere_sample;
+    Vector3<float> adj_sp = surface_point + (normal * 1e-3);
     
-    const float theta = acos(e0);   // uniform sampling over hemisphere
-    const float phi   = 2 * ML_PI * e1;
+    Ray reflection_ray(adj_sp, normalize(target - adj_sp));
+    return reflection_ray;
+}
 
-    Vector3<float> hemisphere_sample = stc_coords(theta, phi);
-    bool negative_halfspace = dot(hemisphere_sample, normal) < 0.f;
-    if (negative_halfspace)
+Ray uniform_reflection_ray(
+    const Ray& incident_ray,
+    const Vector3<float>& surface_point,
+    const Vector3<float>& normal)
+{
+    const float e0 = random_in_range(0.f, 1.f);
+    const float e1 = random_in_range(0.f, 1.f);
+    const float theta = acos(e0);
+    const float phi   = 2 * ML_PI * e1;
+    const Vector3<float> v = stc_coords(theta, phi);
+    
+    CoordinateSystem cs(normal);
+    const Vector3<float> new_point = cs.to_local(v);
+    const Vector3<float> new_dir   = normalize(new_point - surface_point);
+    
+    Ray reflection_ray(surface_point + (new_dir * 1e-3), new_dir);
+    return reflection_ray;
+}
+
+Ray realcw_reflection_ray(
+    const Ray& incident_ray,
+    const Vector3<float>& surface_point,
+    const Vector3<float>& normal,
+    const float theta,
+    const float phi)
+{
+    const Vector3<float> v = stc_coords(theta, phi);
+
+    CoordinateSystem cs(normal);
+    const Vector3<float> new_point = cs.to_local(v);
+    const Vector3<float> new_dir = normalize(new_point - surface_point);
+
+    Ray reflection_ray(surface_point + (new_dir * 1e-3), new_dir);
+    return reflection_ray;
+}
+
+IntersectionParams intersect_all_triangles(
+    Ray& ray,
+    float* tris,
+    uint32_t stride,
+    uint32_t n_triangles)
+{
+    const unsigned triangle_size = stride * 3 + 3 + 1;
+    IntersectionParams intersect;
+    for (int i = 0; i < n_triangles; ++i)
     {
-        hemisphere_sample = invert(hemisphere_sample);
+        uint32_t tri_idx = i * triangle_size;
+        IntersectionParams new_intersect = ray_hit_triangle(ray, &tris[tri_idx], stride);
+        if (new_intersect.t < intersect.t && new_intersect.t > 0.f)
+        {
+            std::memcpy(&intersect, &new_intersect, sizeof(IntersectionParams));
+            intersect = new_intersect;
+            intersect.triangle_idx = tri_idx;
+        }
     }
 
-    // Avoid self-intersection by translating the intersection point along the surface normal.
-    Vector3<float> dn = normal * 1e-4;
-    Ray reflection_ray(incident_ray.o + dn, normalize(hemisphere_sample));
-    return reflection_ray;
-    */
+    ray.t = intersect.t;
+    return intersect;
+};
+
+Vector3<float> random_cosine_direction() {
+    auto r1 = random_in_range(0.f, 1.f);
+    auto r2 = random_in_range(0.f, 1.f);
+    auto z = sqrt(1 - r2);
+
+    auto phi = 2 * ML_PI * r1;
+    auto x = cos(phi) * sqrt(r2);
+    auto y = sin(phi) * sqrt(r2);
+
+    return Vector3<float>(x, y, z);
+}
+
+float scattering_pdf(const Ray& r_in, const Ray& scattered, const IntersectionParams& ip)
+{
+    auto cosine = dot(ip.normal, scattered.d);
+    return cosine < 0 ? 0 : cosine / ML_PI;
 }
 
 Vector3<float> RTX_Renderer::trace_path(
@@ -268,7 +329,7 @@ Vector3<float> RTX_Renderer::trace_path(
     {
         return Vector3<float>(0.f);
     }
-
+    
     IntersectionParams its = m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
     IntersectionParams its_light = light_source->intersect(ray);
 
@@ -280,21 +341,27 @@ Vector3<float> RTX_Renderer::trace_path(
             return light_source->albedo();
         }
     }
-
     if (!its.is_intersection())
     {
-        return Vector3<float>(0.f);
+        return Vector3<float>(0.f, 0.f, 0.f);
     }
 
     Vector3<float> sp = ray.o + (ray.t * ray.d);
 
     // Material idx is triangle offset + attrib_size + centroid_size
-    uint32_t material_idx = m_mesh[its.triangle_idx + m_stride_in_32floats * 3 + 3];
+    uint32_t material_idx      = m_mesh[its.triangle_idx + m_stride_in_32floats * 3 + 3];
     Vector3<float> attenuation = *(Vector3<float>*)&m_mat_diffuse_colors[material_idx].x;
-    Vector3<float> normal = *(Vector3<float>*)&m_mesh[its.triangle_idx + 3];
-    Ray scattered = cw_reflection_ray(ray, sp, normal);
     
-    return attenuation * trace_path(scattered, light_source, traversal_depth - 1);
+    CoordinateSystem cs(its.normal);
+    auto cs_dir = cs.to_local(random_cosine_direction());
+    cs_dir = normalize(cs_dir);
+
+    Ray scattered = Ray(sp + cs_dir * 1e-3, cs_dir);
+    float pdf = dot(cs.n, scattered.d) / ML_PI;
+
+    return attenuation * 
+        scattering_pdf(ray, scattered, its) * 
+        trace_path(scattered, light_source, traversal_depth - 1) / pdf;
 }
 
 void RTX_Renderer::generate_image()
@@ -318,7 +385,11 @@ void RTX_Renderer::generate_image()
     {
         if (gui.m_enable_path_tracing & 1)
         {
+            static int i = 0;
+            static LoggingFile logger("n_generate.txt", LoggingFile::Truncate);
+            logger << i++;
             generate_image_mt_pt();
+            logger << ": finished\n";
         }
         else
         {
@@ -345,6 +416,9 @@ void RTX_Renderer::generate_image_mt()
                     auto ray = m_ray_camera->getRay({ x, y });
                     IntersectionParams intersect = 
                         m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
+
+                    //IntersectionParams intersect =
+                    //    intersect_all_triangles(ray, m_mesh.get(), m_stride_in_32floats, m_num_triangles);
                     if (intersect.t < std::numeric_limits<float>::max())
                     {
                         uint32_t material_idx = 
@@ -355,7 +429,7 @@ void RTX_Renderer::generate_image_mt()
                         if (m_mesh_flags & ML_MISC_FLAG_ATTR_VERTEX_NORMAL)
                         {
                             Vector3<float> mat_color = *(Vector3<float>*)&m_mesh[intersect.triangle_idx + 3];
-                            diffuse_color = absolute(mat_color);
+                            diffuse_color = mat_color;
                         }
                         else
                         {
@@ -382,19 +456,19 @@ void RTX_Renderer::generate_image_mt_pt()
 {
     ILight* light_source = new AreaLight(
         { 15, 15, 15 },
-        { 0.2300, 1.5800, -0.2200 },
-        { 0.2300, 1.5800, 0.1600 },
-        { -0.2400, 1.5800, 0.1600 },
-        { -0.2400, 1.5800, -0.2200 }
+        { -0.884011, 5.319334, -2.517968 },
+        { -0.884011, 5.318497, -3.567968 },
+        { 0.415989, 5.318497, -3.567968 },
+        { 0.415989, 5.319334, -2.517968 }
     );
 
     tbb::parallel_for(
         tbb::blocked_range2d<uint32_t>(0, m_window->height(), 0, m_window->width()),
         [&](tbb::blocked_range2d<uint32_t> r)
         {
-            for (uint32_t x = r.cols().begin(); x < r.cols().end(); ++x)
+            for (uint32_t y = r.rows().begin(); y < r.rows().end(); ++y)
             {
-                for (uint32_t y = r.rows().begin(); y < r.rows().end(); ++y)
+                for (uint32_t x = r.cols().begin(); x < r.cols().end(); ++x)
                 {
                     std::size_t idx = y * m_window->width();
                     idx += (m_window->width() - 1) - x;
@@ -406,7 +480,10 @@ void RTX_Renderer::generate_image_mt_pt()
                     {
                         albedo += trace_path(ray, light_source, gui.m_num_bounces);
                     }
-                    albedo /= gui.m_spp;
+                    auto scale = 1.f / (float)gui.m_spp;
+                    albedo.x = sqrt(scale * albedo.x);
+                    albedo.y = sqrt(scale * albedo.y);
+                    albedo.z = sqrt(scale * albedo.z);
                     albedo *= 255.f;
 
                     m_image[idx].r = albedo.x;
@@ -423,6 +500,14 @@ void RTX_Renderer::generate_image_mt_pt()
 
 void RTX_Renderer::generate_image_st()
 {
+    ILight* light_source = new AreaLight(
+        { 15, 15, 15 },
+        { 0.2300, 1.5800, -0.2200 },
+        { 0.2300, 1.5800, 0.1600 },
+        { -0.2400, 1.5800, 0.1600 },
+        { -0.2400, 1.5800, -0.2200 }
+    );
+
     for (uint16_t y = 0; y < m_window->height(); y += 4)
     {
         for (uint16_t x = 0; x < m_window->width(); x += 4)
@@ -439,29 +524,27 @@ void RTX_Renderer::generate_image_st()
                     uint16_t py = y + v;
                     auto ray = m_ray_camera->getRay({ px, py });
                     
-                    IntersectionParams intersect = 
-                        m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
-                    if (ray.t < std::numeric_limits<float>::max())
+                    Vector3<float> albedo(0.f);
+                    for (int i = 0; i < gui.m_spp; ++i)
                     {
-                        uint32_t material_idx =
-                            m_mesh[intersect.triangle_idx + m_stride_in_32floats * 3 + 3];
-
-                        Vector3<float> diffuse_color
-                            = m_mat_diffuse_colors[material_idx];
-                        diffuse_color *= 255.f;
-
-                        m_image[idx].r = diffuse_color.x;
-                        m_image[idx].g = diffuse_color.y;
-                        m_image[idx].b = diffuse_color.z;
-                        m_image[idx].a = 255;
-                    } else
-                    {
-                        m_image[idx] = u8_four(0, 0, 0, 0);
+                        albedo += trace_path(ray, light_source, gui.m_num_bounces);
                     }
+                    albedo /= gui.m_spp;
+                    albedo.x = sqrt(albedo.x);
+                    albedo.y = sqrt(albedo.y);
+                    albedo.z = sqrt(albedo.z);
+                    albedo *= 255.f;
+
+                    m_image[idx].r = albedo.x;
+                    m_image[idx].g = albedo.y;
+                    m_image[idx].b = albedo.z;
+                    m_image[idx].a = 255;
                 }
             }
         }
     }
+
+    delete light_source;
 }
 
 void RTX_Renderer::upload_to_texture()
@@ -810,6 +893,16 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
                 gui.m_generate_new_image = true;
             }
         }
+
+        Vector3<float> cam_pos = m_ray_camera->eyepos;
+        Vector3<float> cam_dir = m_ray_camera->eyedir;
+        ImGui::Text("Pos: ");
+        ImGui::SameLine();
+        ImGui::Text("(%.2f, %.2f, %.2f)\n", cam_pos.x, cam_pos.y, cam_pos.z);
+
+        ImGui::Text("Dir: ");
+        ImGui::SameLine();
+        ImGui::Text("(%.2f, %.2f, %.2f)\n", cam_dir.x, cam_dir.y, cam_dir.z);
 
         ImGui::Text("\nApplication average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
         ImGui::End();

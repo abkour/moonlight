@@ -18,11 +18,7 @@ IntersectionParams AreaLight::intersect(const Ray& ray)
         return intersect;
     }
 
-    // If the ray collides with the second triangle, t is updated.
-    // Otherwise it is not, and is_intersection() will return false.
     return ray_hit_triangle(ray, (float*)&v0, (float*)&v2, (float*)&v3, 3);
-    //intersect.t = intersect.t > 0.f && intersect.is_intersection() ?
-    //    intersect.t : std::numeric_limits<float>::max();
 }
 
 }
