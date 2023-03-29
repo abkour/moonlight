@@ -192,100 +192,6 @@ void RTX_Renderer::construct_bvh(const char* asset_path)
     m_model->build_bvh();
 }
 
-// spherical to cartesian coordinate translation
-Vector3<float> stc_coords(float theta, float phi)
-{
-    return Vector3<float>(
-        cos(phi) * sin(theta),
-        sin(phi) * sin(theta),
-        cos(theta)
-    );
-}
-
-// cosine-weighted reflection ray
-Ray cw_reflection_ray(
-    const Ray& incident_ray, 
-    const Vector3<float>& surface_point, 
-    const Vector3<float>& normal)
-{
-    Vector3<float> hemisphere_sample = normalize(random_unit_vector());
-    if (dot(hemisphere_sample, normal) < 0)
-    {
-        //hemisphere_sample = invert(hemisphere_sample);
-    }
-    Vector3<float> target = surface_point + normal + hemisphere_sample;
-    Vector3<float> adj_sp = surface_point + (normal * 1e-3);
-    
-    Ray reflection_ray(adj_sp, normalize(target - adj_sp));
-    return reflection_ray;
-}
-
-Ray uniform_reflection_ray(
-    const Ray& incident_ray,
-    const Vector3<float>& surface_point,
-    const Vector3<float>& normal)
-{
-    const float e0 = random_in_range(0.f, 1.f);
-    const float e1 = random_in_range(0.f, 1.f);
-    const float theta = acos(e0);
-    const float phi   = 2 * ML_PI * e1;
-    const Vector3<float> v = stc_coords(theta, phi);
-    
-    CoordinateSystem cs(normal);
-    const Vector3<float> new_point = cs.to_local(v);
-    const Vector3<float> new_dir   = normalize(new_point - surface_point);
-    
-    Ray reflection_ray(surface_point + (new_dir * 1e-3), new_dir);
-    return reflection_ray;
-}
-
-Ray realcw_reflection_ray(
-    const Ray& incident_ray,
-    const Vector3<float>& surface_point,
-    const Vector3<float>& normal,
-    const float theta,
-    const float phi)
-{
-    const Vector3<float> v = stc_coords(theta, phi);
-
-    CoordinateSystem cs(normal);
-    const Vector3<float> new_point = cs.to_local(v);
-    const Vector3<float> new_dir = normalize(new_point - surface_point);
-
-    Ray reflection_ray(surface_point + (new_dir * 1e-3), new_dir);
-    return reflection_ray;
-}
-
-IntersectionParams intersect_all_triangles(
-    Ray& ray,
-    float* tris,
-    uint32_t stride,
-    uint32_t n_triangles)
-{
-    const unsigned triangle_size = stride * 3 + 3 + 1;
-    IntersectionParams intersect;
-    for (int i = 0; i < n_triangles; ++i)
-    {
-        uint32_t tri_idx = i * triangle_size;
-        IntersectionParams new_intersect = ray_hit_triangle(ray, &tris[tri_idx], stride);
-        if (new_intersect.t < intersect.t && new_intersect.t > 0.f)
-        {
-            std::memcpy(&intersect, &new_intersect, sizeof(IntersectionParams));
-            intersect = new_intersect;
-            intersect.triangle_idx = tri_idx;
-        }
-    }
-
-    ray.t = intersect.t;
-    return intersect;
-};
-
-float scattering_pdf(const Ray& r_in, const Ray& scattered, const IntersectionParams& ip)
-{
-    auto cosine = dot(ip.normal, scattered.d);
-    return cosine < 0 ? 0 : cosine / ML_PI;
-}
-
 Vector3<float> RTX_Renderer::trace_path(
     Ray& ray,
     ILight* light_source,
@@ -312,22 +218,18 @@ Vector3<float> RTX_Renderer::trace_path(
         return Vector3<float>(0.f, 0.f, 0.f);
     }
 
-    Vector3<float> sp = ray.o + (ray.t * ray.d);
+    its.point = ray.o + (ray.t * ray.d);
 
-    // Material idx is triangle offset + attrib_size + centroid_size
     uint32_t material_idx = m_model->material_idx(its);
-    //Vector3<float> attenuation = *(Vector3<float>*)&m_model->m_mat_diffuse_colors[material_idx].x;
+    IMaterial* material = m_model->get_material(material_idx);
     Vector3<float> attenuation = m_model->color_rgb(material_idx);
 
-    CoordinateSystem cs(its.normal);
-    auto cs_dir = cs.to_local(random_cosine_direction());
-    cs_dir = normalize(cs_dir);
-
-    Ray scattered = Ray(sp + cs_dir * 1e-3, cs_dir);
-    float pdf = dot(cs.n, scattered.d) / ML_PI;
+    float pdf;
+    Ray scattered;
+    material->scatter(scattered, pdf, ray, its);
 
     return attenuation * 
-        scattering_pdf(ray, scattered, its) * 
+        material->scattering_pdf(scattered, its) *
         trace_path(scattered, light_source, traversal_depth - 1) / pdf;
 }
 

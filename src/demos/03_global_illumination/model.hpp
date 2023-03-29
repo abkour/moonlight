@@ -19,6 +19,13 @@ struct Model
 
     void build_bvh();
 
+    // Most important functions
+    IntersectionParams intersect(Ray& ray);
+    IMaterial* get_material(uint32_t material_idx)
+    {
+        return m_materials[material_idx];
+    }
+
     uint32_t bvh_nodes_used() const
     {
         return m_bvh->get_nodes_used();
@@ -41,8 +48,6 @@ struct Model
 
     Vector3<float> color_rgb(const uint32_t material_idx);
     Vector4<float> color_rgba(const uint32_t material_idx);
-
-    IntersectionParams intersect(Ray& ray);
 
     uint64_t material_flags() const
     {
