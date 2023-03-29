@@ -224,13 +224,14 @@ Vector3<float> RTX_Renderer::trace_path(
     IMaterial* material = m_model->get_material(material_idx);
     Vector3<float> attenuation = m_model->color_rgb(material_idx);
 
-    float pdf;
     Ray scattered;
-    material->scatter(scattered, pdf, ray, its);
+    material->scatter(scattered, ray, its);
 
-    return attenuation * 
+    return 
+        attenuation * 
         material->scattering_pdf(scattered, its) *
-        trace_path(scattered, light_source, traversal_depth - 1) / pdf;
+        trace_path(scattered, light_source, traversal_depth - 1) /
+        material->pdf(scattered, its);
 }
 
 void RTX_Renderer::generate_image()
