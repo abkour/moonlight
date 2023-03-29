@@ -468,8 +468,8 @@ struct Vector4
         : x(xx), y(yy), z(zz), w(ww)
     {}
 
-    Vector4(const Vector3<T>& other)
-        : x(other.x), y(other.y), z(other.z)
+    Vector4(const Vector4<T>& other)
+        : x(other.x), y(other.y), z(other.z), w(other.w)
     {}
 
     Vector4(Vector3<T>&& other)
