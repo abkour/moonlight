@@ -18,3 +18,18 @@
 #define ML_MISC_FLAG_INDICES                    0x10
 #define ML_MISC_FLAG_PRINT_TRIANGLES_TO_CONSOLE 0x20
 #define ML_MISC_FLAG_MATERIALS_APPENDED         0x40
+
+#define ML_MATERIAL_NONE                0x00
+#define ML_MATERIAL_DIFFUSE             0x01
+#define ML_MATERIAL_EMISSIVE            0x02
+#define ML_MATERIAL_SPECULAR            0x04
+#define ML_MATERIAL_BUMP                0x08
+#define ML_MATERIAL_RGBA                0x10
+#define ML_MATERIAL_IS_TEXTURE_IMAGE    0x20
+
+#define ML_MATERIAL_MAPS_NONE      0x00
+#define ML_MATERIAL_MAPS_DIFFUSE   0x01
+#define ML_MATERIAL_MAPS_EMISSIVE  0x02
+#define ML_MATERIAL_MAPS_SPECULAR  0x04
+#define ML_MATERIAL_MAPS_BUMP      0x08
+#define ML_MATERIAL_MAPS_NORMAL    0x10

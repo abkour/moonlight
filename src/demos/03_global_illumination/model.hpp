@@ -82,7 +82,6 @@ private:
     uint64_t m_mesh_flags;
 
     uint64_t m_num_materials;
-    std::unique_ptr<Vector3<float>[]> m_mat_diffuse_colors;
     std::vector<IMaterial*> m_materials;
     std::vector<ITexture*> m_textures;
 

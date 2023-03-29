@@ -28,21 +28,73 @@ Model::Model(const char* filename)
         file.read((char*)&m_num_materials, sizeof(uint64_t));
         
         m_materials.resize(m_num_materials);
-        m_textures.resize(m_num_materials);
         
-        m_mat_diffuse_colors = std::make_unique<Vector3<float>[]>(m_num_materials);
-        file.read((char*)m_mat_diffuse_colors.get(), sizeof(Vector3<float>) * m_num_materials);
-    
         for (int i = 0; i < m_num_materials; ++i)
         {
-            m_textures[i] = new SingleColor(
-                m_mat_diffuse_colors[i].x, 
-                m_mat_diffuse_colors[i].y, 
-                m_mat_diffuse_colors[i].z, 
-                1.f
-            );
+            uint8_t material_flags      = ML_MATERIAL_NONE;
+            uint8_t texture_map_flags   = ML_MATERIAL_MAPS_NONE;
 
-            m_materials[i] = new LamberrtianMaterial(m_textures[i]);
+            file.read((char*)&material_flags, sizeof(uint8_t));
+            file.read((char*)&texture_map_flags, sizeof(uint8_t));
+
+            if (material_flags & ML_MATERIAL_DIFFUSE)
+            {
+                Vector3<float> diffuse_color;
+                file.read((char*)&diffuse_color.x, sizeof(float) * 3);
+
+                m_textures.emplace_back(new SingleColor(
+                    diffuse_color.x,
+                    diffuse_color.y,
+                    diffuse_color.z,
+                    1.f
+                ));
+
+                m_materials[i] = new LamberrtianMaterial(m_textures.back());
+            }
+
+            //
+            //
+            // The rest of the loop is placeholder code, because the full mof format is
+            // not yet supported by the engine.
+            uint8_t plh = 0x00;
+            Vector3<float> plh_color;
+
+            if (material_flags & ML_MATERIAL_EMISSIVE)
+            {
+                file.read((char*)&plh_color.x, sizeof(Vector3<float>));
+            }
+            if (material_flags & ML_MATERIAL_SPECULAR)
+            {
+                file.read((char*)&plh_color.x, sizeof(Vector3<float>));
+            }
+
+            uint64_t plh_str_len = 0;
+            char plh_str[512];
+            if (texture_map_flags & ML_MATERIAL_MAPS_DIFFUSE)
+            {
+                file.read((char*)&plh_str_len, sizeof(std::size_t));
+                file.read(plh_str, plh_str_len);
+            }
+            if (texture_map_flags & ML_MATERIAL_MAPS_EMISSIVE)
+            {
+                file.read((char*)&plh_str_len, sizeof(std::size_t));
+                file.read(plh_str, plh_str_len);
+            }
+            if (texture_map_flags & ML_MATERIAL_MAPS_SPECULAR)
+            {
+                file.read((char*)&plh_str_len, sizeof(std::size_t));
+                file.read(plh_str, plh_str_len);
+            }
+            if (texture_map_flags & ML_MATERIAL_MAPS_BUMP)
+            {
+                file.read((char*)&plh_str_len, sizeof(std::size_t));
+                file.read(plh_str, plh_str_len);
+            }
+            if (texture_map_flags & ML_MATERIAL_MAPS_NORMAL)
+            {
+                file.read((char*)&plh_str_len, sizeof(std::size_t));
+                file.read(plh_str, plh_str_len);
+            }
         }
     }
 }
