@@ -36,7 +36,7 @@ add_executable (moonlight WIN32
 	"imgui/imgui_impl_win32.cpp"
 	"imgui/imgui_tables.cpp"
 	"imgui/imgui_widgets.cpp"
- "core/cpu_gpu_texture2d.cpp" "utility/file_browser.cpp" "demos/03_global_illumination/area_light.cpp" "demos/03_global_illumination/coordinate_system.cpp")
+ "core/cpu_gpu_texture2d.cpp" "utility/file_browser.cpp" "demos/03_global_illumination/area_light.cpp" "demos/03_global_illumination/coordinate_system.cpp" "demos/03_global_illumination/model.cpp")
 
 if (MSVC)
 set_target_properties(${BUILD_TARGET} PROPERTIES LINK_FLAGS "/PROFILE")

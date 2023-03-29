@@ -1,6 +1,7 @@
 #pragma once
 #include <random>
 
+#include "../project_defines.hpp"
 #include "../simple_math.hpp"
 
 namespace moonlight
@@ -38,6 +39,7 @@ struct RandomFloatEngine
     std::uniform_real_distribution<float> dist_unit;
 };
 
+Vector3<float> random_cosine_direction();
 float random_in_range(float r0, float r1);
 float random_normalized_float();
 

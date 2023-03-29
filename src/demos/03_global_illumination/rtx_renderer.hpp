@@ -1,6 +1,7 @@
 #pragma once
 #include "area_light.hpp"
 #include "coordinate_system.hpp"
+#include "model.hpp"
 #include "ray_camera.hpp"
 #include "../common/scene.hpp"
 #include "../common/shader.hpp"
@@ -118,16 +119,8 @@ private:
     struct u8_four;
 
     // BVH related
-    std::unique_ptr<BVH> m_bvh;
-    std::unique_ptr<float[]> m_mesh;
-    uint64_t m_mesh_flags = 0;
-
+    std::unique_ptr<Model> m_model;
     std::vector<u8_four> m_image;
-    uint64_t m_num_triangles = 0;
-    uint64_t m_stride_in_32floats = 0;
-    std::size_t m_mesh_num_elements = 0;
-    uint64_t m_num_materials = 0;
-    std::unique_ptr<Vector3<float>[]> m_mat_diffuse_colors;
 
 private:
 

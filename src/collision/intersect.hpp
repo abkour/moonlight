@@ -24,6 +24,7 @@ struct IntersectionParams
     float u, v;
     uint32_t triangle_idx = 0;
     Vector3<float> normal;
+    Vector3<float> point;
 };
 
 }

@@ -11,6 +11,9 @@
 using namespace DirectX;
 using namespace Microsoft::WRL;
 
+#include "texture_image.hpp"
+#include "texture_single.hpp"
+
 namespace moonlight {
 
 #define IMGUI_DESC_INDEX            0
@@ -183,35 +186,10 @@ static bool ray_hit_circle(const Ray& ray, const float r)
     return length(P) <= r;
 }
 
-void RTX_Renderer::parse_files(const char* asset_path)
-{
-    uint64_t n_bytes = 0;
-
-    std::ifstream file(asset_path, std::ios::in | std::ios::binary);
-
-    file.read((char*)&m_num_triangles, sizeof(uint64_t));
-    file.read((char*)&m_stride_in_32floats, sizeof(uint64_t));
-    file.read((char*)&n_bytes, sizeof(uint64_t));
-    file.read((char*)&m_mesh_flags, sizeof(uint64_t));
-
-    m_mesh = std::make_unique<float[]>(n_bytes / sizeof(float));
-
-    file.read((char*)m_mesh.get(), n_bytes);
-    m_mesh_num_elements = n_bytes / sizeof(float);
-
-    if (m_mesh_flags & ML_MISC_FLAG_MATERIALS_APPENDED)
-    {
-        file.read((char*)&m_num_materials, sizeof(uint64_t));
-        m_mat_diffuse_colors = std::make_unique<Vector3<float>[]>(m_num_materials);
-        file.read((char*)m_mat_diffuse_colors.get(), sizeof(Vector3<float>) * m_num_materials);
-    }
-}
-
 void RTX_Renderer::construct_bvh(const char* asset_path)
 {
-    parse_files(asset_path);
-    m_bvh = std::make_unique<BVH>();
-    m_bvh->build_bvh(m_mesh.get(), m_stride_in_32floats, m_num_triangles);
+    m_model = std::make_unique<Model>(asset_path);
+    m_model->build_bvh();
 }
 
 // spherical to cartesian coordinate translation
@@ -302,18 +280,6 @@ IntersectionParams intersect_all_triangles(
     return intersect;
 };
 
-Vector3<float> random_cosine_direction() {
-    auto r1 = random_in_range(0.f, 1.f);
-    auto r2 = random_in_range(0.f, 1.f);
-    auto z = sqrt(1 - r2);
-
-    auto phi = 2 * ML_PI * r1;
-    auto x = cos(phi) * sqrt(r2);
-    auto y = sin(phi) * sqrt(r2);
-
-    return Vector3<float>(x, y, z);
-}
-
 float scattering_pdf(const Ray& r_in, const Ray& scattered, const IntersectionParams& ip)
 {
     auto cosine = dot(ip.normal, scattered.d);
@@ -330,7 +296,7 @@ Vector3<float> RTX_Renderer::trace_path(
         return Vector3<float>(0.f);
     }
     
-    IntersectionParams its = m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
+    IntersectionParams its = m_model->intersect(ray);
     IntersectionParams its_light = light_source->intersect(ray);
 
     // The light source is hit before the scene geometry.
@@ -349,9 +315,10 @@ Vector3<float> RTX_Renderer::trace_path(
     Vector3<float> sp = ray.o + (ray.t * ray.d);
 
     // Material idx is triangle offset + attrib_size + centroid_size
-    uint32_t material_idx      = m_mesh[its.triangle_idx + m_stride_in_32floats * 3 + 3];
-    Vector3<float> attenuation = *(Vector3<float>*)&m_mat_diffuse_colors[material_idx].x;
-    
+    uint32_t material_idx = m_model->material_idx(its);
+    //Vector3<float> attenuation = *(Vector3<float>*)&m_model->m_mat_diffuse_colors[material_idx].x;
+    Vector3<float> attenuation = m_model->color_rgb(material_idx);
+
     CoordinateSystem cs(its.normal);
     auto cs_dir = cs.to_local(random_cosine_direction());
     cs_dir = normalize(cs_dir);
@@ -414,26 +381,24 @@ void RTX_Renderer::generate_image_mt()
                     idx += (m_window->width() - 1) - x;
                     
                     auto ray = m_ray_camera->getRay({ x, y });
-                    IntersectionParams intersect = 
-                        m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
+                    IntersectionParams intersect = m_model->intersect(ray);
 
                     //IntersectionParams intersect =
                     //    intersect_all_triangles(ray, m_mesh.get(), m_stride_in_32floats, m_num_triangles);
                     if (intersect.t < std::numeric_limits<float>::max())
                     {
-                        uint32_t material_idx = 
-                            m_mesh[intersect.triangle_idx + m_stride_in_32floats * 3 + 3];
+                        uint32_t material_idx = m_model->material_idx(intersect);
 
                         Vector3<float> diffuse_color;
                         
-                        if (m_mesh_flags & ML_MISC_FLAG_ATTR_VERTEX_NORMAL)
+                        if (m_model->material_flags() & ML_MISC_FLAG_ATTR_VERTEX_NORMAL)
                         {
-                            Vector3<float> mat_color = *(Vector3<float>*)&m_mesh[intersect.triangle_idx + 3];
+                            Vector3<float> mat_color = m_model->normal(intersect.triangle_idx);
                             diffuse_color = mat_color;
                         }
                         else
                         {
-                            diffuse_color = m_mat_diffuse_colors[material_idx];
+                            diffuse_color = m_model->color_rgb(material_idx);
                         }
 
                         diffuse_color *= 255.f;
@@ -777,7 +742,7 @@ void RTX_Renderer::dispatch_compute_shader()
         1, m_srv_descriptor_heap->gpu_handle(UAV_RWTEXTURE_INDEX)
     );
     m_compute_command_list->SetComputeRoot32BitConstants(
-        2, 1, &m_stride_in_32floats, 0
+        2, 1, temp_address(m_model->stride()), 0
     );
 
     CS_RayCameraFormat sub_raycamera;
@@ -1096,8 +1061,8 @@ void RTX_Renderer::initialize_shader_resources()
         m_uav_bvhnodes_rsc->upload(
             m_device.Get(),
             m_command_list_direct.Get(),
-            m_bvh->get_raw_nodes(),
-            sizeof(BVHNode) * m_bvh->get_nodes_used(),
+            m_model->bvh_get_raw_nodes(),
+            sizeof(BVHNode) * m_model->bvh_nodes_used(),
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
         );
@@ -1106,7 +1071,7 @@ void RTX_Renderer::initialize_shader_resources()
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.Format = DXGI_FORMAT_UNKNOWN;
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_bvh->get_nodes_used();
+        srv_desc.Buffer.NumElements = m_model->bvh_nodes_used();
         srv_desc.Buffer.StructureByteStride = sizeof(BVHNode);
 
         m_device->CreateShaderResourceView(
@@ -1122,8 +1087,8 @@ void RTX_Renderer::initialize_shader_resources()
         m_uav_tris_rsc->upload(
             m_device.Get(),
             m_command_list_direct.Get(),
-            m_mesh.get(),
-            sizeof(float) * m_mesh_num_elements,
+            m_model->raw_mesh(),
+            sizeof(float) * m_model->num_elements(),
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
         );
@@ -1132,7 +1097,7 @@ void RTX_Renderer::initialize_shader_resources()
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.Format = DXGI_FORMAT_UNKNOWN;
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_mesh_num_elements;
+        srv_desc.Buffer.NumElements = m_model->num_elements();
         srv_desc.Buffer.StructureByteStride = sizeof(float);
 
         m_device->CreateShaderResourceView(
@@ -1148,8 +1113,8 @@ void RTX_Renderer::initialize_shader_resources()
         m_uav_tris_indices_rsc->upload(
             m_device.Get(),
             m_command_list_direct.Get(),
-            m_bvh->get_raw_indices(),
-            sizeof(uint32_t) * m_num_triangles,
+            m_model->bvh_get_raw_indices(),
+            sizeof(uint32_t) * m_model->num_triangles(),
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES
         );
@@ -1158,7 +1123,7 @@ void RTX_Renderer::initialize_shader_resources()
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.Format = DXGI_FORMAT_UNKNOWN;
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Buffer.NumElements = m_num_triangles;
+        srv_desc.Buffer.NumElements = m_model->num_triangles();
         srv_desc.Buffer.StructureByteStride = sizeof(uint32_t);
 
         m_device->CreateShaderResourceView(

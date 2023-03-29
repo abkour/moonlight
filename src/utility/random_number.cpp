@@ -3,6 +3,19 @@
 namespace moonlight
 {
 
+Vector3<float> random_cosine_direction()
+{
+    auto r1 = random_in_range(0.f, 1.f);
+    auto r2 = random_in_range(0.f, 1.f);
+    auto z = sqrt(1 - r2);
+
+    auto phi = 2 * ML_PI * r1;
+    auto x = cos(phi) * sqrt(r2);
+    auto y = sin(phi) * sqrt(r2);
+
+    return Vector3<float>(x, y, z);
+}
+
 float random_in_range(float r0, float r1)
 {
     static std::random_device rd;
