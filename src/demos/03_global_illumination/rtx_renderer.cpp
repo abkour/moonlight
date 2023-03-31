@@ -14,6 +14,10 @@ using namespace Microsoft::WRL;
 #include "texture_image.hpp"
 #include "texture_single.hpp"
 
+#include "pdf_cosine.hpp"
+#include "pdf_light.hpp"
+#include "pdf_mixture.hpp"
+
 namespace moonlight {
 
 #define IMGUI_DESC_INDEX            0
@@ -227,11 +231,61 @@ Vector3<float> RTX_Renderer::trace_path(
     Ray scattered;
     material->scatter(scattered, ray, its);
 
-    return 
-        attenuation * 
+    return
+        attenuation *
         material->scattering_pdf(scattered, its) *
         trace_path(scattered, light_source, traversal_depth - 1) /
         material->pdf(scattered, its);
+}
+
+Vector3<float> RTX_Renderer::trace_light(
+    Ray& ray,
+    ILight* light_source,
+    int traversal_depth)
+{
+    if (traversal_depth <= 0)
+    {
+        return Vector3<float>(0.f);
+    }
+
+    IntersectionParams its = m_model->intersect(ray);
+    IntersectionParams its_light = light_source->intersect(ray);
+
+    // The light source is hit before the scene geometry.
+    if (its_light.is_intersection())
+    {
+        if (its_light.t < its.t)
+        {
+            if(its.front_face && dot(ray.d, its.normal) >= 0.f)
+                return light_source->albedo();
+        }
+    }
+    if (!its.is_intersection())
+    {
+        return Vector3<float>(0.f, 0.f, 0.f);
+    }
+
+    its.point = ray.o + (ray.t * ray.d);
+
+    uint32_t material_idx = m_model->material_idx(its);
+    IMaterial* material = m_model->get_material(material_idx);
+    Vector3<float> attenuation = m_model->color_rgb(material_idx);
+
+    CosinePDF cosine_pdf(its.normal);
+    LightPDF light_pdf(light_source, its.point);
+    MixturePDF mixed_pdf(&cosine_pdf, &light_pdf);
+
+    Vector3<float> random_dir = mixed_pdf.generate();
+    float pdf = mixed_pdf.value(random_dir);
+    
+    Vector3<float> n_dir = normalize(random_dir);
+    Ray scattered(its.point + n_dir * 1e-3, n_dir);
+
+    return
+        attenuation *
+        material->scattering_pdf(scattered, its) *
+        trace_path(scattered, light_source, traversal_depth - 1) /
+        pdf;
 }
 
 void RTX_Renderer::generate_image()
@@ -322,13 +376,22 @@ void RTX_Renderer::generate_image_mt()
 
 void RTX_Renderer::generate_image_mt_pt()
 {
-    ILight* light_source = new AreaLight(
+    ILight* light_source = new RectangularLight(
         { 15, 15, 15 },
         { -0.884011, 5.319334, -2.517968 },
-        { -0.884011, 5.318497, -3.567968 },
-        { 0.415989, 5.318497, -3.567968 },
-        { 0.415989, 5.319334, -2.517968 }
+        { 0.415989, 5.319334, -2.517968 },
+        { 0.415989, 5.319334, -3.567968 },
+        { -0.884011, 5.319334, -3.567968 }
     );
+
+    /*
+    ILight* light_source = new RectangularLight(
+        { 15, 15, 15 },
+        { 0.415989, 3.319334, -2.517968 },
+        { 0.415989, 3.319334, -3.567968 },
+        { 0.415989, 4.319334, -3.567968 },
+        { 0.415989, 4.319334, -2.517968 }
+    );*/
 
     tbb::parallel_for(
         tbb::blocked_range2d<uint32_t>(0, m_window->height(), 0, m_window->width()),
@@ -346,7 +409,7 @@ void RTX_Renderer::generate_image_mt_pt()
                     Vector3<float> albedo(0.f);
                     for (int i = 0; i < gui.m_spp; ++i)
                     {
-                        albedo += trace_path(ray, light_source, gui.m_num_bounces);
+                        albedo += trace_light(ray, light_source, gui.m_num_bounces);
                     }
                     auto scale = 1.f / (float)gui.m_spp;
                     albedo.x = sqrt(scale * albedo.x);
@@ -368,7 +431,7 @@ void RTX_Renderer::generate_image_mt_pt()
 
 void RTX_Renderer::generate_image_st()
 {
-    ILight* light_source = new AreaLight(
+    ILight* light_source = new RectangularLight(
         { 15, 15, 15 },
         { 0.2300, 1.5800, -0.2200 },
         { 0.2300, 1.5800, 0.1600 },
@@ -722,7 +785,7 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
             m_asset_path = file_browser.display();
         }
 
-        ImGui::DragInt("spp", &gui.m_spp, 1, 1, 250);
+        ImGui::DragInt("spp", &gui.m_spp, 1, 1, 1000);
         ImGui::DragInt("bounces", &gui.m_num_bounces, 1, 1, 16);
 
         ImGui::Text("Choose a threading model");

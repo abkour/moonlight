@@ -1,6 +1,6 @@
 #pragma once
-#include "area_light.hpp"
 #include "coordinate_system.hpp"
+#include "light_rectangular.hpp"
 #include "model.hpp"
 #include "ray_camera.hpp"
 #include "../common/scene.hpp"
@@ -85,6 +85,12 @@ private:
     void upload_to_texture();
 
     Vector3<float> trace_path(
+        Ray& ray,
+        ILight* light_source,
+        int traversal_depth
+    );
+
+    Vector3<float> trace_light(
         Ray& ray,
         ILight* light_source,
         int traversal_depth

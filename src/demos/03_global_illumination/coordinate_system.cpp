@@ -21,7 +21,7 @@ CoordinateSystem::CoordinateSystem(const vec3f& normal)
     nt = cross(n, nb);
 }
 
-vec3f CoordinateSystem::to_local(const vec3f& p)
+vec3f CoordinateSystem::to_local(const vec3f& p) const
 {
     return p.x * nt + p.y * nb + p.z * n;
 }

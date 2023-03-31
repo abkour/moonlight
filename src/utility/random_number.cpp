@@ -20,7 +20,7 @@ float random_in_range(float r0, float r1)
 {
     static std::random_device rd;
     static std::mt19937 mt(rd());
-    static std::uniform_real_distribution<float> dist(r0, r1);
+    std::uniform_real_distribution<float> dist(r0, r1);
     return dist(mt);
 }
 

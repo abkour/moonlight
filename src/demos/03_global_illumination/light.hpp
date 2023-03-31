@@ -14,7 +14,12 @@ public:
         : m_albedo(albedo)
     {}
 
-    virtual Vector3<float> sample() = 0;
+    virtual float pdf(const Vector3<float>& origin, const Vector3<float>& dir)
+    {
+        return 0.f;
+    }
+
+    virtual Vector3<float> sample(const Vector3<float>& origin) = 0;
     virtual IntersectionParams intersect(const Ray& ray) = 0;
 
     Vector3<float> albedo() const

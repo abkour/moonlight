@@ -35,7 +35,7 @@ struct LamberrtianMaterial : public IMaterial
     float scattering_pdf(const Ray& scattered, IntersectionParams& intersect) override
     {
         auto cosine = dot(intersect.normal, scattered.d);
-        return cosine < 0 ? 0 : cosine / ML_PI;
+        return cosine / ML_PI;
     }
 };
 
