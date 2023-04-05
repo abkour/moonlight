@@ -14,6 +14,11 @@ public:
         : m_albedo(albedo)
     {}
 
+    virtual Vector3<float> normal() const
+    {
+        return Vector3<float>(0.f);
+    }
+
     virtual float pdf(const Vector3<float>& origin, const Vector3<float>& dir)
     {
         return 0.f;

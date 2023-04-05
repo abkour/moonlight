@@ -91,5 +91,33 @@ void Camera::translate(DirectX::XMVECTOR pos_offset)
     XMStoreFloat3(&m_eye_position, eye_position_xmv);
 }
 
+void Camera::translate_around_center(KeyState keys, DirectX::XMVECTOR center, float delta_time)
+{
+    XMVECTOR world_up = XMVectorSet(0, 1, 0, 0);
+    XMVECTOR eye_position_xmv = XMLoadFloat3(&m_eye_position);
+    XMVECTOR eye_direction_xmv = XMLoadFloat3(&m_eye_direction);
+
+    XMVECTOR right = XMVector3Normalize(XMVector3Cross(eye_direction_xmv, world_up));
+    XMVECTOR up = XMVector3Normalize(XMVector3Cross(eye_direction_xmv, right));
+
+    const float ms_v = m_movement_speed * delta_time;
+    XMVECTOR ms = XMVectorSet(ms_v, ms_v, ms_v, ms_v);
+
+    if (keys['W'])  // 'W'
+        eye_position_xmv = XMVectorAdd(eye_position_xmv, XMVectorMultiply(eye_direction_xmv, ms));
+    if (keys['S'])  // 'S'
+        eye_position_xmv = XMVectorSubtract(eye_position_xmv, XMVectorMultiply(eye_direction_xmv, ms));
+    if (keys['A'])  // 'A'
+        eye_position_xmv = XMVectorAdd(eye_position_xmv, XMVectorMultiply(right, ms));
+    if (keys['D'])  // 'D'
+        eye_position_xmv = XMVectorSubtract(eye_position_xmv, XMVectorMultiply(right, ms));
+
+    view = XMMatrixLookAtLH(eye_position_xmv, center, world_up);
+
+    XMStoreFloat3(&m_eye_position, eye_position_xmv);
+    XMStoreFloat3(&m_eye_direction, eye_direction_xmv);
+}
+
+
 
 }

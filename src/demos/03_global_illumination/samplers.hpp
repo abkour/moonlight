@@ -1,5 +1,9 @@
 #pragma once
 #include "../../simple_math.hpp"
+#include "../../utility/random_number.hpp"
+
+#define PIQuarter 0.785398163f
+#define PIHalf PIQuarter * 2.f
 
 namespace moonlight
 {

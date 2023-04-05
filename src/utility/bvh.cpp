@@ -374,13 +374,13 @@ bool BVH::validate_all_bvs_well_defined()
     }
 }
 
-void BVH::deserialize(const char* filename)
+void BVH::deserialize(const std::string& filename)
 {
     std::ifstream file(filename, std::ios::binary);
 
     file.read((char*)&m_num_nodes, sizeof(unsigned));
     const unsigned n_triangles = (m_num_nodes + 1) / 2;
-    
+
     m_tri_idx = std::make_unique<unsigned[]>(n_triangles);
     m_bvh_nodes = std::make_unique<BVHNode[]>(m_num_nodes);
 
@@ -389,7 +389,7 @@ void BVH::deserialize(const char* filename)
     file.read((char*)&m_nodes_used, sizeof(unsigned));
 }
 
-void BVH::serialize(const char* filename)
+void BVH::serialize(const std::string& filename)
 {
     const unsigned n_triangles = (m_num_nodes + 1) / 2;
 
@@ -400,7 +400,7 @@ void BVH::serialize(const char* filename)
     file.write((char*)&m_nodes_used, sizeof(unsigned));
 }
 
-void BVH::to_file_ascii(const char* filename)
+void BVH::to_file_ascii(const std::string& filename)
 {
 
 }

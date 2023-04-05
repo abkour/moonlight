@@ -16,7 +16,7 @@ AssetFileBrowser::AssetFileBrowser(const char* starting_directory)
     m_current_dir = fs::directory_entry(fs::path(starting_directory));
 }
 
-char* AssetFileBrowser::display()
+char* AssetFileBrowser::display(AssetFileType& asset_file_type)
 {
     int n = 0;
     static int selection = -1;
@@ -75,7 +75,22 @@ char* AssetFileBrowser::display()
     style->Colors[ImGuiCol_Text] = ImVec4(0.f, 1.f, 0.f, 1.f);
     for (auto const& dir_entry : fs::directory_iterator(m_current_dir))
     {
-        if (dir_entry.path().extension() == L".mof")
+        auto extension = dir_entry.path().extension();
+
+        if (extension == L".mof")
+        {
+            asset_file_type = MOF;
+        }
+        else if (extension == L".bvh")
+        {
+            asset_file_type = BVH;
+        }
+        else
+        {
+            asset_file_type = Unknown;
+        }
+
+        if (asset_file_type != Unknown)
         {
             wcstombs(str_buffer, (wchar_t*)dir_entry.path().filename().c_str(), 512);
             if (ImGui::Selectable(str_buffer, selection == n))

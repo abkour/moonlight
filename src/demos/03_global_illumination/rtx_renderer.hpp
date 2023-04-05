@@ -31,23 +31,36 @@ namespace moonlight
 
 class RTX_Renderer : public IApplication
 {
+    enum IntegratorValue
+    {
+        PathTracing = 0,
+        Normal = 1,
+        AmbientOcclusion = 2
+    };
 
     enum TracingMethod
     {
-        SingleThreaded = 0,
-        MultiThreaded = 1,
-        ComputeShader = 2
+        SingleThreaded  = 0,
+        MultiThreaded   = 1,
+        ComputeShader   = 2
     };
-
+    
     struct GUI_State
     {
         int m_enable_path_tracing = 0;
-        bool m_generate_new_image = 0;
         bool m_asset_loaded = false;
+        bool m_generate_new_image = 0;
+        bool m_serialize_bvh = false;
+
+        IntegratorValue m_integration_method;
         TracingMethod m_tracing_method;
 
         int m_spp = 16;
         int m_num_bounces = 4;
+        float m_visibility_scale = 0.25f;
+
+        std::string m_last_asset_path;
+        AssetFileType m_asset_type;
     };
 
 public:

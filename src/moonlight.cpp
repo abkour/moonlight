@@ -7,6 +7,7 @@
 #include "demos/01_frustum_culling/frustum_culling.hpp"
 #include "demos/02_environment_mapping/environment_mapping.hpp"
 #include "demos/03_global_illumination/rtx_renderer.hpp"
+#include "demos/04_plotter/plotter.hpp"
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow)
 {

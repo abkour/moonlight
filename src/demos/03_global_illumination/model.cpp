@@ -7,11 +7,21 @@
 namespace moonlight
 {
 
-Model::Model(const char* filename)
+Model::Model()
+{
+    m_bvh = std::make_unique<BVH>();
+}
+
+void Model::build_bvh()
+{
+    m_bvh->build_bvh(m_mesh.get(), m_stride_in_32floats, m_num_triangles);
+}
+
+void Model::parse_mof(const std::string& filename)
 {
     uint64_t n_attr_data_bytes = 0;
 
-    std::ifstream file(filename, std::ios::in | std::ios::binary);
+    std::ifstream file(filename.c_str(), std::ios::in | std::ios::binary);
 
     file.read((char*)&m_num_triangles, sizeof(uint64_t));
     file.read((char*)&m_stride_in_32floats, sizeof(uint64_t));
@@ -26,13 +36,13 @@ Model::Model(const char* filename)
     if (m_mesh_flags & ML_MISC_FLAG_MATERIALS_APPENDED)
     {
         file.read((char*)&m_num_materials, sizeof(uint64_t));
-        
+
         m_materials.resize(m_num_materials);
-        
+
         for (int i = 0; i < m_num_materials; ++i)
         {
-            uint8_t material_flags      = ML_MATERIAL_NONE;
-            uint8_t texture_map_flags   = ML_MATERIAL_MAPS_NONE;
+            uint8_t material_flags = ML_MATERIAL_NONE;
+            uint8_t texture_map_flags = ML_MATERIAL_MAPS_NONE;
 
             file.read((char*)&material_flags, sizeof(uint8_t));
             file.read((char*)&texture_map_flags, sizeof(uint8_t));
@@ -99,25 +109,19 @@ Model::Model(const char* filename)
     }
 }
 
-void Model::build_bvh()
-{
-    m_bvh = std::make_unique<BVH>();
-    m_bvh->build_bvh(m_mesh.get(), m_stride_in_32floats, m_num_triangles);
-}
-
-Vector3<float> Model::color_rgb(const uint32_t material_idx)
+Vector3<float> Model::color_rgb(const uint32_t material_idx) const
 {
     Vector4<float> color = m_textures[material_idx]->color(0.f, 0.f);
     Vector3<float> res(color.x, color.y, color.z);
     return res;
 }
 
-Vector4<float> Model::color_rgba(const uint32_t material_idx)
+Vector4<float> Model::color_rgba(const uint32_t material_idx) const
 {
     return m_textures[material_idx]->color(0.f, 0.f);
 }
 
-IntersectionParams Model::intersect(Ray& ray)
+IntersectionParams Model::intersect(Ray& ray) const
 {
     return m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
 }

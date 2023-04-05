@@ -18,6 +18,7 @@ struct Camera
     void rotate(float dx, float dy);
     void translate(KeyState keys, float delta_time);
     void translate(DirectX::XMVECTOR pos_offset);
+    void translate_around_center(KeyState keys, DirectX::XMVECTOR center, float delta_time);
 
     DirectX::XMFLOAT3 get_direction() const
     {

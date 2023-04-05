@@ -6,7 +6,7 @@ namespace moonlight
 LoggingFile::LoggingFile()
 {}
 
-LoggingFile::LoggingFile(const char* filename, OpenMode open_mode)
+LoggingFile::LoggingFile(const std::string& filename, OpenMode open_mode)
     : m_filename(filename)
 {
     switch (open_mode)
@@ -36,7 +36,7 @@ void LoggingFile::close()
     m_ofile.close();
 }
 
-void LoggingFile::open(const char* filename, OpenMode open_mode)
+void LoggingFile::open(const std::string& filename, OpenMode open_mode)
 {
     m_ofile.open(filename, open_mode);
 }

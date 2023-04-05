@@ -1,5 +1,6 @@
 #pragma once
 #include <fstream>
+#include <string>
 
 namespace moonlight
 {
@@ -16,12 +17,12 @@ public:
     };
 
     LoggingFile();
-    LoggingFile(const char* filename, OpenMode open_mode);
+    LoggingFile(const std::string& filename, OpenMode open_mode);
     ~LoggingFile();
 
     void close();
     void open(OpenMode open_mode);
-    void open(const char* filename, OpenMode open_mode);
+    void open(const std::string& filename, OpenMode open_mode);
 
     template<typename T>
     LoggingFile& operator<<(T input)
@@ -32,7 +33,7 @@ public:
 
 private:
 
-    const char* m_filename;
+    std::string m_filename;
     std::ofstream m_ofile;
 };
 

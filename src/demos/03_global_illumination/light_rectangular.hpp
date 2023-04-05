@@ -20,7 +20,14 @@ public:
     {
         Vector3<float> e0 = v1 - v0;
         Vector3<float> e1 = v2 - v0;
-        area = length(cross(e0, e1));
+        Vector3<float> cp = cross(e0, e1);
+        area = length(cp);
+        m_normal = normalize(cp);
+    }
+
+    Vector3<float> normal() const override
+    {
+        return m_normal;
     }
 
     virtual float pdf(const Vector3<float>& origin, const Vector3<float>& dir)
@@ -33,11 +40,11 @@ public:
         {
             return 0.f;
         }
-
+        /*
         if (its.front_face && dot(its.normal, normalized_dir) < 0.f)
         {
             return 0.f;
-        }
+        }*/
 
         float distance_squared = dot(dir, dir);
         float cosine = fabs(dot(dir, its.normal) / length(dir));
@@ -80,6 +87,7 @@ protected:
 
     float area;
     Vector3<float> v0, v1, v2, v3;
+    Vector3<float> m_normal;
 };
 
 }

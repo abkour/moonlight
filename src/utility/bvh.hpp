@@ -49,10 +49,10 @@ public:
         const uint64_t stride_in_bytes
     );
 
-    void to_file_ascii(const char* filename);
+    void to_file_ascii(const std::string& filename);
 
-    void deserialize(const char* filename);
-    void serialize(const char* filename);
+    void deserialize(const std::string& filename);
+    void serialize(const std::string& filename);
 
     bool validate_parent_bigger_than_child();
     bool validate_all_bvs_well_defined();

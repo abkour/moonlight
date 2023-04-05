@@ -258,6 +258,8 @@ void CubeApplication::load_assets()
 {
     // Vertex buffer uploading
     {
+        std::ifstream cube_file("cube_vertices.bin", std::ios::binary);
+
         ThrowIfFailed(device->CreateCommittedResource(
             temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
             D3D12_HEAP_FLAG_NONE,
@@ -274,7 +276,10 @@ void CubeApplication::load_assets()
             &read_range,
             reinterpret_cast<void**>(&vertex_data_begin)
         ));
-        memcpy(vertex_data_begin, vertices, sizeof(vertices));
+
+        cube_file.read((char*)vertex_data_begin, 720);
+
+        //memcpy(vertex_data_begin, vertices, sizeof(vertices));
         vertex_buffer->Unmap(0, nullptr);
 
         vertex_buffer_view.BufferLocation = vertex_buffer->GetGPUVirtualAddress();

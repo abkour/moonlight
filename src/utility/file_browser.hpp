@@ -8,6 +8,13 @@
 namespace moonlight
 {
 
+enum AssetFileType
+{
+    Unknown = 0,
+    MOF = 1,
+    BVH = 2
+};
+
 class AssetFileBrowser
 {
 public:
@@ -15,7 +22,7 @@ public:
     AssetFileBrowser();
     AssetFileBrowser(const char* starting_directory);
 
-    char* display();
+    char* display(AssetFileType& asset_file_type);
 
 private:
 

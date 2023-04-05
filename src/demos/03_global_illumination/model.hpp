@@ -5,6 +5,7 @@
 #include "../../simple_math.hpp"
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 
@@ -13,15 +14,16 @@ namespace moonlight
 
 struct Model
 {
-    Model() = default;
-    Model(const char* filename);
+    Model();
     ~Model();
 
     void build_bvh();
 
+    void parse_mof(const std::string& filename);
+
     // Most important functions
-    IntersectionParams intersect(Ray& ray);
-    IMaterial* get_material(uint32_t material_idx)
+    IntersectionParams intersect(Ray& ray) const;
+    IMaterial* get_material(uint32_t material_idx) const
     {
         return m_materials[material_idx];
     }
@@ -46,8 +48,19 @@ struct Model
         return m_bvh->get_raw_nodes();
     }
 
-    Vector3<float> color_rgb(const uint32_t material_idx);
-    Vector4<float> color_rgba(const uint32_t material_idx);
+    void bvh_deserialize(const std::string& filename)
+    {
+        m_bvh->deserialize(filename.c_str());
+    }
+
+    void bvh_serialize(const std::string& filename)
+    {
+        std::string new_filename = filename + ".bvh";
+        m_bvh->serialize(new_filename.c_str());
+    }
+
+    Vector3<float> color_rgb(const uint32_t material_idx) const;
+    Vector4<float> color_rgba(const uint32_t material_idx) const;
 
     uint64_t material_flags() const
     {

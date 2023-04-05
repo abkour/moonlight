@@ -18,6 +18,10 @@ using namespace Microsoft::WRL;
 #include "pdf_light.hpp"
 #include "pdf_mixture.hpp"
 
+#include "integrator_ao.hpp"
+#include "integrator_normal.hpp"
+#include "integrator_path.hpp"
+
 namespace moonlight {
 
 #define IMGUI_DESC_INDEX            0
@@ -90,8 +94,8 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         hinstance,
         L"DX12MoonlightApplication",
         L"DX12_Demo_Template",
-        1280,
-        960,
+        1024,
+        720,
         &RTX_Renderer::WindowMessagingProcess,
         this
     );
@@ -138,8 +142,9 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         1
     );
 
-    m_ray_camera->set_movement_speed(10.f);
+    m_ray_camera->set_movement_speed(5.f);
     gui.m_tracing_method = MultiThreaded;
+    gui.m_integration_method = Normal;
 
     m_image.resize(m_window->width() * m_window->height());
 
@@ -192,8 +197,20 @@ static bool ray_hit_circle(const Ray& ray, const float r)
 
 void RTX_Renderer::construct_bvh(const char* asset_path)
 {
-    m_model = std::make_unique<Model>(asset_path);
-    m_model->build_bvh();
+    m_model = std::make_unique<Model>();
+
+    switch (gui.m_asset_type)
+    {
+    case MOF:
+        m_model->parse_mof(asset_path);
+        m_model->build_bvh();
+        break;
+    case BVH:
+        m_model->bvh_deserialize(asset_path);
+        break;
+    default:
+        break;
+    }
 }
 
 Vector3<float> RTX_Renderer::trace_path(
@@ -256,8 +273,7 @@ Vector3<float> RTX_Renderer::trace_light(
     {
         if (its_light.t < its.t)
         {
-            if(its.front_face && dot(ray.d, its.normal) >= 0.f)
-                return light_source->albedo();
+            return light_source->albedo();
         }
     }
     if (!its.is_intersection())
@@ -284,7 +300,7 @@ Vector3<float> RTX_Renderer::trace_light(
     return
         attenuation *
         material->scattering_pdf(scattered, its) *
-        trace_path(scattered, light_source, traversal_depth - 1) /
+        trace_light(scattered, light_source, traversal_depth - 1) /
         pdf;
 }
 
@@ -340,8 +356,6 @@ void RTX_Renderer::generate_image_mt()
                     auto ray = m_ray_camera->getRay({ x, y });
                     IntersectionParams intersect = m_model->intersect(ray);
 
-                    //IntersectionParams intersect =
-                    //    intersect_all_triangles(ray, m_mesh.get(), m_stride_in_32floats, m_num_triangles);
                     if (intersect.t < std::numeric_limits<float>::max())
                     {
                         uint32_t material_idx = m_model->material_idx(intersect);
@@ -351,7 +365,7 @@ void RTX_Renderer::generate_image_mt()
                         if (m_model->material_flags() & ML_MISC_FLAG_ATTR_VERTEX_NORMAL)
                         {
                             Vector3<float> mat_color = m_model->normal(intersect.triangle_idx);
-                            diffuse_color = mat_color;
+                            diffuse_color = absolute(mat_color);
                         }
                         else
                         {
@@ -376,22 +390,43 @@ void RTX_Renderer::generate_image_mt()
 
 void RTX_Renderer::generate_image_mt_pt()
 {
-    ILight* light_source = new RectangularLight(
-        { 15, 15, 15 },
-        { -0.884011, 5.319334, -2.517968 },
-        { 0.415989, 5.319334, -2.517968 },
-        { 0.415989, 5.319334, -3.567968 },
-        { -0.884011, 5.319334, -3.567968 }
-    );
+    int light_choice = 0;
+    ILight* light_source = nullptr;
+    switch (light_choice)
+    {
+    case 0:
+        light_source = new RectangularLight(
+            { 15, 15, 15 },
+            { -0.884011, 5.319334, -2.517968 },
+            { 0.415989, 5.319334, -2.517968 },
+            { 0.415989, 5.319334, -3.567968 },
+            { -0.884011, 5.319334, -3.567968 }
+        );
+        break;
+    case 1:
+        ILight * light_source = new RectangularLight(
+            { 15, 15, 15 },
+            { 0.415989, 3.319334, -2.517968 },
+            { 0.415989, 3.319334, -3.567968 },
+            { 0.415989, 4.319334, -3.567968 },
+            { 0.415989, 4.319334, -2.517968 }
+        );
+        break;
+    }
 
-    /*
-    ILight* light_source = new RectangularLight(
-        { 15, 15, 15 },
-        { 0.415989, 3.319334, -2.517968 },
-        { 0.415989, 3.319334, -3.567968 },
-        { 0.415989, 4.319334, -3.567968 },
-        { 0.415989, 4.319334, -2.517968 }
-    );*/
+    Integrator* integrator = nullptr;
+    switch (gui.m_integration_method)
+    {
+    case PathTracing:
+        integrator = new PathIntegrator;
+        break;
+    case Normal:
+        integrator = new NormalIntegrator;
+        break;
+    case AmbientOcclusion:
+        integrator = new AOIntegrator(gui.m_visibility_scale);
+        break;
+    }
 
     tbb::parallel_for(
         tbb::blocked_range2d<uint32_t>(0, m_window->height(), 0, m_window->width()),
@@ -409,7 +444,7 @@ void RTX_Renderer::generate_image_mt_pt()
                     Vector3<float> albedo(0.f);
                     for (int i = 0; i < gui.m_spp; ++i)
                     {
-                        albedo += trace_light(ray, light_source, gui.m_num_bounces);
+                        albedo += integrator->integrate(ray, m_model.get(), light_source, gui.m_num_bounces);
                     }
                     auto scale = 1.f / (float)gui.m_spp;
                     albedo.x = sqrt(scale * albedo.x);
@@ -426,6 +461,7 @@ void RTX_Renderer::generate_image_mt_pt()
         }
     );
 
+    delete integrator;
     delete light_source;
 }
 
@@ -782,7 +818,7 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
         {
             std::string default_path = std::string(ROOT_DIRECTORY_ASCII) + "/assets";
             static AssetFileBrowser file_browser(default_path.c_str());
-            m_asset_path = file_browser.display();
+            m_asset_path = file_browser.display(gui.m_asset_type);
         }
 
         ImGui::DragInt("spp", &gui.m_spp, 1, 1, 1000);
@@ -811,6 +847,24 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
             }
         }
 
+        ImGui::Text("Choose a integrator");
+        {
+            // Choose threading model
+            const char* integration_names[] =
+            {
+                "\tPath tracing",
+                "\tNormals",
+                "\tAmbient occlusion"
+            };
+
+            IntegratorValue prev_tracing_method = gui.m_integration_method;
+            for (unsigned int n = 0; n < _countof(integration_names); n++)
+            {
+                if (ImGui::Selectable(integration_names[n], gui.m_integration_method == n))
+                    gui.m_integration_method = IntegratorValue(n);
+            }
+        }
+
         if (ImGui::Button("Enable path tracing"))
         {
             gui.m_enable_path_tracing++;
@@ -822,6 +876,11 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
             if(ImGui::Button("Generate New Image"))
             {
                 gui.m_generate_new_image = true;
+            }
+
+            if (gui.m_integration_method == AmbientOcclusion)
+            {
+                ImGui::DragFloat("visib_scale", &gui.m_visibility_scale, 0.01f, 0.02f, 1.f);
             }
         }
 
@@ -836,6 +895,12 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
         ImGui::Text("(%.2f, %.2f, %.2f)\n", cam_dir.x, cam_dir.y, cam_dir.z);
 
         ImGui::Text("\nApplication average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        
+        if (ImGui::Button("Export BVH"))
+        {
+            gui.m_serialize_bvh = true;
+        }
+
         ImGui::End();
     }
 
@@ -969,6 +1034,8 @@ void RTX_Renderer::update()
 
     if (m_asset_path != nullptr)
     {
+        gui.m_last_asset_path = m_asset_path;
+
         construct_bvh(m_asset_path);
         initialize_shader_resources();
         
@@ -995,6 +1062,11 @@ void RTX_Renderer::update()
     {
         m_ray_camera->reinitialize_camera_variables();
         generate_image();
+    }
+
+    if (gui.m_serialize_bvh)
+    {
+        m_model->bvh_serialize(gui.m_last_asset_path.c_str());
     }
 }
 

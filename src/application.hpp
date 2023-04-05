@@ -36,9 +36,11 @@ public:
 
     virtual void flush() = 0;
 
-    virtual void on_key_event(const PackedKeyArguments key_state) = 0;
+    virtual void on_key_event(const PackedKeyArguments key_state)
+    {}
 
-    virtual void on_mouse_move(LPARAM lparam) = 0;
+    virtual void on_mouse_move(LPARAM lparam)
+    {}
 
     virtual void update() = 0;
     

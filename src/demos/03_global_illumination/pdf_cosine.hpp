@@ -1,3 +1,4 @@
+#pragma once
 #include "pdf.hpp"
 #include "coordinate_system.hpp"
 #include "../../utility/random_number.hpp"
