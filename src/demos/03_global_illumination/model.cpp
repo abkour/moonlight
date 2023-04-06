@@ -123,7 +123,9 @@ Vector4<float> Model::color_rgba(const uint32_t material_idx) const
 
 IntersectionParams Model::intersect(Ray& ray) const
 {
-    return m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
+    IntersectionParams its = m_bvh->intersect(ray, m_mesh.get(), m_stride_in_32floats);
+    its.point = ray.o + its.t * ray.d;
+    return its;
 }
 
 uint32_t Model::material_idx(IntersectionParams& intersect) const

@@ -1,9 +1,6 @@
 #pragma once 
 #include "integrator.hpp"
 #include "material.hpp"
-#include "pdf_cosine.hpp"
-#include "pdf_light.hpp"
-#include "pdf_mixture.hpp"
 
 namespace moonlight
 {
@@ -24,13 +21,17 @@ struct PathIntegrator : Integrator
         IntersectionParams its = model->intersect(ray);
         IntersectionParams its_light;
         
-        for (auto& light : light_sources)
+        int light_idx = -1;
+        for (int i = 0; auto& light : light_sources)
         {
             IntersectionParams its_l = light->intersect(ray);
             if (its_l.t < its_light.t)
             {
+                light_idx = i;
                 its_light = its_l;
             }
+
+            ++i;
         }
 
         // The light source is hit before the scene geometry.
@@ -38,15 +39,13 @@ struct PathIntegrator : Integrator
         {
             if (its_light.t < its.t)
             {
-                return light_sources[1]->albedo();
+                return light_sources[light_idx]->albedo();
             }
         }
         if (!its.is_intersection())
         {
             return Vector3<float>(0.f);
         }
-
-        its.point = ray.o + (ray.t * ray.d);
 
         uint32_t material_idx = model->material_idx(its);
         IMaterial* material = model->get_material(material_idx);
@@ -61,7 +60,7 @@ struct PathIntegrator : Integrator
         }
         else
         {
-            auto light = light_sources[random_in_range(0, light_sources.size() - 1)];
+            auto light = light_sources[random_in_range_int(0, light_sources.size() - 1)];
             light->sample(scattered, ray, pdf, its);
         }
         

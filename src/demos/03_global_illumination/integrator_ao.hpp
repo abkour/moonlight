@@ -32,8 +32,6 @@ struct AOIntegrator : public Integrator
 
         CoordinateSystem cs(its.normal);
 
-        its.point = ray.o + ray.t * ray.d;
-        
         auto sample_dir = cs.to_local(random_cosine_direction());
         sample_dir = normalize(sample_dir);
         Ray random_ray(its.point + sample_dir * 1e-5, sample_dir);

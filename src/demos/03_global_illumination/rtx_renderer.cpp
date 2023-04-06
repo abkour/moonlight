@@ -16,10 +16,6 @@ using namespace Microsoft::WRL;
 
 #include "light_point.hpp"
 
-#include "pdf_cosine.hpp"
-#include "pdf_light.hpp"
-#include "pdf_mixture.hpp"
-
 #include "integrator_ao.hpp"
 #include "integrator_normal.hpp"
 #include "integrator_path.hpp"
@@ -367,29 +363,58 @@ void RTX_Renderer::generate_image_mt_pt()
         break;
     case 1:
     {
-        Vector3<float> v0{ -1.884011, 5.319334, -2.517968 };
-        Vector3<float> v1{ -0.615989, 5.319334, -2.517968 };
-        Vector3<float> v2{ -0.615989, 5.319334, -3.567968 };
-        Vector3<float> v3{ -1.884011, 5.319334, -3.567968 };
-        Vector3<float> v4{ 1.884011, 5.319334, -2.517968 };
-        Vector3<float> v5{ 0.615989, 5.319334, -2.517968 };
-        Vector3<float> v6{ 0.615989, 5.319334, -3.567968 };
-        Vector3<float> v7{ 1.884011, 5.319334, -3.567968 };
-
+        Vector3<float> v[] =
+        {
+            // Light 1
+            { -1.884011, 5.319334, -3.517968 },
+            { -0.615989, 5.319334, -3.517968 },
+            { -0.615989, 5.319334, -4.567968 },
+            { -1.884011, 5.319334, -4.567968 },
+            // Light 2
+            { -1.884011, 5.319334, -0.517968 },
+            { -0.615989, 5.319334, -0.517968 },
+            { -0.615989, 5.319334, -1.567968 },
+            { -1.884011, 5.319334, -1.567968 },
+            // Light 3
+            { 1.884011, 5.319334, -3.517968 },
+            { 0.615989, 5.319334, -3.517968 },
+            { 0.615989, 5.319334, -4.567968 },
+            { 1.884011, 5.319334, -4.567968 },
+            // Light 4
+            { 1.884011, 5.319334, -0.517968 },
+            { 0.615989, 5.319334, -0.517968 },
+            { 0.615989, 5.319334, -1.567968 },
+            { 1.884011, 5.319334, -1.567968 }
+        };
+        
         std::shared_ptr<Shape> shape = std::make_shared<Rectangle>(
-            v0, v1, v2, v3
+            v[0], v[1], v[2], v[3]
         );
         std::shared_ptr<Shape> shape1 = std::make_shared<Rectangle>(
-            v4, v5, v6, v7
+            v[4], v[5], v[6], v[7]
+        );
+        std::shared_ptr<Shape> shape2 = std::make_shared<Rectangle>(
+            v[8], v[9], v[10], v[11]
+        );
+        std::shared_ptr<Shape> shape3 = std::make_shared<Rectangle>(
+            v[12], v[13], v[14], v[15]
         );
 
         light_sources.emplace_back(new AreaLight(
-            { 15, 15, 15 },
+            { 15, 0, 0 },
             shape
         ));
         light_sources.emplace_back(new AreaLight(
-            { 15, 15, 15 },
+            { 0, 15, 0 },
             shape1
+        ));
+        light_sources.emplace_back(new AreaLight(
+            { 0, 0, 15 },
+            shape2
+        ));
+        light_sources.emplace_back(new AreaLight(
+            { 15, 15, 15 },
+            shape3
         ));
     }
         break;

@@ -13,13 +13,15 @@ public:
 
     AreaLight(Vector3<float> albedo, Shape* shape)
         : m_shape(shape)
-        , ILight(albedo)
-    {}
+    {
+        m_albedo = albedo;
+    }
 
     AreaLight(Vector3<float> albedo, std::shared_ptr<Shape>& shape)
         : m_shape(shape)
-        , ILight(albedo)
-    {}
+    {
+        m_albedo = albedo;
+    }
 
     void sample_light(const IntersectionParams& its, float* pdf, bool* visibile) override
     {
