@@ -32,6 +32,14 @@ float random_normalized_float()
     return dist(mt);
 }
 
+int random_in_range_int(int r0, int r1)
+{
+    static std::random_device rd;
+    static std::mt19937 mt(rd());
+    std::uniform_int_distribution<int> dist(r0, r1);
+    return dist(mt);
+}
+
 Vector3<float> random_unit_vector()
 {
     static std::random_device rd;

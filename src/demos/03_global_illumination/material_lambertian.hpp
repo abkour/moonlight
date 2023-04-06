@@ -18,17 +18,13 @@ struct LamberrtianMaterial : public IMaterial
     {
     }
 
-    float pdf(const Ray& scattered_ray, IntersectionParams& intersect) override
-    {
-        return dot(intersect.normal, scattered_ray.d) / ML_PI;
-    }
-
-    void scatter(Ray& r_out, const Ray& r_in, IntersectionParams& intersect) override
+    void scatter(Ray& r_out, const Ray& r_in, float& pdf, IntersectionParams& intersect) override
     {
         CoordinateSystem cs(intersect.normal);
         auto cs_dir = cs.to_local(random_cosine_direction());
         cs_dir = normalize(cs_dir);
-
+        
+        pdf = dot(intersect.normal, cs_dir) / ML_PI;
         r_out = Ray(intersect.point + cs_dir * 1e-3, cs_dir);
     }
 

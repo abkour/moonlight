@@ -14,6 +14,8 @@ using namespace Microsoft::WRL;
 #include "texture_image.hpp"
 #include "texture_single.hpp"
 
+#include "light_point.hpp"
+
 #include "pdf_cosine.hpp"
 #include "pdf_light.hpp"
 #include "pdf_mixture.hpp"
@@ -245,62 +247,14 @@ Vector3<float> RTX_Renderer::trace_path(
     IMaterial* material = m_model->get_material(material_idx);
     Vector3<float> attenuation = m_model->color_rgb(material_idx);
 
+    float pdf;
     Ray scattered;
-    material->scatter(scattered, ray, its);
+    material->scatter(scattered, ray, pdf, its);
 
     return
         attenuation *
         material->scattering_pdf(scattered, its) *
         trace_path(scattered, light_source, traversal_depth - 1) /
-        material->pdf(scattered, its);
-}
-
-Vector3<float> RTX_Renderer::trace_light(
-    Ray& ray,
-    ILight* light_source,
-    int traversal_depth)
-{
-    if (traversal_depth <= 0)
-    {
-        return Vector3<float>(0.f);
-    }
-
-    IntersectionParams its = m_model->intersect(ray);
-    IntersectionParams its_light = light_source->intersect(ray);
-
-    // The light source is hit before the scene geometry.
-    if (its_light.is_intersection())
-    {
-        if (its_light.t < its.t)
-        {
-            return light_source->albedo();
-        }
-    }
-    if (!its.is_intersection())
-    {
-        return Vector3<float>(0.f, 0.f, 0.f);
-    }
-
-    its.point = ray.o + (ray.t * ray.d);
-
-    uint32_t material_idx = m_model->material_idx(its);
-    IMaterial* material = m_model->get_material(material_idx);
-    Vector3<float> attenuation = m_model->color_rgb(material_idx);
-
-    CosinePDF cosine_pdf(its.normal);
-    LightPDF light_pdf(light_source, its.point);
-    MixturePDF mixed_pdf(&cosine_pdf, &light_pdf);
-
-    Vector3<float> random_dir = mixed_pdf.generate();
-    float pdf = mixed_pdf.value(random_dir);
-    
-    Vector3<float> n_dir = normalize(random_dir);
-    Ray scattered(its.point + n_dir * 1e-3, n_dir);
-
-    return
-        attenuation *
-        material->scattering_pdf(scattered, its) *
-        trace_light(scattered, light_source, traversal_depth - 1) /
         pdf;
 }
 
@@ -390,41 +344,72 @@ void RTX_Renderer::generate_image_mt()
 
 void RTX_Renderer::generate_image_mt_pt()
 {
-    int light_choice = 0;
-    ILight* light_source = nullptr;
+    int light_choice = 1;
+    std::vector<std::shared_ptr<ILight>> light_sources;
     switch (light_choice)
     {
     case 0:
-        light_source = new RectangularLight(
-            { 15, 15, 15 },
-            { -0.884011, 5.319334, -2.517968 },
-            { 0.415989, 5.319334, -2.517968 },
-            { 0.415989, 5.319334, -3.567968 },
-            { -0.884011, 5.319334, -3.567968 }
+    {
+        Vector3<float> v0{ -0.884011, 5.319334, -2.517968 };
+        Vector3<float> v1{ 0.415989, 5.319334, -2.517968 };
+        Vector3<float> v2{ 0.415989, 5.319334, -3.567968 };
+        Vector3<float> v3{ -0.884011, 5.319334, -3.567968 };
+        
+        std::shared_ptr<Shape> shape = std::make_shared<Rectangle>(
+            v0, v1, v2, v3
         );
+        
+        light_sources.emplace_back(new AreaLight(
+            { 15, 15, 15 },
+            shape
+        ));
+    }
         break;
     case 1:
-        ILight * light_source = new RectangularLight(
-            { 15, 15, 15 },
-            { 0.415989, 3.319334, -2.517968 },
-            { 0.415989, 3.319334, -3.567968 },
-            { 0.415989, 4.319334, -3.567968 },
-            { 0.415989, 4.319334, -2.517968 }
+    {
+        Vector3<float> v0{ -1.884011, 5.319334, -2.517968 };
+        Vector3<float> v1{ -0.615989, 5.319334, -2.517968 };
+        Vector3<float> v2{ -0.615989, 5.319334, -3.567968 };
+        Vector3<float> v3{ -1.884011, 5.319334, -3.567968 };
+        Vector3<float> v4{ 1.884011, 5.319334, -2.517968 };
+        Vector3<float> v5{ 0.615989, 5.319334, -2.517968 };
+        Vector3<float> v6{ 0.615989, 5.319334, -3.567968 };
+        Vector3<float> v7{ 1.884011, 5.319334, -3.567968 };
+
+        std::shared_ptr<Shape> shape = std::make_shared<Rectangle>(
+            v0, v1, v2, v3
         );
+        std::shared_ptr<Shape> shape1 = std::make_shared<Rectangle>(
+            v4, v5, v6, v7
+        );
+
+        light_sources.emplace_back(new AreaLight(
+            { 15, 15, 15 },
+            shape
+        ));
+        light_sources.emplace_back(new AreaLight(
+            { 15, 15, 15 },
+            shape1
+        ));
+    }
         break;
+    case 2:
+        light_sources.emplace_back(new PointLight
+            ({ 0.f, 2.619f, 6.f }, { 15, 15, 15 }
+        ));
     }
 
-    Integrator* integrator = nullptr;
+    std::unique_ptr<Integrator> integrator;
     switch (gui.m_integration_method)
     {
     case PathTracing:
-        integrator = new PathIntegrator;
+        integrator = std::make_unique<PathIntegrator>();
         break;
     case Normal:
-        integrator = new NormalIntegrator;
+        integrator = std::make_unique<NormalIntegrator>();
         break;
     case AmbientOcclusion:
-        integrator = new AOIntegrator(gui.m_visibility_scale);
+        integrator = std::make_unique<AOIntegrator>(gui.m_visibility_scale);
         break;
     }
 
@@ -444,7 +429,7 @@ void RTX_Renderer::generate_image_mt_pt()
                     Vector3<float> albedo(0.f);
                     for (int i = 0; i < gui.m_spp; ++i)
                     {
-                        albedo += integrator->integrate(ray, m_model.get(), light_source, gui.m_num_bounces);
+                        albedo += integrator->integrate(ray, m_model.get(), light_sources, gui.m_num_bounces);
                     }
                     auto scale = 1.f / (float)gui.m_spp;
                     albedo.x = sqrt(scale * albedo.x);
@@ -460,19 +445,20 @@ void RTX_Renderer::generate_image_mt_pt()
             }
         }
     );
-
-    delete integrator;
-    delete light_source;
 }
 
 void RTX_Renderer::generate_image_st()
 {
-    ILight* light_source = new RectangularLight(
+    Vector3<float> v0{ 0.2300, 1.5800, -0.2200 };
+    Vector3<float> v1{ 0.2300, 1.5800, 0.1600 };
+    Vector3<float> v2{ -0.2400, 1.5800, 0.1600 };
+    Vector3<float> v3{ -0.2400, 1.5800, -0.2200 };
+
+    std::shared_ptr<Shape> shape = std::make_shared<Rectangle>(v0, v1, v2, v3);
+
+    ILight* light_source = new AreaLight(
         { 15, 15, 15 },
-        { 0.2300, 1.5800, -0.2200 },
-        { 0.2300, 1.5800, 0.1600 },
-        { -0.2400, 1.5800, 0.1600 },
-        { -0.2400, 1.5800, -0.2200 }
+        shape
     );
 
     for (uint16_t y = 0; y < m_window->height(); y += 4)

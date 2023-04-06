@@ -145,6 +145,52 @@ IntersectionParams ray_hit_triangle(
     return intersect_params;
 }
 
+IntersectionParams ray_hit_triangle(
+    const Ray& ray,
+    const Vector3<float>& v0, const Vector3<float>& v1, const Vector3<float>& v2)
+{
+    using vec3f = Vector3<float>;
+
+    IntersectionParams intersect_params;
+
+    const float epsilon = 1e-6;
+    const vec3f e0 = v1 - v0;
+    const vec3f e1 = v2 - v0;
+
+    const vec3f q = cross(ray.d, e1);
+    const float a = dot(e0, q);
+
+    if (a > -epsilon && a < epsilon)
+    {
+        return intersect_params;
+    }
+
+    const float f = 1.f / a;
+    const vec3f s = ray.o - v0;
+
+    intersect_params.u = f * dot(s, q);
+
+    if (intersect_params.u < 0.f)
+    {
+        return intersect_params;
+    }
+
+    const vec3f r = cross(s, e0);
+    intersect_params.v = f * dot(ray.d, r);
+
+    if (intersect_params.v < 0.f ||
+        intersect_params.u + intersect_params.v > 1.f)
+    {
+        return intersect_params;
+    }
+
+    intersect_params.t = f * dot(e1, r);
+    vec3f normal = normalize(cross(e0, e1));
+    intersect_params.set_face_normal(ray.d, normal);
+
+    return intersect_params;
+}
+
 std::ostream& operator<<(std::ostream& os, const Ray& ray) {
     return os << "origin: " << ray.o << ", direction: " << ray.d;
 }

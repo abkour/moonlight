@@ -10,7 +10,12 @@ namespace moonlight
 struct Integrator
 {
 
-    virtual Vector3<float> integrate(Ray& ray, const Model* model, ILight* light_source, int traversal_depth = 0) = 0;
+    virtual Vector3<float> integrate(
+        Ray& ray, 
+        const Model* model, 
+        std::vector<std::shared_ptr<ILight>>& light_sources, 
+        int traversal_depth = 0
+    ) = 0;
 
 };
 

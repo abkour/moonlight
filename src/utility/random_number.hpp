@@ -43,6 +43,8 @@ Vector3<float> random_cosine_direction();
 float random_in_range(float r0, float r1);
 float random_normalized_float();
 
+int random_in_range_int(int r0, int r1);
+
 Vector3<float> random_unit_vector();
 
 }

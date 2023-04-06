@@ -10,8 +10,11 @@ namespace moonlight
 
 struct PathIntegrator : Integrator
 {
-
-    Vector3<float> integrate(Ray& ray, const Model* model, ILight* light_source, int traversal_depth) override
+    Vector3<float> integrate(
+        Ray& ray, 
+        const Model* model, 
+        std::vector<std::shared_ptr<ILight>>& light_sources, 
+        int traversal_depth) override
     {
         if (traversal_depth <= 0)
         {
@@ -19,14 +22,23 @@ struct PathIntegrator : Integrator
         }
 
         IntersectionParams its = model->intersect(ray);
-        IntersectionParams its_light = light_source->intersect(ray);
+        IntersectionParams its_light;
+        
+        for (auto& light : light_sources)
+        {
+            IntersectionParams its_l = light->intersect(ray);
+            if (its_l.t < its_light.t)
+            {
+                its_light = its_l;
+            }
+        }
 
         // The light source is hit before the scene geometry.
         if (its_light.is_intersection())
         {
             if (its_light.t < its.t)
             {
-                return light_source->albedo();
+                return light_sources[1]->albedo();
             }
         }
         if (!its.is_intersection())
@@ -40,23 +52,25 @@ struct PathIntegrator : Integrator
         IMaterial* material = model->get_material(material_idx);
         Vector3<float> attenuation = model->color_rgb(material_idx);
 
-        CosinePDF cosine_pdf(its.normal);
-        LightPDF light_pdf(light_source, its.point);
-        MixturePDF mixed_pdf(&cosine_pdf, &light_pdf);
-
-        Vector3<float> random_dir = mixed_pdf.generate();
-        float pdf = mixed_pdf.value(random_dir);
-
-        Vector3<float> n_dir = normalize(random_dir);
-        Ray scattered(its.point + n_dir * 1e-3, n_dir);
-
+        Ray scattered;
+        float pdf = 0.f;
+        
+        if (random_in_range(0.f, 1.f) < 0.5f)
+        {
+            material->scatter(scattered, ray, pdf, its);
+        }
+        else
+        {
+            auto light = light_sources[random_in_range(0, light_sources.size() - 1)];
+            light->sample(scattered, ray, pdf, its);
+        }
+        
         return
             attenuation *
             material->scattering_pdf(scattered, its) *
-            integrate(scattered, model, light_source, traversal_depth - 1) /
+            integrate(scattered, model, light_sources, traversal_depth - 1) /
             pdf;
     }
-
 };
 
 }

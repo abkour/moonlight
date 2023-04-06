@@ -23,9 +23,7 @@ public:
     {
     }
 
-    virtual float pdf(const Ray& scattered_ray, IntersectionParams& intersect) = 0;
-
-    virtual void scatter(Ray& r_out, const Ray& r_in, IntersectionParams& intersect) = 0;
+    virtual void scatter(Ray& r_out, const Ray& r_in, float& pdf, IntersectionParams& intersect) = 0;
 
     virtual float scattering_pdf(const Ray& scattered, IntersectionParams& intersect) = 0;
 

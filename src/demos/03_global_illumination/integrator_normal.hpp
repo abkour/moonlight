@@ -13,7 +13,11 @@ struct NormalIntegrator : Integrator
     *  Is this because of the model?
     *  Or is it a flaw in the way the normalis calculated?
     */
-    Vector3<float> integrate(Ray& ray, const Model* model, ILight* light_source, int traversal_depth) override
+    Vector3<float> integrate(
+        Ray& ray, 
+        const Model* model,
+        std::vector<std::shared_ptr<ILight>>& light_sources, 
+        int traversal_depth) override
     {
         IntersectionParams its = model->intersect(ray);
         if (its.is_intersection())

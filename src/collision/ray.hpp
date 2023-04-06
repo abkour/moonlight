@@ -67,4 +67,9 @@ IntersectionParams ray_hit_triangle(
     const unsigned stride
 );
 
+IntersectionParams ray_hit_triangle(
+    const Ray& ray,
+    const Vector3<float>& v0, const Vector3<float>& v1, const Vector3<float>& v2
+);
+
 }

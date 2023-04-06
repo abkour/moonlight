@@ -348,6 +348,12 @@ Vector3<T> operator*(const T t, const Vector3<T>& v)
 }
 
 template<typename T>
+Vector3<T> operator/(const Vector3<T>& v0, const Vector3<T>& v1)
+{
+    return { v0.x / v1.x, v0.y / v1.y, v0.z / v1.z };
+}
+
+template<typename T>
 Vector3<T> absolute(const Vector3<T>& v)
 {
     return { std::abs(v.x), std::abs(v.y), std::abs(v.z) };

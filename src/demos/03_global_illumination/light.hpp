@@ -13,6 +13,9 @@ public:
     ILight(const Vector3<float> albedo)
         : m_albedo(albedo)
     {}
+    
+    virtual void sample_light(const IntersectionParams& its, float* pdf, bool* visibile)
+    {}
 
     virtual Vector3<float> normal() const
     {
@@ -24,7 +27,7 @@ public:
         return 0.f;
     }
 
-    virtual Vector3<float> sample(const Vector3<float>& origin) = 0;
+    virtual void sample(Ray& r_out, const Ray& r_in, float& pdf, const IntersectionParams& its) = 0;
     virtual IntersectionParams intersect(const Ray& ray) = 0;
 
     Vector3<float> albedo() const

@@ -19,7 +19,11 @@ struct AOIntegrator : public Integrator
         , ambient_color(ambient_color)
     {}
 
-    Vector3<float> integrate(Ray& ray, const Model* model, ILight* light_source, int traversal_depth) override
+    Vector3<float> integrate(
+        Ray& ray, 
+        const Model* model, 
+        std::vector<std::shared_ptr<ILight>>& light_sources, 
+        int traversal_depth) override
     {
         auto its = model->intersect(ray);
 

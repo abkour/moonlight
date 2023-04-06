@@ -1,6 +1,6 @@
 #pragma once
 #include "coordinate_system.hpp"
-#include "light_rectangular.hpp"
+#include "light_area.hpp"
 #include "model.hpp"
 #include "ray_camera.hpp"
 #include "../common/scene.hpp"
