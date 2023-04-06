@@ -20,6 +20,8 @@ using namespace Microsoft::WRL;
 #include "integrator_normal.hpp"
 #include "integrator_path.hpp"
 
+#include "shapes/circle.hpp"
+
 namespace moonlight {
 
 #define IMGUI_DESC_INDEX            0
@@ -396,10 +398,13 @@ void RTX_Renderer::generate_image_mt_pt()
         std::shared_ptr<Shape> shape2 = std::make_shared<Rectangle>(
             v[8], v[9], v[10], v[11]
         );
-        std::shared_ptr<Shape> shape3 = std::make_shared<Rectangle>(
-            v[12], v[13], v[14], v[15]
-        );
 
+        Vector3<float> center{ 1.22, 5.319, -1.0f };
+        Vector3<float> normal{ 0.f, -1.f, 0.f };
+        std::shared_ptr<Shape> shape3 = std::make_shared<Circle>(
+            center, normal, 1.f
+        );
+        
         light_sources.emplace_back(new AreaLight(
             { 15, 0, 0 },
             shape
