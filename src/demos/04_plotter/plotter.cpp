@@ -46,7 +46,6 @@ static struct ScenePipelineStateStream
 
 Plotter::Plotter(HINSTANCE hinstance)
     : IApplication(hinstance)
-    , m_app_initialized(false)
     , camera(XMFLOAT3(0.f, 0.f, -2.f), XMFLOAT3(0.f, 0.f, 1.f), 2.5f)
 {
     m_window = std::make_unique<Window>(
@@ -86,12 +85,7 @@ Plotter::Plotter(HINSTANCE hinstance)
 
     load_assets();
 
-    m_app_initialized = true;
-}
-
-bool Plotter::is_application_initialized()
-{
-    return m_app_initialized;
+    m_application_initialized = true;
 }
 
 void Plotter::flush() 
@@ -220,17 +214,6 @@ void Plotter::update()
     static XMVECTOR center = XMLoadFloat4(&center_f4);
     camera.translate(keyboard_state, elapsed_time);
     mvp_matrix = XMMatrixMultiply(camera.view, projection_matrix);
-}
-
-void Plotter::initialize_raw_input_devices()
-{
-    RAWINPUTDEVICE rids[1];
-    rids[0].usUsagePage = 0x01;
-    rids[0].usUsage = 0x02;
-    rids[0].dwFlags = RIDEV_NOLEGACY;
-    rids[0].hwndTarget = 0;
-
-    ThrowIfFailed(RegisterRawInputDevices(rids, 1, sizeof(rids[0])));
 }
 
 void sample_triangle(float& r0, float& r1)

@@ -88,7 +88,6 @@ static struct ScenePipelineStateStream
 
 RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
     : IApplication(hinstance)
-    , app_initialized(false)
 {
     m_window = std::make_unique<Window>(
         hinstance,
@@ -178,7 +177,7 @@ RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
         );
     }
 
-    app_initialized = true;
+    m_application_initialized = true;
 }
 
 RTX_Renderer::~RTX_Renderer()
@@ -556,25 +555,9 @@ void RTX_Renderer::upload_to_texture()
     );
 }
 
-bool RTX_Renderer::is_application_initialized()
-{
-    return app_initialized;
-}
-
 void RTX_Renderer::flush()
 {
     m_command_queue->flush();
-}
-
-void RTX_Renderer::initialize_raw_input_devices()
-{
-    RAWINPUTDEVICE rids[1];
-    rids[0].usUsagePage = 0x01;
-    rids[0].usUsage = 0x02;
-    rids[0].dwFlags = RIDEV_NOLEGACY;
-    rids[0].hwndTarget = 0;
-
-    ThrowIfFailed(RegisterRawInputDevices(rids, 1, sizeof(rids[0])));
 }
 
 void RTX_Renderer::on_key_event(const PackedKeyArguments key_state)

@@ -92,7 +92,6 @@ static float interleaved_quad_vertices[] =
 
 FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     : IApplication(hinstance)
-    , app_initialized(false)
     , camera(XMFLOAT3(0.f, 0.f, -10.f), XMFLOAT3(0.f, 0.f, 1.f), 500.f)
 {
     text_output.resize(256);
@@ -182,32 +181,16 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     command_queue->signal();
     command_queue->wait_for_fence();
     
-    app_initialized = true;
+    m_application_initialized = true;
 }
 
 FrustumCulling::~FrustumCulling()
 {
 }
 
-bool FrustumCulling::is_application_initialized()
-{
-    return app_initialized;
-}
-
 void FrustumCulling::flush()
 {
     command_queue->flush();
-}
-
-void FrustumCulling::initialize_raw_input_devices()
-{
-    RAWINPUTDEVICE rids[1];
-    rids[0].usUsagePage = 0x01;
-    rids[0].usUsage = 0x02;
-    rids[0].dwFlags = RIDEV_NOLEGACY;
-    rids[0].hwndTarget = 0;
-
-    ThrowIfFailed(RegisterRawInputDevices(rids, 1, sizeof(rids[0])));
 }
 
 void FrustumCulling::on_key_event(const PackedKeyArguments key_state)

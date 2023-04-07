@@ -61,7 +61,7 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
         return FALSE;
     }
     
-    if (app->is_application_initialized()) 
+    if (app->m_application_initialized)
     {
         UINT msg = message;
 
@@ -131,6 +131,18 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
 
     return 0;
 }
+
+void IApplication::initialize_raw_input_devices()
+{
+    RAWINPUTDEVICE rids[1];
+    rids[0].usUsagePage = 0x01;
+    rids[0].usUsage = 0x02;
+    rids[0].dwFlags = RIDEV_NOLEGACY;
+    rids[0].hwndTarget = 0;
+
+    ThrowIfFailed(RegisterRawInputDevices(rids, 1, sizeof(rids[0])));
+}
+
 
 Microsoft::WRL::ComPtr<IDXGIAdapter4> IApplication::_pimpl_create_adapter()
 {

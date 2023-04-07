@@ -11,8 +11,6 @@ public:
 
     ~CubeApplication() {}
 
-    bool is_application_initialized() override;
-
     void flush() override;
 
     void update() override;
@@ -76,7 +74,6 @@ private:
 private:
 
     uint64_t fence_value = 0;
-    bool app_initialized = false;
 };
 
 }

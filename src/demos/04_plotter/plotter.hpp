@@ -18,8 +18,6 @@ public:
 
     Plotter(HINSTANCE);
 
-    bool is_application_initialized() override;
-
     void flush() override;
     void on_key_event(const PackedKeyArguments) override;
     void on_mouse_move(LPARAM) override;
@@ -29,12 +27,9 @@ public:
 
 private:
 
-    void initialize_raw_input_devices();
     void load_assets();
 
 private:
-
-    bool m_app_initialized;
 
     int m_num_points = 0;
 

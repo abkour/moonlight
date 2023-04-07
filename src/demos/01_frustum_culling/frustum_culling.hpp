@@ -29,8 +29,6 @@ public:
     FrustumCulling(HINSTANCE);
     ~FrustumCulling();
 
-    bool is_application_initialized() override;
-
     void flush() override;
     void on_key_event(const PackedKeyArguments) override;
     void on_mouse_move(LPARAM) override;
@@ -44,11 +42,8 @@ private:
     void load_assets();
     void load_scene_shader_assets();
     void load_quad_shader_assets();
-    void initialize_raw_input_devices();
 
 private:
-
-    bool app_initialized;
 
     Microsoft::WRL::ComPtr<ID3D12Device2>             device;
     Microsoft::WRL::ComPtr<ID3D12Resource>            depth_buffer;

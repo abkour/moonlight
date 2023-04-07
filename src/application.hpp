@@ -32,8 +32,6 @@ public:
         CoUninitialize();
     }
 
-    virtual bool is_application_initialized() = 0;
-
     virtual void flush() = 0;
 
     virtual void on_key_event(const PackedKeyArguments key_state)
@@ -53,6 +51,8 @@ public:
     static LRESULT CALLBACK WindowMessagingProcess(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 protected:
+
+    virtual void initialize_raw_input_devices();
 
     virtual Microsoft::WRL::ComPtr<IDXGIAdapter4> _pimpl_create_adapter();
 
@@ -125,6 +125,7 @@ protected:
 
 protected:
 
+    bool m_application_initialized = false;
     std::unique_ptr<Window> m_window;
 };
 

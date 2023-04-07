@@ -75,7 +75,6 @@ static struct ScenePipelineStateStream
 
 EnvironmentMapping::EnvironmentMapping(HINSTANCE hinstance)
     : IApplication(hinstance)
-    , app_initialized(false)
     , camera(XMFLOAT3(0.f, 0.f, 0.f), XMFLOAT3(0.f, 0.f, 1.f), 0.5f)
 {
     text_output.resize(256);
@@ -153,32 +152,16 @@ EnvironmentMapping::EnvironmentMapping(HINSTANCE hinstance)
     command_queue->signal();
     command_queue->wait_for_fence();
 
-    app_initialized = true;
+    m_application_initialized = true;
 }
 
 EnvironmentMapping::~EnvironmentMapping()
 {
 }
 
-bool EnvironmentMapping::is_application_initialized()
-{
-    return app_initialized;
-}
-
 void EnvironmentMapping::flush()
 {
     command_queue->flush();
-}
-
-void EnvironmentMapping::initialize_raw_input_devices()
-{
-    RAWINPUTDEVICE rids[1];
-    rids[0].usUsagePage = 0x01;
-    rids[0].usUsage = 0x02;
-    rids[0].dwFlags = RIDEV_NOLEGACY;
-    rids[0].hwndTarget = 0;
-
-    ThrowIfFailed(RegisterRawInputDevices(rids, 1, sizeof(rids[0])));
 }
 
 void EnvironmentMapping::on_key_event(const PackedKeyArguments key_state)

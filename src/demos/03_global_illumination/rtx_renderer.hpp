@@ -68,8 +68,6 @@ public:
     RTX_Renderer(HINSTANCE);
     ~RTX_Renderer();
 
-    bool is_application_initialized() override;
-
     void flush() override;
     void on_key_event(const PackedKeyArguments) override;
     void on_mouse_move(LPARAM) override;
@@ -83,7 +81,6 @@ private:
     void record_gui_commands(ID3D12GraphicsCommandList* command_list);
     void load_assets();
     void load_scene_shader_assets();
-    void initialize_raw_input_devices();
 
 private:
 
@@ -147,7 +144,6 @@ private:
     GUI_State gui;
 
     bool rtx_use_multithreading = false;
-    bool app_initialized;
 
     void on_resource_invalidation();
     void on_switch_tracing_method(TracingMethod prev_tracing_method);

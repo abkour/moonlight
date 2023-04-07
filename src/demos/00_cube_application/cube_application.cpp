@@ -110,12 +110,7 @@ CubeApplication::CubeApplication(HINSTANCE hinstance)
 
     command_list_direct->Close();
 
-    app_initialized = true;
-}
-
-bool CubeApplication::is_application_initialized()
-{
-    return app_initialized;
+    m_application_initialized = true;
 }
 
 void CubeApplication::update()
