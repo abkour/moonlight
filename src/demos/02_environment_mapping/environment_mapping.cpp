@@ -164,19 +164,6 @@ void EnvironmentMapping::flush()
     command_queue->flush();
 }
 
-void EnvironmentMapping::on_key_event(const PackedKeyArguments key_state)
-{
-    switch (key_state.key_state)
-    {
-    case PackedKeyArguments::Released:
-        keyboard_state.reset(key_state.key);
-        break;
-    case PackedKeyArguments::Pressed:
-        keyboard_state.set(key_state.key);
-        break;
-    }
-}
-
 void EnvironmentMapping::on_mouse_move(LPARAM lparam)
 {
     UINT size;
@@ -315,7 +302,7 @@ void EnvironmentMapping::update()
         far_clip_distance
     );
 
-    camera.translate(keyboard_state, elapsed_time);
+    camera.translate(m_keyboard_state, elapsed_time);
     XMFLOAT3X3 rotate_camera;
     XMStoreFloat3x3(&rotate_camera, camera.view);
     XMMATRIX rotate_camera_xmm = XMLoadFloat3x3(&rotate_camera);

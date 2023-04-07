@@ -89,6 +89,7 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
                 PackedKeyArguments key_state(
                     key, KeyCode::Reserved, PackedKeyArguments::KeyState::Pressed
                 );
+                app->update_keystates(key_state);
                 app->on_key_event(key_state);
             }
                 break;
@@ -105,6 +106,7 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
             PackedKeyArguments key_state(
                 key, KeyCode::Reserved, PackedKeyArguments::KeyState::Released
             );
+            app->update_keystates(key_state);
             app->on_key_event(key_state);
         }
             break;
@@ -467,6 +469,22 @@ ComPtr<ID3D12Fence> IApplication::_pimpl_create_fence(
 HANDLE IApplication::_pimpl_create_fence_event()
 {
     return ::CreateEvent(NULL, FALSE, FALSE, NULL);
+}
+
+//
+//
+// Private implementation functions
+void IApplication::update_keystates(PackedKeyArguments key_state)
+{
+    switch (key_state.key_state)
+    {
+    case PackedKeyArguments::Released:
+        m_keyboard_state.reset(key_state.key);
+        break;
+    case PackedKeyArguments::Pressed:
+        m_keyboard_state.set(key_state.key);
+        break;
+    }
 }
 
 }

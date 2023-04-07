@@ -124,7 +124,6 @@ private:
     D3D12_RECT     m_scissor_rect;
 
     float m_elapsed_time = 0.f;
-    KeyState m_keyboard_state;
 
     std::unique_ptr<RayCamera> m_ray_camera;
     std::unique_ptr<DescriptorHeap> m_srv_descriptor_heap;

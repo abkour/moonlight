@@ -193,19 +193,6 @@ void FrustumCulling::flush()
     command_queue->flush();
 }
 
-void FrustumCulling::on_key_event(const PackedKeyArguments key_state)
-{
-    switch (key_state.key_state)
-    {
-    case PackedKeyArguments::Released:
-        keyboard_state.reset(key_state.key);
-        break;
-    case PackedKeyArguments::Pressed:
-        keyboard_state.set(key_state.key);
-        break;
-    }
-}
-
 void FrustumCulling::on_mouse_move(LPARAM lparam)
 {
     UINT size;
@@ -349,7 +336,7 @@ void FrustumCulling::update()
         far_clip_distance
     );
 
-    camera.translate(keyboard_state, elapsed_time);
+    camera.translate(m_keyboard_state, elapsed_time);
     mvp_matrix = XMMatrixMultiply(model_matrix, camera.view);
     mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
 

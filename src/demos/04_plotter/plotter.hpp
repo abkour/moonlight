@@ -19,7 +19,6 @@ public:
     Plotter(HINSTANCE);
 
     void flush() override;
-    void on_key_event(const PackedKeyArguments) override;
     void on_mouse_move(LPARAM) override;
     void render() override;
     void resize() override;
@@ -48,7 +47,6 @@ private:
     D3D12_RECT     m_scissor_rect;
 
     Camera camera;
-    KeyState keyboard_state;
     DirectX::XMMATRIX mvp_matrix;
 
     float elapsed_time = 0.f;

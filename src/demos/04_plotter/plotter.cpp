@@ -93,19 +93,6 @@ void Plotter::flush()
     m_command_queue->flush();
 }
 
-void Plotter::on_key_event(const PackedKeyArguments key_state) 
-{
-    switch (key_state.key_state)
-    {
-    case PackedKeyArguments::Released:
-        keyboard_state.reset(key_state.key);
-        break;
-    case PackedKeyArguments::Pressed:
-        keyboard_state.set(key_state.key);
-        break;
-    }
-}
-
 void Plotter::on_mouse_move(LPARAM lparam) 
 {
     UINT size;
@@ -212,7 +199,7 @@ void Plotter::update()
 
     static XMFLOAT4 center_f4(0.f, 0.f, 0.f, 0.f);
     static XMVECTOR center = XMLoadFloat4(&center_f4);
-    camera.translate(keyboard_state, elapsed_time);
+    camera.translate(m_keyboard_state, elapsed_time);
     mvp_matrix = XMMatrixMultiply(camera.view, projection_matrix);
 }
 

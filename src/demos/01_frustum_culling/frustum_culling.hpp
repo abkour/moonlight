@@ -30,7 +30,6 @@ public:
     ~FrustumCulling();
 
     void flush() override;
-    void on_key_event(const PackedKeyArguments) override;
     void on_mouse_move(LPARAM) override;
     void render() override;
     void resize() override;
@@ -82,7 +81,6 @@ private:
     std::unique_ptr<UINT[]> instance_ids;
 
     float elapsed_time = 0.f;
-    KeyState keyboard_state;
 
 private:
 

@@ -568,16 +568,6 @@ void RTX_Renderer::on_key_event(const PackedKeyArguments key_state)
     {
         io.KeysDown[key_state.key] = key_state.key_state;
     }
-
-    switch (key_state.key_state)
-    {
-    case PackedKeyArguments::Released:
-        m_keyboard_state.reset(key_state.key);
-        break;
-    case PackedKeyArguments::Pressed:
-        m_keyboard_state.set(key_state.key);
-        break;
-    }
 }
 
 void RTX_Renderer::on_mouse_move(LPARAM lparam)

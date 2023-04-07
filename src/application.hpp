@@ -127,6 +127,12 @@ protected:
 
     bool m_application_initialized = false;
     std::unique_ptr<Window> m_window;
+    KeyState m_keyboard_state;
+
+private:
+    
+    void update_keystates(PackedKeyArguments key_state);
+
 };
 
 }
