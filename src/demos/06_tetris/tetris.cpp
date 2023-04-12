@@ -900,6 +900,16 @@ struct Tetris::Playfield
         }
     }
 
+    void quick_drop2(const TetrisBlock& highlight_block)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            int bx = highlight_block.b[i].x;
+            int by = highlight_block.b[i].y;
+            simulation_grid[by][bx] = highlight_block.color_id;
+        }
+    }
+
     TetrisBlock quick_drop_highlight(const TetrisBlock& block)
     {
         int y = 0;
@@ -914,6 +924,7 @@ struct Tetris::Playfield
                     is_collision = true;
                 }
             }
+
             if (is_collision)
                 break;
         }
@@ -1115,6 +1126,8 @@ void Tetris::update()
         far_clip_distance
     );
 
+    static bool space_pressed = false;
+    static bool w_pressed = false;
     static float simulation_scale = 1.f;
     static float ms_threshold_time = 0.f;
     static float total_time = 0.f;
@@ -1164,12 +1177,32 @@ void Tetris::update()
             {
                 simulation_scale = 1.f;
             }
-            if (m_keyboard_state['W'])
-            {
+            if (m_keyboard_state['W'] && !w_pressed)
+            {      
+                w_pressed = true;
                 tetris_block = rotate_block(tetris_block, m_field->simulation_grid);
             }
+            if (!m_keyboard_state['W'] && w_pressed)
+            {
+                w_pressed = false;
+            }
+            if (m_keyboard_state[KeyCode::Spacebar] && !space_pressed)
+            {
+                space_pressed = true;
+
+                m_field->quick_drop2(highlight_block);
+
+                m_field->synchronize_grids();
+                tetris_block = create_block();
+                total_time = 0.f;
+            }
+
+            if (!m_keyboard_state[KeyCode::Spacebar] && space_pressed)
+            {
+                space_pressed = false;
+            }
            
-            m_field->quick_drop(tetris_block, m_keyboard_state[KeyCode::Spacebar]);
+           //m_field->quick_drop(tetris_block, m_keyboard_state[KeyCode::Spacebar]);
 
             ms_threshold_time = 0.f;
         }
