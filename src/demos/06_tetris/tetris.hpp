@@ -1,4 +1,5 @@
 #pragma once
+#include "input_buffer.hpp"
 #include "../common/scene.hpp"
 #include "../common/shader.hpp"
 #include "../../application.hpp"
@@ -30,6 +31,7 @@ public:
     ~Tetris();
 
     void flush() override;
+    void on_key_event(const PackedKeyArguments key_state) override;
     void on_mouse_move(LPARAM) override;
     void render() override;
     void resize() override;
@@ -74,6 +76,8 @@ private:
     std::unique_ptr<Playfield> m_field;
     std::vector<unsigned> instances_buffer;
     std::unique_ptr<DX12Resource> instance_buffer_rsc;
+
+    InputBuffer m_input_buffer;
 
     void update_instanced_buffer();
 };

@@ -1,4 +1,5 @@
 #include "tetris.hpp"
+#include "input_buffer.hpp"
 #include "../../simple_math.hpp"
 #include "../../utility/random_number.hpp"
 
@@ -205,6 +206,35 @@ struct TetrisBlock
         }
 
         b0.x++; b1.x++; b2.x++; b3.x++;
+    }
+
+    int is_outside_left_bound()
+    {
+        int max_extent = 0;
+        for (int i = 0; i < 4; ++i)
+        {
+            if (b[i].x < 0)
+            {
+                max_extent = std::min(max_extent, b[i].x);
+            }
+        }
+
+        return -max_extent;
+    }
+
+    int is_outside_right_bound()
+    {
+        int max_extent = 0;
+
+        for (int i = 0; i < 4; ++i)
+        {
+            if (b[i].x >= tetris_width)
+            {
+                max_extent = std::max(max_extent, b[i].x - (static_cast<int>(tetris_width) - 1));
+            }
+        }
+
+        return -max_extent;
     }
 
     BlockType block_type;
@@ -672,13 +702,28 @@ TetrisBlock rotate_block(const TetrisBlock& block, const std::vector<std::vector
         break;
     }
 
+    int max_extent_left = nb.is_outside_left_bound();
+    int max_extent_right = nb.is_outside_right_bound();
+    if (max_extent_left != 0)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            nb.b[i].x += max_extent_left;
+        }
+        return nb;
+    }
+
+    if (max_extent_right != 0)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            nb.b[i].x += max_extent_right;
+        }
+        return nb;
+    }
+
     for (int i = 0; i < 4; ++i)
     {
-        if (nb.b[i].x < 0 || nb.b[i].x >= tetris_width)
-        {
-            return block;
-        }
-
         if (nb.b[i].y >= tetris_height)
         {
             return block;
@@ -865,7 +910,9 @@ struct Tetris::Playfield
             {
                 unsigned cell = simulation_grid[y][block.b[i].x];
                 if (cell != CELL_EMPTY)
+                {
                     is_collision = true;
+                }
             }
             if (is_collision)
                 break;
@@ -874,7 +921,19 @@ struct Tetris::Playfield
         int min_diff = std::numeric_limits<int>::max();
         for (int i = 0; i < 4; ++i)
         {
-            int diff = y - block.b[i].y;
+            int diff = 100.f;
+            if (y < tetris_height)
+            {
+                unsigned cell = simulation_grid[y][block.b[i].x];
+                if (cell != CELL_EMPTY)
+                {
+                    diff = y - block.b[i].y;
+                }
+            }
+            else 
+            {
+                diff = y - block.b[i].y;
+            }
             min_diff = std::min(min_diff, diff);
         }
         
@@ -882,8 +941,8 @@ struct Tetris::Playfield
 
         for (int i = 0; i < 4; ++i)
         {
-            int y = block.b[i].y + min_diff - 1;
-            grid[y][block.b[i].x] = 0x08;
+            int yy = block.b[i].y + min_diff - 1;
+            grid[yy][block.b[i].x] = 0x08;
 
             highlight_block.b[i].y += min_diff - 1;
         }
@@ -914,6 +973,7 @@ struct Tetris::Playfield
 
 Tetris::Tetris(HINSTANCE hinstance)
     : IApplication(hinstance)
+    , m_input_buffer(4)
 {
     m_window = std::make_unique<Window>(
         hinstance,
@@ -978,6 +1038,14 @@ Tetris::~Tetris()
 void Tetris::flush() 
 {
     m_command_queue->flush();
+}
+
+void Tetris::on_key_event(const PackedKeyArguments key_state)
+{
+    if (key_state.key_state == PackedKeyArguments::Pressed)
+    {
+        m_input_buffer.push(key_state.key);
+    }
 }
 
 void Tetris::on_mouse_move(LPARAM) 
@@ -1048,7 +1116,6 @@ void Tetris::update()
     );
 
     static float simulation_scale = 1.f;
-    static float render_threshold_time = 0.f;
     static float ms_threshold_time = 0.f;
     static float total_time = 0.f;
     static auto t0 = std::chrono::high_resolution_clock::now();
@@ -1057,7 +1124,6 @@ void Tetris::update()
     t0 = t1;
     total_time += m_elapsed_time;
     ms_threshold_time += m_elapsed_time;
-    render_threshold_time += m_elapsed_time;
 
     float bsx = 20.f / m_window->width();
     float bsy = 20.f / m_window->height();
@@ -1073,18 +1139,14 @@ void Tetris::update()
         static TetrisBlock tetris_block = create_block();
         static bool is_collide = false;
         
-        if (render_threshold_time > 0.0166f)
-        {
-            TetrisBlock highlight_block = m_field->quick_drop_highlight(tetris_block);
-            m_field->display(tetris_block);
-            m_field->clear_lines();
-            update_instanced_buffer();
-            m_field->clear(tetris_block);
-            m_field->clear(highlight_block);
-            render_threshold_time = 0.f;
-        }
+        TetrisBlock highlight_block = m_field->quick_drop_highlight(tetris_block);
+        m_field->display(tetris_block);
+        m_field->clear_lines();
+        update_instanced_buffer();
+        m_field->clear(tetris_block);
+        m_field->clear(highlight_block);
 
-        if (ms_threshold_time > 0.1f)
+        if (ms_threshold_time > 0.05f)
         {
             if (m_keyboard_state['A'])
             {
@@ -1106,9 +1168,9 @@ void Tetris::update()
             {
                 tetris_block = rotate_block(tetris_block, m_field->simulation_grid);
             }
-
+           
             m_field->quick_drop(tetris_block, m_keyboard_state[KeyCode::Spacebar]);
-            
+
             ms_threshold_time = 0.f;
         }
 
