@@ -21,16 +21,15 @@
 namespace moonlight
 {
 
-class PBRDemo : public IApplication
+class Tetris : public IApplication
 {
 
 public:
 
-    PBRDemo(HINSTANCE);
-    ~PBRDemo();
+    Tetris(HINSTANCE);
+    ~Tetris();
 
     void flush() override;
-    void on_key_event(const PackedKeyArguments key_state) override;
     void on_mouse_move(LPARAM) override;
     void render() override;
     void resize() override;
@@ -63,11 +62,20 @@ private:
     D3D12_VIEWPORT m_viewport;
     D3D12_RECT     m_scissor_rect;
 
-    Camera m_camera;
     DirectX::XMMATRIX m_mvp_matrix;
     DirectX::XMMATRIX m_cube_mvp;
 
     float m_elapsed_time = 0.f;
+
+private:
+
+    // Game related
+    struct Playfield;
+    std::unique_ptr<Playfield> m_field;
+    std::vector<unsigned> instances_buffer;
+    std::unique_ptr<DX12Resource> instance_buffer_rsc;
+
+    void update_instanced_buffer();
 };
 
 }

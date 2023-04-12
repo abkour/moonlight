@@ -12,6 +12,7 @@ enum KeyCode
     Shift = 0x10,
     Control = 0x11,
     Alt = 0x12,
+    Spacebar = 0x20,
     N0 = 0x30,
     N1 = 0x31,
     N2 = 0x32,

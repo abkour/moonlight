@@ -1,0 +1,43 @@
+Tetris blocks:
+	x      x x    x      x      x
+	x      x x    x x    x    x x x
+	x x             x    x
+					     x
+
+Representation:
+
+Block structure
+	-> Four miniblocks
+	-> Initialized by generating a random number [0, 4]
+		-> each tetris block is assigned an id in that range
+		-> based on rval generate miniblock position
+
+Playfield structure
+	-> Fixed height/length
+	-> Grid
+		-> Each cell has a byte
+			-> If byte is set, the cell is occupied
+			-> Otherwise it is not
+
+Collision
+
+On each simulation step check the tetris block against the
+line it is on. If a cell on the line collides with the block,
+drop the block on top of that cell/line.
+Do this for every miniblock in the block.
+
+Winning condition
+If any block is above the top-most allowed line, the player loses.
+Otherwise, the player keeps playing.
+
+Update:
+
+	1. Spawn block
+	   2.0 Drop block one line per simulation tick
+	   2.1 Allow the player to move/rotate per input tick
+
+-----------------------------------
+-----------------------------------
+-----------------------------------
+-----------------------------------
+-----------------------------------

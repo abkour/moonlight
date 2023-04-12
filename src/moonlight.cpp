@@ -9,6 +9,7 @@
 #include "demos/03_global_illumination/rtx_renderer.hpp"
 #include "demos/04_plotter/plotter.hpp"
 #include "demos/05_pbr/pbr_demo.hpp"
+#include "demos/06_tetris/tetris.hpp"
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow)
 {
@@ -16,7 +17,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
     try 
     {
-        moonlight::PBRDemo application(hInstance);
+        moonlight::Tetris application(hInstance);
         application.run();
     } 
     catch (...) 

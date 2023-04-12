@@ -1,7 +1,10 @@
 #include "pbr_demo.hpp"
+#include "../../simple_math.hpp"
 
 using namespace Microsoft::WRL;
 using namespace DirectX;
+
+
 
 namespace
 {
@@ -19,11 +22,54 @@ static struct ScenePipelineStateStream
     CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL ds_desc;
 } scene_pipeline_state_stream;
 
-static float vertices[] =
+struct VertexFormat
 {
-    0.f, 0.f, 0.f,
-    1.f, 0.f, 0.f,
-    1.f, 1.f, 0.f
+    XMFLOAT3 Position;
+    XMFLOAT3 Normal;
+};
+
+static float cube_vertices[] = {
+    -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+     0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+     0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+     0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+    -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+    -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+
+    -0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+     0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+     0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+     0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+    -0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+    -0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+
+    -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+    -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+    -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+    -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+    -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+    -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+
+     0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+     0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+     0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+     0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+     0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+     0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+
+    -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+     0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+     0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+     0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+    -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+    -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+
+    -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+     0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+     0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+     0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+    -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+    -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
 };
 
 }
@@ -31,10 +77,29 @@ static float vertices[] =
 namespace moonlight
 {
 
+struct PSAttributes
+{
+    Vector3<float> position; float dummy0;
+    Vector3<float> direction; float dummy1;
+    Vector3<float> luminance; float dummy2;
+    Vector3<float> view_position; float dummy3;
+    Vector3<float> view_direction; float dummy4;
+    Vector3<float> albedo; float dummy5;
+    Vector3<float> metallic_roughness_ao; float dummy6;
+};
+
+alignas(256) static PSAttributes ps_00;
+
 PBRDemo::PBRDemo(HINSTANCE hinstance)
     : IApplication(hinstance)
     , m_camera(XMFLOAT3(0.f, 0.f, 0.f), XMFLOAT3(0.f, 0.f, 1.f), 10.f)
 {
+    ps_00.position = Vector3<float>(5.f, 5.f, 0.f);
+    ps_00.direction = normalize(invert(ps_00.position));
+    ps_00.luminance = Vector3<float>(15.f, 15.f, 15.f);
+    ps_00.albedo = Vector3<float>(0.5f, 0.f, 0.f);
+    ps_00.metallic_roughness_ao.z = 1.f;
+
     m_window = std::make_unique<Window>(
         hinstance,
         L"DX12MoonlightApplication",
@@ -43,7 +108,7 @@ PBRDemo::PBRDemo(HINSTANCE hinstance)
         800,
         &PBRDemo::WindowMessagingProcess,
         this
-        );
+    );
 
     SetCursor(NULL);
     initialize_raw_input_devices();
@@ -56,6 +121,12 @@ PBRDemo::PBRDemo(HINSTANCE hinstance)
 
     m_dsv_descriptor_heap = std::make_unique<DescriptorHeap>(
         m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 2
+    );
+
+    m_srv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        m_device.Get(),
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        1
     );
 
     m_swap_chain = std::make_unique<SwapChain>(
@@ -80,6 +151,26 @@ PBRDemo::PBRDemo(HINSTANCE hinstance)
         m_window->width(), m_window->height()
     );
 
+    {
+        // IMGUI initialization
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+        (void)io;
+
+        ImGui::StyleColorsDark();
+
+        ImGui_ImplWin32_Init(m_window->handle);
+        ImGui_ImplDX12_Init(
+            m_device.Get(),
+            3,
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            m_srv_descriptor_heap->get_underlying(),
+            m_srv_descriptor_heap->cpu_handle(0),
+            m_srv_descriptor_heap->gpu_handle(0)
+        );
+    }
+
     load_assets();
 
     m_application_initialized = true;
@@ -91,6 +182,16 @@ PBRDemo::~PBRDemo()
 void PBRDemo::flush()
 {
     m_command_queue->flush();
+}
+
+void PBRDemo::on_key_event(const PackedKeyArguments key_state)
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    if (key_state.key < 256)
+    {
+        io.KeysDown[key_state.key] = key_state.key_state;
+    }
 }
 
 void PBRDemo::on_mouse_move(LPARAM lparam)
@@ -138,6 +239,7 @@ void PBRDemo::render()
     }
 
     record_command_list(m_command_list_direct.Get());
+    record_gui_commands(m_command_list_direct.Get());
 
     // Present
     {
@@ -161,7 +263,6 @@ void PBRDemo::render()
 
 void PBRDemo::resize() 
 {
-
 }
 
 void PBRDemo::update() 
@@ -183,10 +284,46 @@ void PBRDemo::update()
     t0 = t1;
 
     m_camera.translate(m_keyboard_state, m_elapsed_time);
-    XMFLOAT3X3 rotate_camera;
-    XMStoreFloat3x3(&rotate_camera, m_camera.view);
-    XMMATRIX rotate_camera_xmm = XMLoadFloat3x3(&rotate_camera);
     m_mvp_matrix = XMMatrixMultiply(m_camera.view, projection_matrix);
+
+    XMFLOAT3 cpos = m_camera.get_position();
+    XMFLOAT3 cdir = m_camera.get_direction();
+    ps_00.view_position = Vector3<float>(cpos.x, cpos.y, cpos.z);
+    ps_00.view_direction = Vector3<float>(cdir.x, cdir.y, cdir.z);
+
+    float s = 0.25f;
+    XMMATRIX model_matrix = XMMatrixScaling(s, s, s);
+    XMMATRIX translate_matrix = XMMatrixTranslation(ps_00.position.x, ps_00.position.y, ps_00.position.z);
+    model_matrix = XMMatrixMultiply(model_matrix, translate_matrix);
+    m_cube_mvp = XMMatrixMultiply(model_matrix, m_camera.view);
+    m_cube_mvp = XMMatrixMultiply(m_cube_mvp, projection_matrix);
+}
+
+void PBRDemo::record_gui_commands(ID3D12GraphicsCommandList* command_list)
+{
+    ID3D12DescriptorHeap* heaps[] = { m_srv_descriptor_heap->get_underlying() };
+    command_list->SetDescriptorHeaps(1, heaps);
+
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    {
+        static int open_file_browser = 0;
+
+        ImGui::Begin("Moonlight");
+        if (ImGui::Button("Open/Close File Browser"))
+        {
+            open_file_browser++;
+        }
+
+        ImGui::Text("\nApplication average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+
+        ImGui::End();
+    }
+
+    ImGui::Render();
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_command_list_direct.Get());
 }
 
 void PBRDemo::record_command_list(ID3D12GraphicsCommandList* command_list)
@@ -209,7 +346,12 @@ void PBRDemo::record_command_list(ID3D12GraphicsCommandList* command_list)
     command_list->RSSetScissorRects(1, &m_scissor_rect);
     command_list->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, &dsv_handle);
     command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / sizeof(float), &m_mvp_matrix, 0);
-    command_list->DrawInstanced(sizeof(vertices) / (sizeof(float) * 3), 1, 0, 0);
+    command_list->SetGraphicsRoot32BitConstants(1, sizeof(PSAttributes) / sizeof(float), &ps_00, 0);
+    command_list->DrawInstanced(sizeof(cube_vertices) / sizeof(VertexFormat), 1, 0, 0);
+
+    command_list->SetPipelineState(m_cube_pso.Get());
+    command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / sizeof(float), &m_cube_mvp, 0);
+    command_list->DrawInstanced(sizeof(cube_vertices) / sizeof(VertexFormat), 1, 0, 0);
 }
 
 void PBRDemo::load_assets()
@@ -223,14 +365,14 @@ void PBRDemo::load_scene_shader_assets()
     {
         m_vertex_buffer = std::make_unique<DX12Resource>();
         m_vertex_buffer->upload(m_device.Get(), m_command_list_direct.Get(),
-            (float*)vertices,
-            sizeof(vertices),
+            (float*)cube_vertices,
+            sizeof(cube_vertices),
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
         m_vertex_buffer_view.BufferLocation = m_vertex_buffer->gpu_virtual_address();
-        m_vertex_buffer_view.SizeInBytes = sizeof(vertices);
-        m_vertex_buffer_view.StrideInBytes = sizeof(float) * 3;
+        m_vertex_buffer_view.SizeInBytes = sizeof(cube_vertices);
+        m_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
     ComPtr<ID3DBlob> vs_blob;
@@ -258,9 +400,10 @@ void PBRDemo::load_scene_shader_assets()
         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-    CD3DX12_ROOT_PARAMETER1 root_parameters[1];
+    CD3DX12_ROOT_PARAMETER1 root_parameters[2];
     // Three float4x4
     root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / sizeof(float), 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+    root_parameters[1].InitAsConstants(sizeof(PSAttributes) / sizeof(float), 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
     // TODO: Is this call correct, if the highest supported version is 1_0?
@@ -317,6 +460,33 @@ void PBRDemo::load_scene_shader_assets()
     };
 
     ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_scene_pso)));
+
+    ComPtr<ID3DBlob> cube_vs_blob;
+    ComPtr<ID3DBlob> cube_ps_blob;
+    {
+        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/05_pbr/shaders/cube_vs.cso";
+        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/05_pbr/shaders/cube_ps.cso";
+        ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &cube_vs_blob));
+        ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &cube_ps_blob));
+    }
+
+    ScenePipelineStateStream cube_pss;
+    cube_pss.dsv_format = DXGI_FORMAT_D32_FLOAT;
+    cube_pss.input_layout = { input_layout, _countof(input_layout) };
+    cube_pss.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    cube_pss.ps = CD3DX12_SHADER_BYTECODE(cube_ps_blob.Get());
+    cube_pss.root_signature = m_scene_root_signature.Get();
+    cube_pss.rs = rasterizer_desc;
+    cube_pss.rtv_formats = rtv_formats;
+    cube_pss.vs = CD3DX12_SHADER_BYTECODE(cube_vs_blob.Get());
+    cube_pss.ds_desc = dsv_desc;
+
+    D3D12_PIPELINE_STATE_STREAM_DESC cube_pss_desc = {
+        sizeof(ScenePipelineStateStream),
+        &cube_pss
+    };
+
+    ThrowIfFailed(m_device->CreatePipelineState(&cube_pss_desc, IID_PPV_ARGS(&m_cube_pso)));
 }
 
 }
