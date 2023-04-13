@@ -1,12 +1,12 @@
 static float4 Colors[] =
 {
-    float4(1.f, 0.f, 0.f, 1.f),
-    float4(0.f, 1.f, 0.f, 1.f),
-    float4(0.f, 0.f, 1.f, 1.f),
-    float4(1.f, 1.f, 0.f, 1.f),
-    float4(0.f, 1.f, 1.f, 1.f),
+    float4(0.533, 0.988, 0.011, 1.f),
+    float4(0.011, 0.988, 0.549, 1.f),
+    float4(0.988, 0.011, 0.306, 1.f),
+    float4(0.988, 0.368, 0.011, 1.f),
+    float4(0.011, 0.451, 0.988, 1.f),
+    float4(0.521, 0.345, 0.961, 1.f),
     float4(1.f, 1.f, 1.f, 1.f),
-    float4(1.f, 0.6f, 0.2f, 1.f),
     // (quick drop color)
     float4(0.4f, 0.4f, 0.4f, 1.f)
 };
@@ -59,7 +59,7 @@ VS_Output main(VS_Input IN, uint InstanceID : SV_InstanceID)
     OUT.Position = OUT.Position + sum_v4;
     if (cell == 0)
     {
-        OUT.Position.z = 255;
+        OUT.Color = float4(0.1f, 0.1f, 0.1f, 1.f);
     } 
     else
     {

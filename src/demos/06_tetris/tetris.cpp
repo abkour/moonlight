@@ -932,22 +932,59 @@ struct Tetris::Playfield
         int min_diff = std::numeric_limits<int>::max();
         for (int i = 0; i < 4; ++i)
         {
-            int diff = 100.f;
+            int diff = 100;
             if (y < tetris_height)
             {
                 unsigned cell = simulation_grid[y][block.b[i].x];
                 if (cell != CELL_EMPTY)
                 {
                     diff = y - block.b[i].y;
+                    min_diff = std::min(min_diff, diff);
                 }
             }
             else 
             {
-                diff = y - block.b[i].y;
+                diff = tetris_height - block.b[i].y;
+                min_diff = std::min(min_diff, diff);
             }
-            min_diff = std::min(min_diff, diff);
         }
         
+        TetrisBlock highlight_block(block);
+
+        for (int i = 0; i < 4; ++i)
+        {
+            int yy = block.b[i].y + min_diff - 1;
+            grid[yy][block.b[i].x] = 0x08;
+
+            highlight_block.b[i].y += min_diff - 1;
+        }
+
+        return highlight_block;
+    }
+
+    TetrisBlock quick_drop_highlight2(const TetrisBlock& block)
+    {
+        int min_diff = std::numeric_limits<int>::max();
+        int y = 0;
+        for (; y < tetris_height; ++y)
+        {
+            for (int i = 0; i < 4; ++i)
+            {
+                unsigned cell = simulation_grid[y][block.b[i].x];
+                if (cell != CELL_EMPTY)
+                {
+                    int diff = y - block.b[i].y;
+                    min_diff = std::min(min_diff, diff);
+                }
+            }
+        }
+
+        for (int i = 0; i < 4; ++i)
+        {
+            int diff = tetris_height - block.b[i].y;
+            min_diff = std::min(min_diff, diff);
+        }
+
         TetrisBlock highlight_block(block);
 
         for (int i = 0; i < 4; ++i)
@@ -1152,7 +1189,7 @@ void Tetris::update()
         static TetrisBlock tetris_block = create_block();
         static bool is_collide = false;
         
-        TetrisBlock highlight_block = m_field->quick_drop_highlight(tetris_block);
+        TetrisBlock highlight_block = m_field->quick_drop_highlight2(tetris_block);
         m_field->display(tetris_block);
         m_field->clear_lines();
         update_instanced_buffer();
