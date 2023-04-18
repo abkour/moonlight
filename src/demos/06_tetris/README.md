@@ -16,7 +16,7 @@ The game is never won, rather the player loses when a block reaches past the top
 #### Tetris block
 
 A tetris block is defined by four tuples. Each tuple defines the location of a 2D miniblock on the 
-playfield. Additionally, a tetris block contains a block id, that is used to identify what shape it is,
+playfield. Additionally, a tetris block contains a block id, that is used to identify what shape it has,
 a color id that identifies what color it has and a rotation id, that identifies in what rotational
 state it is in. 
 
