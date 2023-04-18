@@ -18,12 +18,12 @@ to provide a GUI to the user.
 ### Backwards Path Tracer
 
 A simple backwards path tracer. Features include:
-    - Importance sampling
-    - BVHs
-    - Lambertian surfaces
-    - Area light sources
-    - Ambient occlusion
-    - Customizable model loader
+- Importance sampling
+- BVHs
+- Lambertian surfaces
+- Area light sources
+- Ambient occlusion
+- Customizable model loader
 
 Features I want to implement:
     - Bidirectionality
