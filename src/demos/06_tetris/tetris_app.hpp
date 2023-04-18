@@ -1,5 +1,6 @@
 #pragma once
 #include "input_buffer.hpp"
+#include "tetris_playfield.hpp"
 #include "../common/scene.hpp"
 #include "../common/shader.hpp"
 #include "../../application.hpp"
@@ -68,11 +69,11 @@ private:
     DirectX::XMMATRIX m_cube_mvp;
 
     float m_elapsed_time = 0.f;
+    float m_total_time = 0.f;
 
 private:
 
     // Game related
-    struct Playfield;
     std::unique_ptr<Playfield> m_field;
     std::vector<unsigned> instances_buffer;
     std::unique_ptr<DX12Resource> instance_buffer_rsc;
@@ -80,6 +81,13 @@ private:
     InputBuffer m_input_buffer;
 
     void update_instanced_buffer();
+
+private:
+
+    // Font related
+    std::unique_ptr<GlyphRenderer> glyph_renderer;
+    DirectX::XMFLOAT2 font_pos;
+    std::wstring text_output;
 };
 
 }

@@ -9,7 +9,7 @@
 #include "demos/03_global_illumination/rtx_renderer.hpp"
 #include "demos/04_plotter/plotter.hpp"
 #include "demos/05_pbr/pbr_demo.hpp"
-#include "demos/06_tetris/tetris.hpp"
+#include "demos/06_tetris/tetris_app.hpp"
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow)
 {
