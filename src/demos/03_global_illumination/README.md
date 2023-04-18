@@ -2,7 +2,7 @@
 This is a backwards unidirectional path tracer. It currently only supports lambertian surfaces.
 It uses importance sampling for area light sources to reduce noiser per sample.
 
-![frustum-culling](https://github.com/abkour/moonlight/blob/main/src/demos/03_global_illumination/results/cornell_4lights.png)
+![frustum-culling](https://github.com/abkour/moonlight/src/demos/03_global_illumination/results/cornell_4lights.png)
 
 This is a toy path tracer. It doesn't feature the following:
 - Anti aliasing*
