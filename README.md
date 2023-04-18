@@ -26,10 +26,10 @@ A simple backwards path tracer. Features include:
 - Customizable model loader
 
 Features I want to implement:
-    - Bidirectionality
-    - Arbitrary light shapes in combination with Importance Sampling
-    - Physically based shading model
-    - IBL
+- Bidirectionality
+- Arbitrary light shapes in combination with Importance Sampling
+- Physically based shading model
+- IBL
 
 #### Optimization
 The renderer originally supported single/multithreaded CPU Raytracing and Compute Shader Raytracing.
