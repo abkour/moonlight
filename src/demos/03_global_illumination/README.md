@@ -3,7 +3,8 @@ This is a backwards unidirectional path tracer. It currently only supports lambe
 It uses importance sampling for area light sources to reduce noiser per sample.
 
 ![frustum-culling](https://github.com/abkour/moonlight/blob/main/src/demos/03_global_illumination/results/cornell_4lights.PNG)
-![frustum-culling](https://github.com/abkour/moonlight/blob/main/src/demos/03_global_illumination/results/cornell_box_1000spp_v04.PNG)
+
+![frustum-culling](https://github.com/abkour/moonlight/blob/main/src/demos/03_global_illumination/results/cornell_box_1000_spp_v04.PNG)
 
 This is a toy path tracer. It doesn't feature the following:
 - Anti aliasing*
