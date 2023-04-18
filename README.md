@@ -30,7 +30,7 @@ Features I want to implement:
     - Physically based shading model
     - IBL
 
-### Optimization
+#### Optimization
 The renderer originally supported single/multithreaded CPU Raytracing and Compute Shader Raytracing.
 However, during feature development, the Compute Shader implementation is multiple versions behind.
 My plan is to work on the CS implementation once I have implemented the wanted features listed above.
