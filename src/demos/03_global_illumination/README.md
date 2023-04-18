@@ -24,6 +24,6 @@ The demo requires a .mof file to be loaded. It is a special file that contains i
 and materials of a model. The .mof file is created with an external tool, that I will add to the project
 in the near future.
 
-Known bugs:
+### Known bugs:
 - Loading in a new asset does not work for the CPU tracer. This is probably related to a mistake in the usage
 of DX12 rather than in the way .mof files are handled.
