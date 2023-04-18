@@ -14,10 +14,10 @@ This is a toy path tracer. It doesn't feature the following:
 - Refractive materials
 - Point lights*
 
-Some of these features are not grounded on difficult mathematical concepts. Nevertheless, implementing them
+Some of these features are not grounded in difficult mathematical concepts. Nevertheless, implementing them
 into the demo requires architectural changes that I'm unable to evaluate currently.
 
-'These features are relatively easy to implement. I will add them ine future if I get to it.
+'These features are relatively easy to implement. I will add them in the future if I get to it.
 
 ### Model loading
 The demo requires a .mof file to be loaded. It is a special file that contains information about the geometry
