@@ -15,6 +15,8 @@ to provide a GUI to the user.
 
 ## PROJECTS
 
+To read more about the projects, go into the demo folder of a project to find a detailed README.
+
 ### Backwards Path Tracer
 
 A simple backwards path tracer. Features include:
