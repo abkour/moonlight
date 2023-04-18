@@ -47,15 +47,15 @@ It uses the lambertian BRDF for diffuse surfaces. For specular surfaces I used t
 
 
 ### Frustum culling demo
-This demo features CPU frustum culling to the amount of geometry pushed to the GPU and therefore it reduces
-the amount of vertices the Vertex Shader has to process. The demo uses simple cubes in combination with 
-instanced rendering. For that reason, the effects of frustum culling are not that visible. 
-In the feature, I will swap out the cubes for more complex models, attach AABBs to them.
+This demo features CPU frustum culling to reduce the amount of geometry pushed to the GPU and therefore reduce
+the amount of vertices the Vertex Shader has to process. Howver, the demo uses simple cubes. 
+For that reason, the effects of frustum culling are not that visible. 
+In the future, I will swap out the cubes for more complex models.
 
 
 ### Tetris
 This is a tetris clone. It works like the original game. I was inspired to work on this because it doesn't 
-require assets and I since I never developed a proper game I was interested to try it out.
+require assets and since I never developed a proper game I was interested to try it out.
 
 
 ## FUTURE PROJECTS
