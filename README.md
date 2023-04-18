@@ -1,4 +1,4 @@
-MOONLIGHT
+#MOONLIGHT
 
 Moonlight is a from DX12 framework that was originally intended for implementing and testing
 computer graphics solutions.
@@ -56,6 +56,7 @@ require assets and I since I never developed a proper game I was interested to t
 
 
 FUTURE PROJECTS
+
 The project I want to ultimately work on the most is a 3D asteroids clone using mesh shaders, LODs and 
 instanced rendering. It is currently out of reach for me, since I don't know how to do mesh simplification
 to create the LODs for the asteroids. I also have not tried out mesh shaders. 
