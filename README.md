@@ -1,4 +1,4 @@
-*MOONLIGHT
+## MOONLIGHT
 
 Moonlight is a from DX12 framework that was originally intended for implementing and testing
 computer graphics solutions.
@@ -13,7 +13,7 @@ With moonlight I was able to built the following applications:
 Each of the demos was built entirely from scratch. No external libraries were used, except for ImGUI 
 to provide a GUI to the user.
 
-PROJECTS
+## PROJECTS
 
 1. Backwards Path Tracer
 A simple backwards path tracer. Features include:
@@ -30,7 +30,7 @@ Features I want to implement:
     - Physically based shading model
     - IBL
 
-Optimization
+# Optimization
 The renderer originally supported single/multithreaded CPU Raytracing and Compute Shader Raytracing.
 However, during feature development, the Compute Shader implementation is multiple versions behind.
 My plan is to work on the CS implementation once I have implemented the wanted features listed above.
@@ -55,7 +55,7 @@ This is a tetris clone. It works like the original game. I was inspired to work 
 require assets and I since I never developed a proper game I was interested to try it out.
 
 
-FUTURE PROJECTS
+## FUTURE PROJECTS
 
 The project I want to ultimately work on the most is a 3D asteroids clone using mesh shaders, LODs and 
 instanced rendering. It is currently out of reach for me, since I don't know how to do mesh simplification
