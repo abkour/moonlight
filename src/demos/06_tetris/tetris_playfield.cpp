@@ -173,7 +173,8 @@ void Playfield::quick_drop2(const TetrisBlock& highlight_block)
     {
         int bx = highlight_block.b[i].x;
         int by = highlight_block.b[i].y;
-        simulation_grid[by][bx] = highlight_block.color_id;
+        if(by >= 0)
+            simulation_grid[by][bx] = highlight_block.color_id;
     }
 }
 

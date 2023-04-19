@@ -358,7 +358,7 @@ void Tetris::update()
                 update_timer = 0.f;
             }
         }
-
+         
         if (ms_threshold_time > 0.01f)
         {
             if (m_keyboard_state['S'])
@@ -414,6 +414,13 @@ void Tetris::update()
             text_output.data(),
             L"%d",
             game_score
+        );
+    }
+    else
+    {
+        swprintf(
+            text_output.data(),
+            L"Game over"
         );
     }
 }
