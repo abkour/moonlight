@@ -22,7 +22,7 @@ of the enclosing space that the plane seperates, and a point on the plane.
 The frustum's planes all point inwards by construction, therefore to test that an AABB is inside the frustum,
 all points in the AABB have to be within the positive halfspace of all planes. This can be done with the 
 seperating-axis test. I won't go into details on this, since it requires too much description, but you can find 
-the implemention in the src/math/primitive_tests.hpp file.
+the implemention in the src/collision/primitive_tests.hpp file.
 
 <h3>DX12 related</h3>
 
