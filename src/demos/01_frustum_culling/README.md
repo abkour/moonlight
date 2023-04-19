@@ -24,5 +24,15 @@ all points in the AABB have to be within the positive halfspace of all planes. T
 seperating-axis test. I won't go into details on this, since it requires too much description, but you can find 
 the implemention in the src/collision/primitive_tests.hpp file.
 
-<h3>DX12 related</h3>
+#### Optimization
+
+Using AABBs is the most significant optimization opportunity. There are more though. Frustum culling is an
+embarassingly parallel procedure. Threfore, it scales with the number of cores on the machine. Furthermore, the seperating
+axis test is easily SIMDified. For SSE2 architectures we process four AABBs at once. For AVX we can up that number to eight.
+
+Past these, there are multiple heuristics that can be applied. For one, we can only perform frustum culling
+if the camera moved. If not, we use the result of the previous frustum culling step. Not a heuristic, but we could use 
+a shallow octree to only perform this procedure on AABBs within Octree nodes that have intersected with the frustum.
+I have implemented an octree before for ray acceleration. It worked great, but there are certain things that need to be 
+done. One, the octree node graph needs to be flattened out. Also, each node needs to be as small as possible.
 
