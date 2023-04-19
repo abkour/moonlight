@@ -28,5 +28,5 @@ Finally, given R we can sample the TextureCube object.
 
 #### Rendering the texture cube itself (cube mapping)
 
-This is done in the same as described above. However, we skip the reflection vector step, and simply use 
+This is done in the same as described above. However, we skip the reflection vector step, and simply use the
 interpolated vertex position.
