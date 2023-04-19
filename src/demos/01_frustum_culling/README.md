@@ -3,7 +3,7 @@ Frustum culling demo.
 Frustum culling is an extremely important tool for interactive rendering. It allows the GPU to only process 
 primitives that have the chance of being captured by the view camera. To accomplish this we do the following:
 
-![frustum-culling](https://github.com/abkour/moonlight/blob/main/src/demos/01_frustum_culling/frustum_culling.gif)
+![frustum-culling](https://github.com/abkour/moonlight/blob/main/src/demos/01_frustum_culling/res/frustum_culling.gif)
 
 <h3>Mathematical foundation</h3>
 
@@ -36,3 +36,4 @@ a shallow octree to only perform this procedure on AABBs within Octree nodes tha
 I have implemented an octree before for ray acceleration. It worked great, but there are certain things that need to be 
 done. One, the octree node graph needs to be flattened out. Also, each node needs to be as small as possible.
 
+![frustum-culling](https://github.com/abkour/moonlight/blob/main/src/demos/01_frustum_culling/res/fcull.gif)
