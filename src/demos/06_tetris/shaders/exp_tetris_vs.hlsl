@@ -20,12 +20,12 @@ static uint4 colors_red[] =
     uint4(130, 94, 90, 255)
 };
 
-struct VS_Input 
+struct VS_Input
 {
     float2 Position : POSITION;
 };
 
-struct VS_Output 
+struct VS_Output
 {
     float4 Color : COLOR;
     float4 Position : SV_Position;
@@ -33,7 +33,7 @@ struct VS_Output
 
 struct VS_Constants
 {
-    matrix scale;
+    float aspect_ratio;
 };
 
 struct InstanceFormat
@@ -56,10 +56,17 @@ VS_Output main(VS_Input IN, uint InstanceID : SV_InstanceID)
     uint instance_y = InstanceID / 10;
     uint cell = InstanceData_SB[InstanceID].cell;
 
+    float blocks_per_line_x = 50.f;
+    float first_block_x = 12.f;
+    float first_block_y = 6.f;
+
+    float bw = 1.f / blocks_per_line_x;
+    float bh = bw * VS_Constant.aspect_ratio;
+
     float ox = -0.25f;
-    float oy = 0.0f;
-    float dx = 1.f / 36.f;
-    float dy = -1.f / 18.f;
+    float oy = 1.f - (bh * first_block_y);
+    float dx = bw * 2.f + 0.005f;
+    float dy = -dx * VS_Constant.aspect_ratio;
     float ix = instance_x * dx;
     float iy = instance_y * dy;
 
@@ -70,7 +77,8 @@ VS_Output main(VS_Input IN, uint InstanceID : SV_InstanceID)
 
     VS_Output OUT;
 
-    OUT.Position = mul(VS_Constant.scale, float4(IN.Position, 0.f, 1.f));
+    //OUT.Position = mul(VS_Constant.scale, float4(IN.Position, 0.f, 1.f));
+    OUT.Position = float4(bw, bh, 0.f, 1.f) * float4(IN.Position, 0.f, 1.f);
     OUT.Position = OUT.Position + sum_v4;
     if (cell == 0)
     {

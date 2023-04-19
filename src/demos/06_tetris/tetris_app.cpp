@@ -154,6 +154,7 @@ void Tetris::on_key_event(const PackedKeyArguments key_state)
     static bool d_pressed = false;
     static bool w_pressed = false;
     static bool space_pressed = false;
+    static bool r_pressed = false;
 
     const float double_press_threshold = 0.0001f;
 
@@ -227,6 +228,12 @@ void Tetris::on_key_event(const PackedKeyArguments key_state)
     if (!m_keyboard_state[KeyCode::Spacebar] && space_pressed)
     {
         space_pressed = false;
+    }
+
+    if (m_keyboard_state['R'] && !r_pressed)
+    {
+        r_pressed = true;
+        m_input_buffer.push('R');
     }
 }
 
@@ -310,21 +317,31 @@ void Tetris::update()
     m_total_time += m_elapsed_time;
     ms_threshold_time += m_elapsed_time;
     update_timer += m_elapsed_time;
+    
+    static bool p_pressed = false;
+    static bool game_paused = false;
 
-    float bsx = 0.0125f;
-    float bsy = 0.025f;
-    m_mvp_matrix = XMMatrixScaling(bsx, bsy, 0.f);
+    if (m_keyboard_state['P'] && !p_pressed)
+    {
+        p_pressed = true;
+        game_paused = !game_paused;
+    }
 
-    float pfx = 0.f;
-    float pfy = 0.5f;
-    XMMATRIX translate_matrix = XMMatrixTranslation(pfx, pfy, 0.f);
-    m_mvp_matrix = XMMatrixMultiply(m_mvp_matrix, translate_matrix);
+    if (!m_keyboard_state['P'] && p_pressed)
+    {
+        p_pressed = false;
+    }
+
+    if (game_paused)
+    {
+        return;
+    }
 
     if (m_field->is_game_valid)
     {
         static TetrisBlock tetris_block = create_block();
         static bool is_collide = false;
-        
+
         TetrisBlock highlight_block = m_field->quick_drop_highlight2(tetris_block);
         m_field->display(tetris_block);
         int lines_cleared = m_field->clear_lines();
@@ -356,6 +373,12 @@ void Tetris::update()
                 m_field->synchronize_grids();
                 tetris_block = create_block();
                 update_timer = 0.f;
+            }
+            if (key == 'R')
+            {
+                tetris_block = create_block();
+                update_timer = 0.f;
+                break;
             }
         }
          
@@ -485,7 +508,8 @@ void Tetris::record_command_list(ID3D12GraphicsCommandList* command_list)
     command_list->RSSetViewports(1, &m_viewport);
     command_list->RSSetScissorRects(1, &m_scissor_rect);
     command_list->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, &dsv_handle);
-    command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / sizeof(float), &m_mvp_matrix, 0);
+    float aspect_ratio = static_cast<float>(m_window->width()) / m_window->height();
+    command_list->SetGraphicsRoot32BitConstants(0, 1, &aspect_ratio, 0);
     command_list->DrawInstanced(sizeof(quad_vertices) / (sizeof(float) * 2), tetris_width * tetris_height, 0, 0);
 
     glyph_renderer->render_text(command_list, m_command_queue->get_underlying(), text_output.c_str(), font_pos);
@@ -572,7 +596,7 @@ void Tetris::load_scene_shader_assets()
 
     CD3DX12_ROOT_PARAMETER1 root_parameters[2];
     // Three float4x4
-    root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / sizeof(float), 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+    root_parameters[0].InitAsConstants(1, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
     root_parameters[1].InitAsShaderResourceView(0);
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
