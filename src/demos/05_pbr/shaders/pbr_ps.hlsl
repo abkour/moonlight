@@ -40,7 +40,7 @@ struct PSConstants
     float4 view_position;
     float4 view_direction;
     // New
-    float3 albedo;
+    float4 albedo;
     float metallic;
     float roughness;
     float ao;
@@ -59,44 +59,49 @@ float3 blinn_phong_shading(in PS_Input IN);
 // Diffuse term
 float3 diffuse_brdf(in float3 object_color, in float3 v, in float3 l);
 
-float DistributionGGX(float3 N, float3 H, float roughness)
+float spec_ndf_ggx(float3 N, float3 H, float roughness)
 {
     float a = roughness * roughness;
     float a2 = a * a;
-    float NdotH = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH * NdotH;
+    float dot_nh = max(dot(N, H), 0.0);
 
     float nom = a2;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    float denom = (dot_nh * dot_nh * (a2 - 1.0) + 1.0);
     denom = Pi * denom * denom;
 
     return nom / denom;
 }
+
 // ----------------------------------------------------------------------------
-float GeometrySchlickGGX(float NdotV, float roughness)
+float spec_geometry_schlick_ggx(float dot_nv, float roughness)
 {
     float r = (roughness + 1.0);
     float k = (r * r) / 8.0;
 
-    float nom = NdotV;
-    float denom = NdotV * (1.0 - k) + k;
+    float nom = dot_nv;
+    float denom = dot_nv * (1.0 - k) + k;
 
     return nom / denom;
 }
 // ----------------------------------------------------------------------------
-float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
+float spec_geometry_smith(float3 N, float3 V, float3 L, float roughness)
 {
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
-    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+    float dot_nl = max(dot(N, L), 0.0);
+    float dot_nv = max(dot(N, V), 0.0);
+    float ggx1 = spec_geometry_schlick_ggx(dot_nl, roughness);
+    float ggx2 = spec_geometry_schlick_ggx(dot_nv, roughness);
 
     return ggx1 * ggx2;
 }
 // ----------------------------------------------------------------------------
-float3 fresnelSchlick(float cosTheta, float3 F0)
+float3 spec_fresnel_schlick(float cosTheta, float3 F0)
 {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+float3 spec_fresnel_schlick_sg(float cosTheta, float3 F0)
+{
+    return F0 + (1.0 - F0) * pow(2.f, (-5.55473 * cosTheta - 6.98316) * cosTheta);
 }
 
 float3 compute_brdf(PS_Input IN)
@@ -107,35 +112,35 @@ float3 compute_brdf(PS_Input IN)
     float3 V = normalize(psc.view_position.xyz - IN.FragPosition);
 
     float3 F0 = float3(0.04, 0.04, 0.04);
-    F0 = lerp(F0, psc.albedo, psc.metallic);
+    F0 = lerp(F0, psc.albedo.xyz, psc.metallic);
 
     float3 Lo = float3(0.0, 0.0, 0.0);
     
     // Integrate Lo
     float3 L = normalize(psc.light_position.xyz - IN.FragPosition);
     float3 H = normalize(L + V);
-    float distance = length(psc.light_position.xyz - IN.FragPosition);
+    float distance    = length(psc.light_position.xyz - IN.FragPosition);
     float attenuation = 1.0 / (distance * distance);
-    float3 radiance = psc.light_luminance.xyz * attenuation;
+    float3 radiance   = psc.light_luminance.xyz * attenuation;
 
-    float NDF = DistributionGGX(N, H, psc.roughness);
-    float G = GeometrySmith(N, V, L, psc.roughness);
-    float3 F = fresnelSchlick(clamp(dot(H, V), 0.f, 1.f), F0);
+    float  NDF = spec_ndf_ggx(N, H, psc.roughness);
+    float  G   = spec_geometry_smith(N, V, L, psc.roughness);
+    float3 F   = spec_fresnel_schlick_sg(clamp(dot(H, V), 0.f, 1.f), F0);
 
-    float3 numerator = NDF * G * F;
+    float3 numerator  = NDF * G * F;
     float denominator = 4.0 * max(dot(N, V), 0.f) * max(dot(N, L), 0.0) + 0.0001;
-    float3 specular = numerator / denominator;
+    float3 specular   = numerator / denominator;
 
     float3 kS = F;
     float3 kD = float3(1.f, 1.f, 1.f) - kS;
     kD *= 1.f - psc.metallic;
 
-    float NdotL = max(dot(N, L), 0.0);
+    float dot_nl = max(dot(N, L), 0.0);
 
-    Lo += (kD * psc.albedo / Pi + specular) * radiance * NdotL;
+    Lo += (kD * psc.albedo.xyz / Pi + specular) * radiance * dot_nl;
     // Integration over
 
-    float3 ambient = float3(0.03, 0.03, 0.03) * psc.albedo * psc.ao;
+    float3 ambient = float3(0.03, 0.03, 0.03) * psc.albedo.xyz * psc.ao;
     
     float3 color = ambient + Lo;
     color = color / (color + float3(1.f, 1.f, 1.f));
