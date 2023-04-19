@@ -7,7 +7,7 @@ outdoor scenes. It can be used in combination with SSR to achieve realistic look
 
 ### Implementation
 
-First, we load the cube into memory. For this I chose to use DirectTX12, because of its ease of use. To create a
+First, we load the texture cube into memory. For this I chose to use DirectTX12, because of its ease of use. To create a
 descriptor for a cube texture we simply populate the 'TextureCube' field of the 'D3D12_SHADER_RESOURCE_VIEW_DESC'.
 In particular, we set the 'TextureCube.MipLevels' field to 6. The rest is standard resource handling.
 
@@ -26,3 +26,7 @@ to compute the view direction V by subtracting the camera position from the ws_p
 and the normal direction we can compute the reflected vector R with the built-in reflect function. 
 Finally, given R we can sample the TextureCube object.
 
+#### Rendering the texture cube itself (cube mapping)
+
+This is done in the same as described above. However, we skip the reflection vector step, and simply use 
+interpolated vertex position.
