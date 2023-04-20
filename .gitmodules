@@ -1,0 +1,6 @@
+[submodule "ext/oneTBB"]
+	path = ext/oneTBB
+	url = https://github.com/oneapi-src/oneTBB.git
+[submodule "ext_test/DirectXTex"]
+	path = ext_test/DirectXTex
+	url = https://github.com/microsoft/DirectXTex.git
