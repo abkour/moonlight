@@ -6,5 +6,7 @@ cmake_minimum_required (VERSION 3.8)
 project ("moonlight")
 
 # Include sub-projects.
-add_subdirectory ("src")
+add_subdirectory ("ext/DirectXTK12")
+add_subdirectory ("ext/DirectXTex")
 add_subdirectory ("ext/oneTBB")
+add_subdirectory ("src")
