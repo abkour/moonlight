@@ -5,13 +5,9 @@
 
 asset/
 build/
-rsc/
 template/
 moonlight/
 x64/
-
-ext/DirectXTex/
-ext/DirectXTK12/
 
 *.sln
 *.cso

@@ -98,6 +98,8 @@ PBRDemo::PBRDemo(HINSTANCE hinstance)
     ps_00.direction = normalize(invert(ps_00.position));
     ps_00.luminance = Vector3<float>(15.f, 15.f, 15.f);
     ps_00.albedo = Vector3<float>(0.5f, 0.f, 0.f);
+    ps_00.metallic_roughness_ao.x = 1.f;
+    ps_00.metallic_roughness_ao.y = 0.5f;
     ps_00.metallic_roughness_ao.z = 1.f;
 
     m_window = std::make_unique<Window>(
@@ -209,7 +211,25 @@ void PBRDemo::on_mouse_move(LPARAM lparam)
     RAWINPUT* raw = (RAWINPUT*)lpb;
     if (raw->header.dwType == RIM_TYPEMOUSE)
     {
-        m_camera.rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
+        ImGuiIO& io = ImGui::GetIO();
+        switch (raw->data.mouse.usButtonFlags)
+        {
+        case RI_MOUSE_BUTTON_1_DOWN:
+            io.MouseDown[0] = true;
+            break;
+        case RI_MOUSE_BUTTON_1_UP:
+            io.MouseDown[0] = false;
+            break;
+        case RI_MOUSE_WHEEL:
+            io.MouseWheel = (float)(short)raw->data.mouse.usButtonData / WHEEL_DELTA;
+            break;
+        default:
+            break;
+        }
+        if (m_keyboard_state[KeyCode::Shift])
+        {
+            m_camera.rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
+        }
     }
 
     delete[] lpb;
@@ -283,7 +303,10 @@ void PBRDemo::update()
     m_elapsed_time = (t1 - t0).count() * 1e-9;
     t0 = t1;
 
-    m_camera.translate(m_keyboard_state, m_elapsed_time);
+    if (m_keyboard_state.keys[KeyCode::Shift])
+    {
+        m_camera.translate(m_keyboard_state, m_elapsed_time);
+    }
     m_mvp_matrix = XMMatrixMultiply(m_camera.view, projection_matrix);
 
     XMFLOAT3 cpos = m_camera.get_position();
@@ -312,10 +335,13 @@ void PBRDemo::record_gui_commands(ID3D12GraphicsCommandList* command_list)
         static int open_file_browser = 0;
 
         ImGui::Begin("Moonlight");
-        if (ImGui::Button("Open/Close File Browser"))
-        {
-            open_file_browser++;
-        }
+        
+        ImGui::DragFloat("metallic", &ps_00.metallic_roughness_ao.x, 0.01f, 0.f, 1.f);
+        ImGui::DragFloat("roughness", &ps_00.metallic_roughness_ao.y, 0.01f, 0.f, 1.f);
+        ImGui::DragFloat("AO", &ps_00.metallic_roughness_ao.z, 0.01f, 0.f, 1.f);
+        ImGui::DragFloat("Albedo_x", &ps_00.albedo.x, 0.01f, 0.f, 1.f);
+        ImGui::DragFloat("Albedo_y", &ps_00.albedo.y, 0.01f, 0.f, 1.f);
+        ImGui::DragFloat("Albedo_z", &ps_00.albedo.z, 0.01f, 0.f, 1.f);
 
         ImGui::Text("\nApplication average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 

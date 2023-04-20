@@ -7,3 +7,4 @@ project ("moonlight")
 
 # Include sub-projects.
 add_subdirectory ("src")
+add_subdirectory ("ext/oneTBB")

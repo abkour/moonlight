@@ -1,0 +1,5 @@
+
+Results:
+
+v00: Uniform hemisphere sampling
+v01: Uniform sphere sampling 

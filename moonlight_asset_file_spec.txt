@@ -1,0 +1,67 @@
+The moonlight file (.mof) is used to load geometry into the engine.
+
+It has the following format:
+
+    [UINT64]   	Number of triangles
+    [UINT64]   	Stride of vertex data in multiples of 4 bytes (e.g 12 bytes is 3)
+    [UINT64]   	Number of bytes of data
+    [UINT64]   	Flags*
+    [PTR_INT8] 	ATTRIBUTE_Data
+	[UINT64]	Number of materials 
+	[UINT64]	Number of texture images
+	[UINT64]	16-bit array of texture path lengths
+	[UINT64]	Materials
+
+*Flags (Indices represent bits in a 64-bit unsigned integer, 0 represents the LSB):
+	0: Centroids included [centroids always have a stride of 3]
+	1: Vertex data only
+	2: Vertex+Normal data only
+	3: Vertex+Normal+UV data only
+	4: Indexed rendering (Indices included at the end of the data*)
+	5: Print triangles to console (ignore)
+	6: Materials appended
+    7-63: Reserved
+
+*)
+	Parsing this requires consecutive memory locations for the Attribute Data
+	and the index data. For example, if indices are included the data layout 
+	has to look like so:
+		struct DataLayout {
+			array<floats> attr_data;
+			array<ints> indices;
+		}
+	This is a limitation, but I chose to go with it because it makes file parsing
+	simpler, and for the purposes of this engine is not a big problem.
+
+	If material data is present, it is appended at the end of the attribute data.
+	Material data is described in the following format:
+	
+	struct Material
+	{
+		union 
+		{
+			char data[];
+			struct 
+			{
+				uint8_t type;
+
+			}
+		}
+	};
+
+	Data can be either 1. a single color or 2. refer to the path of a texture image.
+	In the case of 1. The first byte is 0xF and the 5th byte identifies the identity
+	of the material. 
+	If the 2nd byte is 1, then the color is a diffuse color only.
+	If the 2nd byte is 2, then the color is a specular color only.
+	If the 2nd byte is 4, then the color is two colors, diffuse followed by specular.
+	If the 2nd byte is 8, then the color is emissive only.
+	If the 2nd byte has bit 5 set, then the color is RGBA otherwise it is RGB.
+
+	In the case of 2. The first byte is not 0xF and thus refer to a path.
+	The second byte dneotes the number of textures the material has (one material can have multiple textures, e.g 
+	diffuse_map and bump_map).
+	At this point you need to look into the "16-bit array of texture path lengths" to know how long the following 
+	texture paths will be. In combination with the second byte denoting the number of textures, you can memcpy 
+	the entire texture paths into memory in one call. The 16-bit array of texture path lengths can be used 
+	to finally delimit the individual texture paths.
