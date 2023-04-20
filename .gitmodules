@@ -4,3 +4,9 @@
 [submodule "ext_test/DirectXTex"]
 	path = ext_test/DirectXTex
 	url = https://github.com/microsoft/DirectXTex.git
+[submodule "ext_test/DirectXTK12"]
+	path = ext_test/DirectXTK12
+	url = https://github.com/microsoft/DirectXTK12.git
+[submodule "ext_test/oneTBB"]
+	path = ext_test/oneTBB
+	url = https://github.com/oneapi-src/oneTBB.git
