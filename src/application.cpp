@@ -1,18 +1,69 @@
 #include "application.hpp"
 
-template<typename T>
-T* temp_address(T&& rvalue)
-{
-    return &rvalue;
-}
-
 using namespace Microsoft::WRL;
 
 namespace moonlight {
 
 IApplication::IApplication(HINSTANCE hinstance)
+    : m_camera(DirectX::XMFLOAT3(0.f, 0.f, 0.f), DirectX::XMFLOAT3(0.f, 0.f, 1.f), 10.f)
 {
     ThrowIfFailed(CoInitializeEx(NULL, COINIT_MULTITHREADED));
+}
+
+IApplication::IApplication(HINSTANCE hinstance, WNDPROC wndproc)
+    : m_camera(DirectX::XMFLOAT3(0.f, 0.f, 0.f), DirectX::XMFLOAT3(0.f, 0.f, 1.f), 10.f)
+{
+    ThrowIfFailed(CoInitializeEx(NULL, COINIT_MULTITHREADED));
+
+    SetCursor(NULL);
+    initialize_raw_input_devices();
+
+    m_window = std::make_unique<Window>(
+        hinstance,
+        L"DX12MoonlightApplication",
+        L"DX12_Demo_Template",
+        1600,
+        800,
+        wndproc,
+        this
+    );
+
+    SetCursor(NULL);
+    initialize_raw_input_devices();
+
+    ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
+    m_device = _pimpl_create_device(most_sutiable_adapter);
+    m_command_queue = std::make_unique<CommandQueue>(m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
+    m_command_allocator = _pimpl_create_command_allocator(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    m_command_list_direct = _pimpl_create_command_list(m_device, m_command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+    m_dsv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 2
+    );
+
+    m_swap_chain = std::make_unique<SwapChain>(
+        m_device.Get(),
+        m_command_queue->get_underlying(),
+        m_window->width(),
+        m_window->height(),
+        m_window->handle
+    );
+
+    m_scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+    m_viewport = CD3DX12_VIEWPORT(
+        0.f,
+        0.f,
+        static_cast<float>(m_window->width()),
+        static_cast<float>(m_window->height())
+    );
+
+    m_depth_buffer = _pimpl_create_dsv(
+        m_device,
+        m_dsv_descriptor_heap->cpu_handle(),
+        m_window->width(), m_window->height()
+    );
+
+    m_shared_pss_field = std::make_shared<GlobalPipelineStateStreamField>();
 }
 
 void IApplication::run() 
@@ -338,8 +389,8 @@ ComPtr<ID3D12DescriptorHeap> IApplication::_pimpl_create_srv_descriptor_heap(
 ComPtr<ID3D12Resource> IApplication::_pimpl_create_dsv(
     ComPtr<ID3D12Device2> device,
     D3D12_CPU_DESCRIPTOR_HANDLE dsv_descriptor,
-    const uint16_t window_width,
-    const uint16_t window_height)
+    const uint16_t buffer_width,
+    const uint16_t buffer_height)
 {
     D3D12_CLEAR_VALUE optimized_clear_value = {};
     optimized_clear_value.Format = DXGI_FORMAT_D32_FLOAT;
@@ -351,8 +402,8 @@ ComPtr<ID3D12Resource> IApplication::_pimpl_create_dsv(
         D3D12_HEAP_FLAG_NONE,
         temp_address(CD3DX12_RESOURCE_DESC::Tex2D(
             DXGI_FORMAT_D32_FLOAT,
-            window_width,
-            window_height,
+            buffer_width,
+            buffer_height,
             1, 0, 1, 0,
             D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)),
         D3D12_RESOURCE_STATE_DEPTH_WRITE,
@@ -485,6 +536,67 @@ void IApplication::update_keystates(PackedKeyArguments key_state)
         m_keyboard_state.set(key_state.key);
         break;
     }
+}
+
+void IApplication::on_mouse_move(LPARAM lparam)
+{
+    UINT size;
+
+    GetRawInputData((HRAWINPUT)lparam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
+    LPBYTE lpb = new BYTE[size];
+    if (lpb == NULL) return;
+
+    if (GetRawInputData((HRAWINPUT)lparam, RID_INPUT, lpb, &size, sizeof(RAWINPUTHEADER)) != size)
+    {
+        OutputDebugStringA("GetRawInputData does not report correct size");
+    }
+    RAWINPUT* raw = (RAWINPUT*)lpb;
+    if (raw->header.dwType == RIM_TYPEMOUSE)
+    {
+        m_camera.rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
+    }
+
+    delete[] lpb;
+}
+
+void IApplication::clear_rtv_dsv(const DirectX::XMFLOAT4 clear_color)
+{
+    const uint8_t backbuffer_idx = m_swap_chain->current_backbuffer_index();
+
+    m_swap_chain->transition_to_rtv(m_command_list_direct.Get());
+
+    // Clear backbuffer
+    //const FLOAT clear_color[] = { 0.7f, 0.7f, 0.7f, 1.f };
+    m_command_list_direct->ClearRenderTargetView(
+        m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx),
+        &clear_color.x,
+        0,
+        NULL
+    );
+
+    m_command_list_direct->ClearDepthStencilView(
+        m_dsv_descriptor_heap->cpu_handle(),
+        D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, NULL
+    );
+}
+
+void IApplication::present()
+{
+    m_swap_chain->transition_to_present(m_command_list_direct.Get());
+
+    m_command_list_direct->Close();
+    ID3D12CommandList* command_lists[] =
+    {
+        m_command_list_direct.Get()
+    };
+
+    m_command_queue->execute_command_list(command_lists, 1);
+    m_command_queue->signal();
+    m_swap_chain->present();
+    m_command_queue->wait_for_fence();
+
+    ThrowIfFailed(m_command_allocator->Reset());
+    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
 }
 
 }

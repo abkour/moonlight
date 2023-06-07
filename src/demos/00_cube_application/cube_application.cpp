@@ -11,12 +11,6 @@ using namespace DirectX;
 namespace moonlight
 {
 
-template<typename T>
-T* temp_address(T&& v)
-{
-    return &v;
-}
-
 struct VertexPosColor {
     XMFLOAT3 Position;
     XMFLOAT2 TexCoord;

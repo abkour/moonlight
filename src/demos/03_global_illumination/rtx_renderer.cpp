@@ -87,43 +87,8 @@ static struct ScenePipelineStateStream
 } scene_pipeline_state_stream;
 
 RTX_Renderer::RTX_Renderer(HINSTANCE hinstance)
-    : IApplication(hinstance)
+    : IApplication(hinstance, &RTX_Renderer::WindowMessagingProcess)
 {
-    m_window = std::make_unique<Window>(
-        hinstance,
-        L"DX12MoonlightApplication",
-        L"DX12_Demo_Template",
-        1024,
-        720,
-        &RTX_Renderer::WindowMessagingProcess,
-        this
-    );
-
-    SetCursor(NULL);
-    initialize_raw_input_devices();
-
-    ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
-    m_device = _pimpl_create_device(most_sutiable_adapter);
-    m_command_queue = std::make_unique<CommandQueue>(m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
-    m_command_allocator = _pimpl_create_command_allocator(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    m_command_list_direct = _pimpl_create_command_list(m_device, m_command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
-
-    m_swap_chain = std::make_unique<SwapChain>(
-        m_device.Get(),
-        m_command_queue->get_underlying(),
-        m_window->width(),
-        m_window->height(),
-        m_window->handle
-    );
-
-    m_scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
-    m_viewport = CD3DX12_VIEWPORT(
-        0.f,
-        0.f,
-        static_cast<float>(m_window->width()),
-        static_cast<float>(m_window->height())
-    );
-
     m_srv_descriptor_heap = std::make_unique<DescriptorHeap>(
         m_device.Get(), 
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 
@@ -899,20 +864,7 @@ void RTX_Renderer::record_gui_commands(ID3D12GraphicsCommandList* command_list)
 
 void RTX_Renderer::render()
 {
-    // Clear
-    {
-        m_swap_chain->transition_to_rtv(m_command_list_direct.Get());
-
-        // Clear backbuffer
-        const FLOAT clear_color[] = { 0.05f, 0.05f, 0.05f, 1.f };
-        m_command_list_direct->ClearRenderTargetView(
-            m_swap_chain->backbuffer_rtv_descriptor_handle(
-                m_swap_chain->current_backbuffer_index()),
-            clear_color, 
-            0, 
-            NULL
-        );
-    }
+    IApplication::clear_rtv_dsv(XMFLOAT4(0.05f, 0.05f, 0.05f, 1.f));
 
     if (gui.m_asset_loaded)
     {
@@ -933,25 +885,7 @@ void RTX_Renderer::render()
     }
     record_gui_commands(m_command_list_direct.Get());
 
-    // Present
-    {
-        m_swap_chain->transition_to_present(m_command_list_direct.Get());
-
-        m_command_list_direct->Close();
-        ID3D12CommandList* command_lists[] =
-        {
-            m_command_list_direct.Get()
-        };
-
-        m_command_queue->execute_command_list(command_lists, 1);
-        m_command_queue->signal();
-        m_command_queue->wait_for_fence();
-        m_swap_chain->present();
-    }
-
-    ThrowIfFailed(m_command_allocator->Reset());
-    ThrowIfFailed(m_command_list_direct->Reset(m_command_allocator.Get(), NULL));
-
+    IApplication::present();
 }
 
 void RTX_Renderer::resize()

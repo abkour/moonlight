@@ -33,9 +33,9 @@ struct RenderTexture
     // Clears the texture with the color specified by the set_clear_color() functioon.
     void clear(ID3D12GraphicsCommandList* command_list);
 
-    float* get_clear_color() 
+    D3D12_CLEAR_VALUE get_clear_color() 
     {
-        return m_clear_color;
+        return m_clear_value;
     }
 
     D3D12_CPU_DESCRIPTOR_HANDLE get_rtv_descriptor() const
@@ -58,9 +58,9 @@ struct RenderTexture
         return m_resource_state;
     }
 
-    void set_clear_color(DirectX::XMFLOAT4 clear_color)
+    void set_clear_value(const D3D12_CLEAR_VALUE  clear_color)
     { 
-        memcpy(m_clear_color, &clear_color.x, sizeof(float) * 4);
+        m_clear_value = clear_color;
     }
 
 private:
@@ -68,7 +68,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Device2> m_device;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_resource;
     DXGI_FORMAT m_format;
-    float m_clear_color[4];
+    D3D12_CLEAR_VALUE m_clear_value;
     D3D12_RESOURCE_STATES m_resource_state;
     D3D12_CPU_DESCRIPTOR_HANDLE m_rtv_descriptor;
     D3D12_CPU_DESCRIPTOR_HANDLE m_srv_descriptor;

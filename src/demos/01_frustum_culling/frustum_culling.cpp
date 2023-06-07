@@ -91,96 +91,46 @@ static float interleaved_quad_vertices[] =
 };
 
 FrustumCulling::FrustumCulling(HINSTANCE hinstance)
-    : IApplication(hinstance)
-    , camera(XMFLOAT3(0.f, 0.f, -10.f), XMFLOAT3(0.f, 0.f, 1.f), 500.f)
+    : IApplication(hinstance, &FrustumCulling::WindowMessagingProcess)
 {
-    text_output.resize(256);
+    m_text_output.resize(256);
 
-    m_window = std::make_unique<Window>(
-        hinstance,
-        L"DX12MoonlightApplication",
-        L"DX12_Demo_01_Frustum_Culling",
-        1600,
-        800,
-        &FrustumCulling::WindowMessagingProcess,
-        this
+    m_quad_rtv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2
     );
-
-    SetCursor(NULL);
-    initialize_raw_input_devices();
-
-    ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
-    device                      = _pimpl_create_device(most_sutiable_adapter);
-    command_queue               = std::make_unique<CommandQueue>(device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
-    command_allocator           = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    command_list_direct         = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
-
-    quad_rtv_descriptor_heap = std::make_unique<DescriptorHeap>(
-        device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 2
+    m_srv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2
     );
-    dsv_descriptor_heap = std::make_unique<DescriptorHeap>(
-        device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 2
-    );
-    srv_descriptor_heap = std::make_unique<DescriptorHeap>(
-        device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2
-    );
-    vs_srv_descriptor_heap = std::make_unique<DescriptorHeap>(
-        device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2
+    m_vs_srv_descriptor_heap = std::make_unique<DescriptorHeap>(
+        m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2
     );
 
-    swap_chain = std::make_unique<SwapChain>(
-        device.Get(),
-        command_queue->get_underlying(),
-        m_window->width(),
-        m_window->height(),
-        m_window->handle
-    );
+    const float clear_color[] = { 0.1f, 0.1f, 0.1f, 0.f };
+    D3D12_CLEAR_VALUE clear_value;
+    clear_value.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    memcpy(clear_value.Color, clear_color, sizeof(clear_color));
 
-    scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
-    viewport0 = CD3DX12_VIEWPORT(
-        0.f,
-        0.f,
-        static_cast<float>(m_window->width()),
-        static_cast<float>(m_window->height())
+    m_scene_texture = std::make_unique<RenderTexture>(DXGI_FORMAT_R8G8B8A8_UNORM);
+    m_scene_texture->set_device(
+        m_device.Get(),
+        m_quad_rtv_descriptor_heap->cpu_handle(), 
+        m_srv_descriptor_heap->cpu_handle()
     );
-
-    scene_texture = std::make_unique<RenderTexture>(DXGI_FORMAT_R8G8B8A8_UNORM);
-    scene_texture->set_device(
-        device.Get(),
-        quad_rtv_descriptor_heap->cpu_handle(), 
-        srv_descriptor_heap->cpu_handle()
-    );
-    scene_texture->set_clear_color(DirectX::XMFLOAT4(0.1f, 0.1f, 0.1f, 0.f));
-    scene_texture->init(m_window->width(), m_window->height());
+    m_scene_texture->set_clear_value(clear_value);
+    m_scene_texture->init(m_window->width(), m_window->height());
 
     load_assets();
-    depth_buffer = _pimpl_create_dsv(
-        device, 
-        dsv_descriptor_heap->cpu_handle(), 
-        m_window->width(), m_window->height()
-    );
 
     std::wstring font_filename = std::wstring(ROOT_DIRECTORY_WIDE) + L"/rsc/myfile.spriteFont";
-    glyph_renderer = std::make_unique<GlyphRenderer>(
-        device.Get(),
-        command_queue->get_underlying(),
-        viewport0,
+    m_glyph_renderer = std::make_unique<GlyphRenderer>(
+        m_device.Get(),
+        m_command_queue->get_underlying(),
+        m_viewport,
         font_filename.c_str()
     );
-    font_pos.x = static_cast<float>(m_window->width()) * 0.9;
-    font_pos.y = static_cast<float>(m_window->height()) * 0.5;
+    m_font_pos.x = static_cast<float>(m_window->width()) * 0.9;
+    m_font_pos.y = static_cast<float>(m_window->height()) * 0.5;
 
-    command_list_direct->Close();
-
-    // Execute eall command now
-    ID3D12CommandList* command_lists[] =
-    {
-        command_list_direct.Get()
-    };
-    command_queue->execute_command_list(command_lists, 1);
-    command_queue->signal();
-    command_queue->wait_for_fence();
-    
     m_application_initialized = true;
 }
 
@@ -190,7 +140,7 @@ FrustumCulling::~FrustumCulling()
 
 void FrustumCulling::flush()
 {
-    command_queue->flush();
+    m_command_queue->flush();
 }
 
 void FrustumCulling::on_mouse_move(LPARAM lparam)
@@ -208,7 +158,7 @@ void FrustumCulling::on_mouse_move(LPARAM lparam)
     RAWINPUT* raw = (RAWINPUT*)lpb;
     if (raw->header.dwType == RIM_TYPEMOUSE)
     {
-        camera.rotate(-raw->data.mouse.lLastX, raw->data.mouse.lLastY);
+        m_camera.rotate(-raw->data.mouse.lLastX, raw->data.mouse.lLastY);
     }
 
     delete[] lpb;
@@ -216,96 +166,67 @@ void FrustumCulling::on_mouse_move(LPARAM lparam)
 
 void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list)
 {
-    uint8_t backbuffer_idx = swap_chain->current_backbuffer_index();
-    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = dsv_descriptor_heap->cpu_handle();
-    UINT rtv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    uint8_t backbuffer_idx = m_swap_chain->current_backbuffer_index();
+    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = m_dsv_descriptor_heap->cpu_handle();
+    UINT rtv_inc_size = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle = 
-        swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
+        m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
     // Transition SRV to RTV
-    scene_texture->transition_to_write_state(command_list);
-    auto rt_descriptor = scene_texture->get_rtv_descriptor();
-    scene_texture->clear(command_list);
+    m_scene_texture->transition_to_write_state(command_list);
+    auto rt_descriptor = m_scene_texture->get_rtv_descriptor();
+    m_scene_texture->clear(command_list);
     //
     // Render Scene to Texture
-    command_list->SetPipelineState(scene_pso.Get());
-    command_list->SetGraphicsRootSignature(scene_root_signature.Get());
-    command_list->SetGraphicsRootShaderResourceView(1, instance_id_buffer->gpu_virtual_address());
-    command_list->SetGraphicsRootShaderResourceView(2, instance_data_buffer->gpu_virtual_address());
-    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { vertex_buffer_view };
+    command_list->SetPipelineState(m_scene_pso.Get());
+    command_list->SetGraphicsRootSignature(m_scene_root_signature.Get());
+    command_list->SetGraphicsRootShaderResourceView(1, m_instance_id_buffer->gpu_virtual_address());
+    command_list->SetGraphicsRootShaderResourceView(2, m_instance_data_buffer->gpu_virtual_address());
+    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer_view };
     command_list->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    command_list->RSSetViewports(1, &viewport0);
-    command_list->RSSetScissorRects(1, &scissor_rect);
+    command_list->RSSetViewports(1, &m_viewport);
+    command_list->RSSetScissorRects(1, &m_scissor_rect);
     command_list->OMSetRenderTargets(1, &rt_descriptor, FALSE, &dsv_handle);
-    command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
-    command_list->DrawInstanced(sizeof(interleaved_cube_vertices) / sizeof(VertexFormat), n_visible_instances, 0, 0);
+    command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &m_mvp_matrix, 0);
+    command_list->DrawInstanced(
+        sizeof(interleaved_cube_vertices) / sizeof(VertexFormat), 
+        m_num_visible_instances, 
+        0, 0
+    );
     // Transition RTV to SRV
-    scene_texture->transition_to_read_state(command_list);
+    m_scene_texture->transition_to_read_state(command_list);
 
     //
     // Render the scene texture to the first viewport
-    command_list->SetPipelineState(quad_pso.Get());
-    command_list->SetGraphicsRootSignature(quad_root_signature.Get());
+    command_list->SetPipelineState(m_quad_pso.Get());
+    command_list->SetGraphicsRootSignature(m_quad_root_signature.Get());
 
-    ID3D12DescriptorHeap* heaps[] = { srv_descriptor_heap->get_underlying() };
+    ID3D12DescriptorHeap* heaps[] = { m_srv_descriptor_heap->get_underlying() };
     command_list->SetDescriptorHeaps(1, heaps);
     command_list->SetGraphicsRootDescriptorTable(
-        0, srv_descriptor_heap->gpu_handle()
+        0, m_srv_descriptor_heap->gpu_handle()
     );
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    command_list->IASetVertexBuffers(0, 1, &quad_vertex_buffer_view);
-    command_list->RSSetScissorRects(1, &scissor_rect);
+    command_list->IASetVertexBuffers(0, 1, &m_quad_vertex_buffer_view);
+    command_list->RSSetScissorRects(1, &m_scissor_rect);
     command_list->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, NULL);
-    command_list->DrawInstanced(sizeof(interleaved_quad_vertices) / sizeof(VertexFormat), 1, 0, 0);
+    command_list->DrawInstanced(
+        sizeof(interleaved_quad_vertices) / sizeof(VertexFormat), 
+        1, 0, 0
+    );
 
     //
     // Render the glyphs
-    glyph_renderer->render_text(command_list, command_queue->get_underlying(), text_output.c_str(), font_pos);
+    m_glyph_renderer->render_text(command_list, m_command_queue->get_underlying(), m_text_output.c_str(), m_font_pos);
 }
 
 void FrustumCulling::render()
 {
-    ThrowIfFailed(command_allocator->Reset());
-    ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
+    IApplication::clear_rtv_dsv();
 
-    uint8_t backbuffer_idx = swap_chain->current_backbuffer_index();
+    record_command_list(m_command_list_direct.Get());
 
-    // Clear
-    {
-        swap_chain->transition_to_rtv(command_list_direct.Get());
-
-        // Clear backbuffer
-        const FLOAT clear_color[] = { 0.7f, 0.7f, 0.7f, 1.f };
-        command_list_direct->ClearRenderTargetView(
-            swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx),
-            clear_color,
-            0,
-            NULL
-        );
-
-        command_list_direct->ClearDepthStencilView(
-            dsv_descriptor_heap->cpu_handle(), 
-            D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, NULL
-        );
-    }
-
-    record_command_list(command_list_direct.Get());
-
-    // Present
-    {
-        swap_chain->transition_to_present(command_list_direct.Get());
-
-        command_list_direct->Close();
-        ID3D12CommandList* command_lists[] =
-        {
-            command_list_direct.Get()
-        };
-
-        command_queue->execute_command_list(command_lists, 1);
-        command_queue->signal();
-        swap_chain->present();
-        command_queue->wait_for_fence();
-    }
+    IApplication::present();
 }
 
 void FrustumCulling::resize()
@@ -320,8 +241,8 @@ void FrustumCulling::update()
     static auto t0 = std::chrono::high_resolution_clock::now();
     static float total_time = 0.f;
     auto t1 = std::chrono::high_resolution_clock::now();
-    elapsed_time = (t1 - t0).count() * 1e-9;
-    total_time += elapsed_time;
+    m_elapsed_time = (t1 - t0).count() * 1e-9;
+    total_time += m_elapsed_time;
     t0 = t1;
 
     float aspect_ratio = static_cast<float>(m_window->width()) / static_cast<float>(m_window->height());
@@ -336,21 +257,17 @@ void FrustumCulling::update()
         far_clip_distance
     );
 
-    camera.translate(m_keyboard_state, elapsed_time);
-    mvp_matrix = XMMatrixMultiply(model_matrix, camera.view);
-    mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
-
-    // Ensure that the GPU has finished work, before we render the next frame.
-    ThrowIfFailed(command_allocator->Reset());
-    ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
+    m_camera.translate(m_keyboard_state, m_elapsed_time);
+    m_mvp_matrix = XMMatrixMultiply(model_matrix, m_camera.view);
+    m_mvp_matrix = XMMatrixMultiply(m_mvp_matrix, projection_matrix);
 
     // Construct the viewing frustum
-    XMFLOAT3 camera_position = camera.get_position();
-    XMFLOAT3 camera_direction = camera.get_direction();
+    XMFLOAT3 m_camera_position = m_camera.get_position();
+    XMFLOAT3 m_camera_direction = m_camera.get_direction();
     
     Frustum frustum = construct_frustum(
-        *reinterpret_cast<Vector3<float>*>(&camera_position),
-        *reinterpret_cast<Vector3<float>*>(&camera_direction),
+        *reinterpret_cast<Vector3<float>*>(&m_camera_position),
+        *reinterpret_cast<Vector3<float>*>(&m_camera_direction),
         XMConvertToRadians(45.f),
         aspect_ratio,
         near_clip_distance,
@@ -390,16 +307,16 @@ void FrustumCulling::update()
         float_set(&d_avx2[i * 8], dot(planes[i].normal, planes[i].point), 8);
     }
     
-    n_visible_instances = 0;
-    for (int i = 0; i < n_instances / 8; ++i)
+    m_num_visible_instances = 0;
+    for (int i = 0; i < m_num_instances / 8; ++i)
     {
-        uint8_t mask = frustum_contains_aabb_avx2(&frustum_avx2, &abs_frustum_avx2, aabbs[i], d_avx2);
+        uint8_t mask = frustum_contains_aabb_avx2(&frustum_avx2, &abs_frustum_avx2, m_aabbs[i], d_avx2);
         for (int k = 0; k < 8; ++k)
         {
             if (mask & (0x01 << k))
             {
-                instance_ids[n_visible_instances] = i * 8 + k;
-                ++n_visible_instances;
+                m_instance_ids[m_num_visible_instances] = i * 8 + k;
+                ++m_num_visible_instances;
             }
         }
     }
@@ -407,34 +324,24 @@ void FrustumCulling::update()
     auto cull_t1 = std::chrono::high_resolution_clock::now();
     auto cull_time = (cull_t1 - cull_t0).count() * 1e-3;
     // Update the contents of the offset buffer
-    instance_id_buffer->update(
-        device.Get(), command_list_direct.Get(), 
-        instance_ids.get(), sizeof(UINT) * n_visible_instances,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    m_instance_id_buffer->update(
+        m_device.Get(), m_command_list_direct.Get(), 
+        m_instance_ids.get(), sizeof(UINT) * m_num_visible_instances,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
     );
 
-    text_output.resize(128);
-    uint32_t n_culled_objects = n_instances - n_visible_instances;
+    m_text_output.resize(128);
+    uint32_t n_culled_objects = m_num_instances - m_num_visible_instances;
     swprintf(
-        text_output.data(), 
+        m_text_output.data(), 
         L"Frame time: %dms\nCull time: %dus\nNumber of cubes: %d\nCulled: %d\nTriangles: %d", 
         static_cast<uint32_t>(elapsed_time_at_threshold * 1e3),
         static_cast<uint32_t>(cull_time),
-        n_instances,
+        m_num_instances,
         n_culled_objects,
         n_culled_objects * 36 / 3
     );
-
-    command_list_direct->Close();
-
-    // Execute eall command now
-    ID3D12CommandList* command_lists[] =
-    {
-        command_list_direct.Get()
-    };
-    command_queue->execute_command_list(command_lists, 1);
-    command_queue->signal();
-    command_queue->wait_for_fence();
 
     update_count++;
     if (update_count % 16 == 0)
@@ -443,7 +350,7 @@ void FrustumCulling::update()
     }
     if (update_count % 25 == 0)
     {
-        elapsed_time_at_threshold = elapsed_time;
+        elapsed_time_at_threshold = m_elapsed_time;
     }
 }
 
@@ -453,16 +360,16 @@ void FrustumCulling::load_assets()
     const float scene_ydim = 700.f;
     const int n_cubes_per_row = 300;
     const int n_cubes_per_column = 300;
-    n_instances = n_cubes_per_row * n_cubes_per_column;
+    m_num_instances = n_cubes_per_row * n_cubes_per_column;
     
-    instance_ids = std::make_unique<UINT[]>(n_instances);
-    for (int i = 0; i < n_instances; ++i)
+    m_instance_ids = std::make_unique<UINT[]>(m_num_instances);
+    for (int i = 0; i < m_num_instances; ++i)
     {
-        instance_ids[i] = i;
+        m_instance_ids[i] = i;
     }
-    instance_vertex_offsets = std::make_unique<InstanceAttributes[]>(n_instances);
+    m_instance_vertex_offsets = std::make_unique<InstanceAttributes[]>(m_num_instances);
     construct_scene_of_cubes(
-        instance_vertex_offsets.get(),
+        m_instance_vertex_offsets.get(),
         scene_xdim, scene_ydim, 
         n_cubes_per_row, n_cubes_per_column
     );
@@ -470,14 +377,14 @@ void FrustumCulling::load_assets()
     load_quad_shader_assets();
     
     const uint32_t n_vertices = sizeof(interleaved_cube_vertices) / sizeof(VertexFormat);
-    aabbs.resize(n_instances / 8);
+    m_aabbs.resize(m_num_instances / 8);
     construct_instanced_aabbs(
-        aabbs.data(), 
-        n_instances / 8,
+        m_aabbs.data(), 
+        m_num_instances / 8,
         interleaved_cube_vertices,
         sizeof(interleaved_cube_vertices) / sizeof(VertexFormat),
         sizeof(VertexFormat),
-        reinterpret_cast<float*>(instance_vertex_offsets.get()),
+        reinterpret_cast<float*>(m_instance_vertex_offsets.get()),
         sizeof(InstanceAttributes)
     );
 }
@@ -486,29 +393,29 @@ void FrustumCulling::load_scene_shader_assets()
 {
     // Vertex buffer uploading
     {
-        vertex_buffer = std::make_unique<DX12Resource>();
-        vertex_buffer->upload(device.Get(), command_list_direct.Get(), 
+        m_vertex_buffer = std::make_unique<DX12Resource>();
+        m_vertex_buffer->upload(m_device.Get(), m_command_list_direct.Get(), 
             interleaved_cube_vertices, sizeof(interleaved_cube_vertices),
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
-        vertex_buffer_view.BufferLocation = vertex_buffer->gpu_virtual_address();
-        vertex_buffer_view.SizeInBytes = sizeof(interleaved_cube_vertices);
-        vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
+        m_vertex_buffer_view.BufferLocation = m_vertex_buffer->gpu_virtual_address();
+        m_vertex_buffer_view.SizeInBytes = sizeof(interleaved_cube_vertices);
+        m_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
     // Instancing ID SRV
     {
-        instance_id_buffer = std::make_unique<DX12Resource>();
-        instance_id_buffer->upload(
-            device.Get(), command_list_direct.Get(),
-            instance_ids.get(), sizeof(UINT) * n_instances,
+        m_instance_id_buffer = std::make_unique<DX12Resource>();
+        m_instance_id_buffer->upload(
+            m_device.Get(), m_command_list_direct.Get(),
+            m_instance_ids.get(), sizeof(UINT) * m_num_instances,
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
         
         D3D12_BUFFER_SRV buffer_desc = {};
         buffer_desc.FirstElement = 0;
-        buffer_desc.NumElements = n_instances;
+        buffer_desc.NumElements = m_num_instances;
         buffer_desc.StructureByteStride = sizeof(UINT);
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
@@ -517,25 +424,31 @@ void FrustumCulling::load_scene_shader_assets()
         srv_desc.Format = DXGI_FORMAT_UNKNOWN;
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-        device->CreateShaderResourceView(
-            instance_id_buffer->get_underlying(),
+        m_device->CreateShaderResourceView(
+            m_instance_id_buffer->get_underlying(),
             &srv_desc,
-            vs_srv_descriptor_heap->cpu_handle()
+            m_vs_srv_descriptor_heap->cpu_handle()
+        );
+        
+        m_instance_id_buffer->transition(
+            m_command_list_direct.Get(), 
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
         );
     }
 
     // Instance data SRV
     {
-        instance_data_buffer = std::make_unique<DX12Resource>();
-        instance_data_buffer->upload(
-            device.Get(), command_list_direct.Get(),
-            instance_vertex_offsets.get(), sizeof(InstanceAttributes) * n_instances,
+        m_instance_data_buffer = std::make_unique<DX12Resource>();
+        m_instance_data_buffer->upload(
+            m_device.Get(), m_command_list_direct.Get(),
+            m_instance_vertex_offsets.get(), sizeof(InstanceAttributes) * m_num_instances,
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
         D3D12_BUFFER_SRV buffer_desc = {};
         buffer_desc.FirstElement = 0;
-        buffer_desc.NumElements = n_instances;
+        buffer_desc.NumElements = m_num_instances;
         buffer_desc.StructureByteStride = sizeof(InstanceAttributes);
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
@@ -544,10 +457,16 @@ void FrustumCulling::load_scene_shader_assets()
         srv_desc.Format = DXGI_FORMAT_UNKNOWN;
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-        device->CreateShaderResourceView(
-            instance_data_buffer->get_underlying(),
+        m_device->CreateShaderResourceView(
+            m_instance_data_buffer->get_underlying(),
             &srv_desc,
-            vs_srv_descriptor_heap->cpu_handle(1)
+            m_vs_srv_descriptor_heap->cpu_handle(1)
+        );
+
+        m_instance_data_buffer->transition(
+            m_command_list_direct.Get(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
         );
     }
 
@@ -565,7 +484,7 @@ void FrustumCulling::load_scene_shader_assets()
 
     D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
     feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
+    if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
     {
         feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
     }
@@ -599,11 +518,11 @@ void FrustumCulling::load_scene_shader_assets()
         &error_blob
     ));
 
-    ThrowIfFailed(device->CreateRootSignature(
+    ThrowIfFailed(m_device->CreateRootSignature(
         0,
         root_signature_blob->GetBufferPointer(),
         root_signature_blob->GetBufferSize(),
-        IID_PPV_ARGS(&scene_root_signature)
+        IID_PPV_ARGS(&m_scene_root_signature)
     ));
 
     D3D12_RT_FORMAT_ARRAY rtv_formats = {};
@@ -620,7 +539,7 @@ void FrustumCulling::load_scene_shader_assets()
     scene_pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
     scene_pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     scene_pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
-    scene_pipeline_state_stream.root_signature = scene_root_signature.Get();
+    scene_pipeline_state_stream.root_signature = m_scene_root_signature.Get();
     scene_pipeline_state_stream.rs = rasterizer_desc;
     scene_pipeline_state_stream.rtv_formats = rtv_formats;
     scene_pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
@@ -630,23 +549,23 @@ void FrustumCulling::load_scene_shader_assets()
         &scene_pipeline_state_stream
     };
 
-    ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&scene_pso)));
+    ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_scene_pso)));
 }
 
 void FrustumCulling::load_quad_shader_assets()
 {
     // Quad vertex buffer
     {
-        quad_vertex_buffer = std::make_unique<DX12Resource>();
-        quad_vertex_buffer->upload(
-            device.Get(), command_list_direct.Get(), 
+        m_quad_vertex_buffer = std::make_unique<DX12Resource>();
+        m_quad_vertex_buffer->upload(
+            m_device.Get(), m_command_list_direct.Get(), 
             interleaved_quad_vertices, sizeof(interleaved_quad_vertices),
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
         );
 
-        quad_vertex_buffer_view.BufferLocation = quad_vertex_buffer->gpu_virtual_address();
-        quad_vertex_buffer_view.SizeInBytes = sizeof(interleaved_quad_vertices);
-        quad_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
+        m_quad_vertex_buffer_view.BufferLocation = m_quad_vertex_buffer->gpu_virtual_address();
+        m_quad_vertex_buffer_view.SizeInBytes = sizeof(interleaved_quad_vertices);
+        m_quad_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
     ComPtr<ID3DBlob> vs_blob;
@@ -662,7 +581,7 @@ void FrustumCulling::load_quad_shader_assets()
 
     D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
     feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
+    if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
     {
         feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
     }
@@ -681,7 +600,11 @@ void FrustumCulling::load_quad_shader_assets()
     root_parameters[0].InitAsDescriptorTable(1, &srv_range, D3D12_SHADER_VISIBILITY_PIXEL);
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-    root_signature_desc.Init_1_1(1, root_parameters, 1, samplers, root_signature_flags);
+    root_signature_desc.Init_1_1(
+        1, root_parameters, 
+        1, samplers, 
+        root_signature_flags
+    );
 
     ComPtr<ID3DBlob> root_signature_blob;
     ComPtr<ID3DBlob> error_blob;
@@ -692,11 +615,11 @@ void FrustumCulling::load_quad_shader_assets()
         &error_blob
     ));
 
-    ThrowIfFailed(device->CreateRootSignature(
+    ThrowIfFailed(m_device->CreateRootSignature(
         0,
         root_signature_blob->GetBufferPointer(),
         root_signature_blob->GetBufferSize(),
-        IID_PPV_ARGS(&quad_root_signature)
+        IID_PPV_ARGS(&m_quad_root_signature)
     ));
 
     D3D12_RT_FORMAT_ARRAY rtv_formats = {};
@@ -712,7 +635,7 @@ void FrustumCulling::load_quad_shader_assets()
     quad_pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
     quad_pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     quad_pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
-    quad_pipeline_state_stream.root_signature = quad_root_signature.Get();
+    quad_pipeline_state_stream.root_signature = m_quad_root_signature.Get();
     quad_pipeline_state_stream.rs = rasterizer_desc;
     quad_pipeline_state_stream.rtv_formats = rtv_formats;
     quad_pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
@@ -722,7 +645,7 @@ void FrustumCulling::load_quad_shader_assets()
         &quad_pipeline_state_stream
     };
 
-    ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&quad_pso)));
+    ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_quad_pso)));
 }
 
 }

@@ -47,23 +47,13 @@ private:
 
 private:
 
-    Microsoft::WRL::ComPtr<ID3D12Device2>             m_device;
-    Microsoft::WRL::ComPtr<ID3D12Resource>            m_depth_buffer;
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    m_command_allocator;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_command_list_direct;
     Microsoft::WRL::ComPtr<ID3D12RootSignature>       m_scene_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState>       m_scene_pso;
     Microsoft::WRL::ComPtr<ID3D12PipelineState>       m_cube_pso;
 
-    std::unique_ptr<SwapChain>      m_swap_chain;
-    std::unique_ptr<CommandQueue>   m_command_queue;
-    std::unique_ptr<DescriptorHeap> m_dsv_descriptor_heap;
     std::unique_ptr<DescriptorHeap> m_srv_descriptor_heap;
     std::unique_ptr<DX12Resource>   m_vertex_buffer;
     D3D12_VERTEX_BUFFER_VIEW        m_vertex_buffer_view;
-
-    D3D12_VIEWPORT m_viewport;
-    D3D12_RECT     m_scissor_rect;
 
     DirectX::XMMATRIX m_mvp_matrix;
     DirectX::XMMATRIX m_cube_mvp;

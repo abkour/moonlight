@@ -1,7 +1,12 @@
 #pragma once
 #include "../ext/d3dx12.h"
+#include "camera.hpp"
 #include "logging_file.hpp"
+#include "core/command_queue.hpp"
+#include "core/descriptor_heap.hpp"
+#include "core/global_pss_field.hpp"
 #include "core/key_state.hpp"
+#include "core/swap_chain.hpp"
 #include "project_defines.hpp"
 #include "window.hpp"
 
@@ -24,27 +29,34 @@ class IApplication {
 
 public:
 
-    IApplication() {}
+    IApplication() = delete;
     IApplication(HINSTANCE hinstance);
+    IApplication(HINSTANCE hinstance, WNDPROC wndproc);
 
     virtual ~IApplication() 
     {
         CoUninitialize();
     }
 
-    virtual void flush() = 0;
+    virtual void flush()
+    {
+        m_command_queue->flush();
+    }
 
     virtual void on_key_event(const PackedKeyArguments key_state)
     {}
 
-    virtual void on_mouse_move(LPARAM lparam)
-    {}
+    virtual void on_mouse_move(LPARAM lparam);
 
     virtual void update() = 0;
     
     virtual void render() = 0;
 
     virtual void resize() = 0;
+
+    virtual void clear_rtv_dsv(
+        const DirectX::XMFLOAT4 clear_color = DirectX::XMFLOAT4(0.7f, 0.7f, 0.7f, 1.f));
+    virtual void present();
 
     void run();
 
@@ -122,6 +134,25 @@ protected:
     );
 
     HANDLE _pimpl_create_fence_event();
+
+protected:
+
+    Microsoft::WRL::ComPtr<ID3D12Device2>             m_device;
+    Microsoft::WRL::ComPtr<ID3D12Resource>            m_depth_buffer;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    m_command_allocator;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_command_list_direct;
+
+    std::unique_ptr<SwapChain>      m_swap_chain;
+    std::unique_ptr<CommandQueue>   m_command_queue;
+    std::unique_ptr<DescriptorHeap> m_dsv_descriptor_heap;
+
+    D3D12_VIEWPORT m_viewport;
+    D3D12_RECT     m_scissor_rect;
+
+    Camera m_camera;
+    DirectX::XMMATRIX m_mvp_matrix;
+
+    std::shared_ptr<GlobalPipelineStateStreamField> m_shared_pss_field;
 
 protected:
 

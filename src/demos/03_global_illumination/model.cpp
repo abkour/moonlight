@@ -28,10 +28,10 @@ void Model::parse_mof(const std::string& filename)
     file.read((char*)&n_attr_data_bytes, sizeof(uint64_t));
     file.read((char*)&m_mesh_flags, sizeof(uint64_t));
 
-    m_mesh = std::make_unique<float[]>(n_attr_data_bytes / sizeof(float));
+    m_mesh_num_elements = n_attr_data_bytes / sizeof(float);
+    m_mesh = std::make_unique<float[]>(m_mesh_num_elements);
 
     file.read((char*)m_mesh.get(), n_attr_data_bytes);
-    m_mesh_num_elements = n_attr_data_bytes / sizeof(float);
 
     if (m_mesh_flags & ML_MISC_FLAG_MATERIALS_APPENDED)
     {

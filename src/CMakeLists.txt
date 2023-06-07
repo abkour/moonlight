@@ -6,6 +6,7 @@
 
 add_executable (moonlight WIN32
 	"application.cpp"
+	"raster_model.cpp"
 	"moonlight.cpp" 
 	"window.cpp" 
 	"camera.cpp" 
@@ -36,7 +37,16 @@ add_executable (moonlight WIN32
 	"imgui/imgui_impl_win32.cpp"
 	"imgui/imgui_tables.cpp"
 	"imgui/imgui_widgets.cpp"
- "core/cpu_gpu_texture2d.cpp" "utility/file_browser.cpp"  "demos/03_global_illumination/coordinate_system.cpp" "demos/03_global_illumination/model.cpp" "demos/04_plotter/plotter.cpp" "demos/05_pbr/pbr_demo.cpp" "demos/06_tetris/tetris_app.cpp" "demos/06_tetris/tetris_block.cpp" "demos/06_tetris/tetris_playfield.cpp")
+	"core/cpu_gpu_texture2d.cpp" 
+	"utility/file_browser.cpp"  
+	"demos/03_global_illumination/coordinate_system.cpp" 
+	"demos/03_global_illumination/model.cpp" 
+	"demos/04_plotter/plotter.cpp" "demos/05_pbr/pbr_demo.cpp" 
+	"demos/06_tetris/tetris_app.cpp" 
+	"demos/06_tetris/tetris_block.cpp" 
+	"demos/06_tetris/tetris_playfield.cpp"
+	"demos/07_ssao/ssao.cpp"
+)
 
 if (MSVC)
 set_target_properties(${BUILD_TARGET} PROPERTIES LINK_FLAGS "/PROFILE")
@@ -57,14 +67,14 @@ if (CMAKE_VERSION VERSION_GREATER 3.13)
 	dxguid.lib
   )
 
-  target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/ext/DirectXTex/build/bin/CMake/Debug/DirectXTex.lib")
-  target_link_libraries(moonlight optimized "${CMAKE_SOURCE_DIR}/ext/DirectXTex/build/bin/CMake/Release/DirectXTex.lib")
+  target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/build/bin/CMake/Debug/DirectXTex.lib")
+  target_link_libraries(moonlight optimized "${CMAKE_SOURCE_DIR}/build/bin/CMake/Release/DirectXTex.lib")
 
-  target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/ext/DirectXTK12/build/bin/CMake/Debug/DirectXTK12.lib")
-  target_link_libraries(moonlight optimized "${CMAKE_SOURCE_DIR}/ext/DirectXTK12/build/bin/CMake/Release/DirectXTK12.lib")
+  target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/build/bin/CMake/Debug/DirectXTK12.lib")
+  target_link_libraries(moonlight optimized "${CMAKE_SOURCE_DIR}/build/bin/CMake/Release/DirectXTK12.lib")
 
-  target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/out/build/x64-debug/msvc_19.34_cxx_64_md_debug/tbb12_debug.lib")
-  target_link_libraries(moonlight optimized "${CMAKE_SOURCE_DIR}/out/build/x64-release/msvc_19.34_cxx_64_md_release/tbb12.lib")
+  target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/build/msvc_19.34_cxx_64_md_debug/tbb12_debug.lib")
+  target_link_libraries(moonlight optimized "${CMAKE_SOURCE_DIR}/build/msvc_19.34_cxx_64_md_release/tbb12.lib")
  
   add_compile_definitions(ROOT_DIRECTORY_ASCII="${CMAKE_SOURCE_DIR}")
 endif()
