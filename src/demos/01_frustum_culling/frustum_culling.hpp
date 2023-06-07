@@ -7,6 +7,7 @@
 #include "../../core/command_queue.hpp"
 #include "../../core/descriptor_heap.hpp"
 #include "../../core/dx12_resource.hpp"
+#include "../../core/pso.hpp"
 #include "../../core/render_texture.hpp"
 #include "../../core/swap_chain.hpp"
 #include "../../collision/aabb.hpp"
@@ -29,7 +30,6 @@ public:
     FrustumCulling(HINSTANCE);
     ~FrustumCulling();
 
-    void flush() override;
     void on_mouse_move(LPARAM) override;
     void render() override;
     void resize() override;
@@ -44,10 +44,8 @@ private:
 
 private:
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_scene_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_scene_pso;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_quad_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_quad_pso;
+    std::unique_ptr<PipelineStateObject> m_scene_pso;
+    std::unique_ptr<PipelineStateObject> m_quad_pso;
 
     std::unique_ptr<DescriptorHeap> m_quad_rtv_descriptor_heap;
     std::unique_ptr<DescriptorHeap> m_srv_descriptor_heap;

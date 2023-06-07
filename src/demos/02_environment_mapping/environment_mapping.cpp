@@ -60,19 +60,6 @@ static float interleaved_cube_vn[] = {
     -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
 };
 
-static struct ScenePipelineStateStream
-{
-    CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
-    CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT input_layout;
-    CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitive_topology;
-    CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-    CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rs;
-    CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-    CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsv_format;
-    CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtv_formats;
-    CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL ds_desc;
-} scene_pipeline_state_stream;
-
 EnvironmentMapping::EnvironmentMapping(HINSTANCE hinstance)
     : IApplication(hinstance, &EnvironmentMapping::WindowMessagingProcess)
 {
@@ -139,8 +126,8 @@ void EnvironmentMapping::record_command_list(ID3D12GraphicsCommandList* command_
 
     //
     // Render Scene to Texture
-    command_list->SetPipelineState(m_scene_pso.Get());
-    command_list->SetGraphicsRootSignature(m_scene_root_signature.Get());
+    command_list->SetPipelineState(m_scene_pso->pso());
+    command_list->SetGraphicsRootSignature(m_scene_pso->root_signature());
 
     ID3D12DescriptorHeap* heaps[] = { m_srv_descriptor_heap->get_underlying() };
     m_command_list_direct->SetDescriptorHeaps(1, heaps);
@@ -158,7 +145,8 @@ void EnvironmentMapping::record_command_list(ID3D12GraphicsCommandList* command_
     command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &m_mvp_matrix, 0);
     command_list->DrawInstanced(sizeof(interleaved_cube_vn) / sizeof(VertexFormat), 1, 0, 0);
 
-    command_list->SetPipelineState(m_scene_pso_env.Get());
+    command_list->SetPipelineState(m_scene_pso_env->pso());
+    command_list->SetGraphicsRootSignature(m_scene_pso_env->root_signature());
     command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, 
         &m_mvp_matrix_2, 0);
     command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, 
@@ -257,30 +245,15 @@ void EnvironmentMapping::load_scene_shader_assets()
         m_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
-    ComPtr<ID3DBlob> vs_blob;
-    ComPtr<ID3DBlob> ps_blob;
-    {
-        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/02_environment_mapping/shaders/cubemap_vs.cso";
-        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/02_environment_mapping/shaders/cubemap_ps.cso";
-        ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
-        ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
-    }
+    std::wstring vspath 
+        = std::wstring(ROOT_DIRECTORY_WIDE) 
+        + L"/src/demos/02_environment_mapping/shaders/cubemap_vs.hlsl";
+    std::wstring pspath 
+        = std::wstring(ROOT_DIRECTORY_WIDE) 
+        + L"/src/demos/02_environment_mapping/shaders/cubemap_ps.hlsl";
 
     D3D12_INPUT_ELEMENT_DESC input_layout[2];
     construct_input_layout_v_n(input_layout);
-
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
-    feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
-    {
-        feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
-    D3D12_ROOT_SIGNATURE_FLAGS root_signature_flags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     CD3DX12_DESCRIPTOR_RANGE1 srv_range{ D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0 };
     CD3DX12_ROOT_PARAMETER1 root_parameters[3];
@@ -292,79 +265,51 @@ void EnvironmentMapping::load_scene_shader_assets()
     CD3DX12_STATIC_SAMPLER_DESC samplers[1];
     samplers[0].Init(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT);
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-    // TODO: Is this call correct, if the highest supported version is 1_0?
-    root_signature_desc.Init_1_1(
-        _countof(root_parameters),  root_parameters,
-        _countof(samplers),         samplers,
-        root_signature_flags
-    );
-
-    ComPtr<ID3DBlob> root_signature_blob;
-    // TODO: What is the error blob=
-    ComPtr<ID3DBlob> error_blob;
-    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-        &root_signature_desc,
-        feature_data.HighestVersion,
-        &root_signature_blob,
-        &error_blob
-    ));
-
-    ThrowIfFailed(m_device->CreateRootSignature(
-        0,
-        root_signature_blob->GetBufferPointer(),
-        root_signature_blob->GetBufferSize(),
-        IID_PPV_ARGS(&m_scene_root_signature)
-    ));
-
     D3D12_RT_FORMAT_ARRAY rtv_formats = {};
     rtv_formats.NumRenderTargets = 1;
     rtv_formats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-    CD3DX12_RASTERIZER_DESC rasterizer_desc = {};
-    rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
-    rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
-    rasterizer_desc.DepthClipEnable = TRUE;
-    rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
     CD3DX12_DEFAULT default_initializer;
     CD3DX12_DEPTH_STENCIL_DESC dsv_desc(default_initializer);
     dsv_desc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 
-    scene_pipeline_state_stream.dsv_format = DXGI_FORMAT_D32_FLOAT;
-    scene_pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
-    scene_pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    scene_pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
-    scene_pipeline_state_stream.root_signature = m_scene_root_signature.Get();
-    scene_pipeline_state_stream.rs = rasterizer_desc;
-    scene_pipeline_state_stream.rtv_formats = rtv_formats;
-    scene_pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
-    scene_pipeline_state_stream.ds_desc = dsv_desc;
+    m_scene_pso
+        = std::make_unique<PipelineStateObject>(m_device, m_shared_pss_field);
+    m_scene_pso->construct_root_signature(
+        root_parameters, _countof(root_parameters),
+        samplers, _countof(samplers)
+    );
+    m_scene_pso->construct_ds_format(DXGI_FORMAT_D32_FLOAT);
+    m_scene_pso->construct_input_layout(input_layout, _countof(input_layout));
+    m_scene_pso->construct_ds_desc(dsv_desc);
+    m_scene_pso->construct_rt_formats(rtv_formats);
+    m_scene_pso->construct_vs(vspath.c_str(), "main", "vs_5_1");
+    m_scene_pso->construct_ps(pspath.c_str(), "main", "ps_5_1");
+    m_scene_pso->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
+    m_scene_pso->construct();
 
-    D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {
-        sizeof(ScenePipelineStateStream),
-        &scene_pipeline_state_stream
-    };
-
-    ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_scene_pso)));
-
+    //
+    // 
     // Create shaders for environment mapping
-    {
-        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/02_environment_mapping/shaders/env_mapping_vs.cso";
-        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/02_environment_mapping/shaders/env_mapping_ps.cso";
-        ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
-        ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
-    }
-    
-    scene_pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
-    scene_pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
+    vspath = std::wstring(ROOT_DIRECTORY_WIDE) 
+        + L"/src/demos/02_environment_mapping/shaders/env_mapping_vs.hlsl";
+    pspath = std::wstring(ROOT_DIRECTORY_WIDE) 
+        + L"/src/demos/02_environment_mapping/shaders/env_mapping_ps.hlsl";
 
-    pss_desc = {
-        sizeof(ScenePipelineStateStream),
-        &scene_pipeline_state_stream
-    };
-
-    ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_scene_pso_env)));
+    m_scene_pso_env 
+        = std::make_unique<PipelineStateObject>(m_device, m_shared_pss_field);
+    m_scene_pso_env->construct_root_signature(
+        root_parameters, _countof(root_parameters), 
+        samplers, _countof(samplers)
+    );
+    m_scene_pso_env->construct_ds_format(DXGI_FORMAT_D32_FLOAT);
+    m_scene_pso_env->construct_input_layout(input_layout, _countof(input_layout));
+    m_scene_pso_env->construct_ds_desc(dsv_desc);
+    m_scene_pso_env->construct_rt_formats(rtv_formats);
+    m_scene_pso_env->construct_vs(vspath.c_str(), "main", "vs_5_1");
+    m_scene_pso_env->construct_ps(pspath.c_str(), "main", "ps_5_1");
+    m_scene_pso_env->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
+    m_scene_pso_env->construct();
 }
 
 void EnvironmentMapping::load_cubemap(const wchar_t* filename)

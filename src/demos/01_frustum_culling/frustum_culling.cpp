@@ -7,29 +7,6 @@ using namespace Microsoft::WRL;
 
 namespace moonlight {
 
-static struct ScenePipelineStateStream
-{
-    CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
-    CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT input_layout;
-    CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitive_topology;
-    CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-    CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rs;
-    CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-    CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsv_format;
-    CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtv_formats;
-} scene_pipeline_state_stream;
-
-static struct QuadPipelineStateStream
-{
-    CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
-    CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT input_layout;
-    CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitive_topology;
-    CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-    CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rs;
-    CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-    CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtv_formats;
-} quad_pipeline_state_stream;
-
 struct VertexFormat
 {
     XMFLOAT3 p; 
@@ -138,11 +115,6 @@ FrustumCulling::~FrustumCulling()
 {
 }
 
-void FrustumCulling::flush()
-{
-    m_command_queue->flush();
-}
-
 void FrustumCulling::on_mouse_move(LPARAM lparam)
 {
     UINT size;
@@ -167,21 +139,24 @@ void FrustumCulling::on_mouse_move(LPARAM lparam)
 void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list)
 {
     uint8_t backbuffer_idx = m_swap_chain->current_backbuffer_index();
-    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = m_dsv_descriptor_heap->cpu_handle();
     UINT rtv_inc_size = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-    D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle = 
+    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = m_dsv_descriptor_heap->cpu_handle();
+    D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle =
         m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
+    
+    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer_view };
+    ID3D12DescriptorHeap* heaps[] = { m_srv_descriptor_heap->get_underlying() };
+
     // Transition SRV to RTV
     m_scene_texture->transition_to_write_state(command_list);
     auto rt_descriptor = m_scene_texture->get_rtv_descriptor();
     m_scene_texture->clear(command_list);
     //
     // Render Scene to Texture
-    command_list->SetPipelineState(m_scene_pso.Get());
-    command_list->SetGraphicsRootSignature(m_scene_root_signature.Get());
+    command_list->SetPipelineState(m_scene_pso->pso());
+    command_list->SetGraphicsRootSignature(m_scene_pso->root_signature());
     command_list->SetGraphicsRootShaderResourceView(1, m_instance_id_buffer->gpu_virtual_address());
     command_list->SetGraphicsRootShaderResourceView(2, m_instance_data_buffer->gpu_virtual_address());
-    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer_view };
     command_list->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list->RSSetViewports(1, &m_viewport);
@@ -198,10 +173,9 @@ void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list
 
     //
     // Render the scene texture to the first viewport
-    command_list->SetPipelineState(m_quad_pso.Get());
-    command_list->SetGraphicsRootSignature(m_quad_root_signature.Get());
+    command_list->SetPipelineState(m_quad_pso->pso());
+    command_list->SetGraphicsRootSignature(m_quad_pso->root_signature());
 
-    ID3D12DescriptorHeap* heaps[] = { m_srv_descriptor_heap->get_underlying() };
     command_list->SetDescriptorHeaps(1, heaps);
     command_list->SetGraphicsRootDescriptorTable(
         0, m_srv_descriptor_heap->gpu_handle()
@@ -215,8 +189,6 @@ void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list
         1, 0, 0
     );
 
-    //
-    // Render the glyphs
     m_glyph_renderer->render_text(command_list, m_command_queue->get_underlying(), m_text_output.c_str(), m_font_pos);
 }
 
@@ -470,86 +442,37 @@ void FrustumCulling::load_scene_shader_assets()
         );
     }
 
-    ComPtr<ID3DBlob> vs_blob;
-    ComPtr<ID3DBlob> ps_blob;
-    {
-        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//01_frustum_culling//shaders//instanced_cube_vs.cso";
-        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//01_frustum_culling//shaders//instanced_cube_ps.cso";
-        ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
-        ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
-    }
+    std::wstring vspath 
+        = std::wstring(ROOT_DIRECTORY_WIDE) 
+        + L"//src//demos//01_frustum_culling//shaders//instanced_cube_vs.hlsl";
+    std::wstring pspath 
+        = std::wstring(ROOT_DIRECTORY_WIDE) 
+        + L"//src//demos//01_frustum_culling//shaders//instanced_cube_ps.hlsl";
 
     D3D12_INPUT_ELEMENT_DESC input_layout[2];
     construct_input_layout_v_t(input_layout);
-
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
-    feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
-    {
-        feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
-    D3D12_ROOT_SIGNATURE_FLAGS root_signature_flags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     CD3DX12_ROOT_PARAMETER1 root_parameters[3];
     root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
     root_parameters[1].InitAsShaderResourceView(0);
     root_parameters[2].InitAsShaderResourceView(1);
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-    // TODO: Is this call correct, if the highest supported version is 1_0?
-    root_signature_desc.Init_1_1(
-        _countof(root_parameters), root_parameters, 
-        0, nullptr, 
-        root_signature_flags
-    );
-
-    ComPtr<ID3DBlob> root_signature_blob;
-    // TODO: What is the error blob=
-    ComPtr<ID3DBlob> error_blob;
-    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-        &root_signature_desc,
-        feature_data.HighestVersion,
-        &root_signature_blob,
-        &error_blob
-    ));
-
-    ThrowIfFailed(m_device->CreateRootSignature(
-        0,
-        root_signature_blob->GetBufferPointer(),
-        root_signature_blob->GetBufferSize(),
-        IID_PPV_ARGS(&m_scene_root_signature)
-    ));
-
     D3D12_RT_FORMAT_ARRAY rtv_formats = {};
     rtv_formats.NumRenderTargets = 1;
     rtv_formats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-    CD3DX12_RASTERIZER_DESC rasterizer_desc = {};
-    rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
-    rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
-    rasterizer_desc.DepthClipEnable = TRUE;
-    rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-    scene_pipeline_state_stream.dsv_format = DXGI_FORMAT_D32_FLOAT;
-    scene_pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
-    scene_pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    scene_pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
-    scene_pipeline_state_stream.root_signature = m_scene_root_signature.Get();
-    scene_pipeline_state_stream.rs = rasterizer_desc;
-    scene_pipeline_state_stream.rtv_formats = rtv_formats;
-    scene_pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
-
-    D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {
-        sizeof(ScenePipelineStateStream),
-        &scene_pipeline_state_stream
-    };
-
-    ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_scene_pso)));
+    m_scene_pso = std::make_unique<PipelineStateObject>(m_device, m_shared_pss_field);
+    m_scene_pso->construct_root_signature(
+        root_parameters, _countof(root_parameters), 
+        nullptr, 0
+    );
+    m_scene_pso->construct_rt_formats(rtv_formats);
+    m_scene_pso->construct_ds_format(DXGI_FORMAT_D32_FLOAT);
+    m_scene_pso->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE);
+    m_scene_pso->construct_input_layout(input_layout, _countof(input_layout));
+    m_scene_pso->construct_vs(vspath.c_str(), "main", "vs_5_1");
+    m_scene_pso->construct_ps(pspath.c_str(), "main", "ps_5_1");
+    m_scene_pso->construct();
 }
 
 void FrustumCulling::load_quad_shader_assets()
@@ -568,29 +491,15 @@ void FrustumCulling::load_quad_shader_assets()
         m_quad_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
-    ComPtr<ID3DBlob> vs_blob;
-    ComPtr<ID3DBlob> ps_blob;
-    {
-        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//01_frustum_culling//shaders//fullquad_vs.cso";
-        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//01_frustum_culling//shaders//fullquad_ps.cso";
-        ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
-        ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
-    }
+    std::wstring vspath 
+        = std::wstring(ROOT_DIRECTORY_WIDE) 
+        + L"//src//demos//01_frustum_culling//shaders//fullquad_vs.hlsl";
+    std::wstring pspath 
+        = std::wstring(ROOT_DIRECTORY_WIDE) 
+        + L"//src//demos//01_frustum_culling//shaders//fullquad_ps.hlsl";
+
     D3D12_INPUT_ELEMENT_DESC input_layout[2];
     construct_input_layout_v_t(input_layout);
-
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
-    feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
-    {
-        feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
-    D3D12_ROOT_SIGNATURE_FLAGS root_signature_flags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     CD3DX12_STATIC_SAMPLER_DESC samplers[1];
     samplers[0].Init(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT);
@@ -599,53 +508,21 @@ void FrustumCulling::load_quad_shader_assets()
     CD3DX12_ROOT_PARAMETER1 root_parameters[1];
     root_parameters[0].InitAsDescriptorTable(1, &srv_range, D3D12_SHADER_VISIBILITY_PIXEL);
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-    root_signature_desc.Init_1_1(
-        1, root_parameters, 
-        1, samplers, 
-        root_signature_flags
-    );
-
-    ComPtr<ID3DBlob> root_signature_blob;
-    ComPtr<ID3DBlob> error_blob;
-    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-        &root_signature_desc,
-        feature_data.HighestVersion,
-        &root_signature_blob,
-        &error_blob
-    ));
-
-    ThrowIfFailed(m_device->CreateRootSignature(
-        0,
-        root_signature_blob->GetBufferPointer(),
-        root_signature_blob->GetBufferSize(),
-        IID_PPV_ARGS(&m_quad_root_signature)
-    ));
-
     D3D12_RT_FORMAT_ARRAY rtv_formats = {};
     rtv_formats.NumRenderTargets = 1;
     rtv_formats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-    CD3DX12_RASTERIZER_DESC rasterizer_desc = {};
-    rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
-    rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
-    rasterizer_desc.DepthClipEnable = TRUE;
-    rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-    quad_pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
-    quad_pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    quad_pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
-    quad_pipeline_state_stream.root_signature = m_quad_root_signature.Get();
-    quad_pipeline_state_stream.rs = rasterizer_desc;
-    quad_pipeline_state_stream.rtv_formats = rtv_formats;
-    quad_pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
-
-    D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {
-        sizeof(QuadPipelineStateStream),
-        &quad_pipeline_state_stream
-    };
-
-    ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_quad_pso)));
+    m_quad_pso = std::make_unique<PipelineStateObject>(m_device, m_shared_pss_field);
+    m_quad_pso->construct_root_signature(
+        root_parameters, _countof(root_parameters), 
+        samplers, _countof(samplers)
+    );
+    m_quad_pso->construct_input_layout(input_layout, _countof(input_layout));
+    m_quad_pso->construct_rt_formats(rtv_formats);
+    m_quad_pso->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
+    m_quad_pso->construct_vs(vspath.c_str(), "main", "vs_5_1");
+    m_quad_pso->construct_ps(pspath.c_str(), "main", "ps_5_1");
+    m_quad_pso->construct();
 }
 
 }

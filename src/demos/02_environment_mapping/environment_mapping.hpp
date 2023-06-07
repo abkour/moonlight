@@ -18,6 +18,8 @@
 #include "../../../ext/DirectXTK12/Inc/SpriteBatch.h"
 #include "../../../ext/DirectXTK12/Inc/SpriteFont.h"
 
+#include "../../core/pso.hpp"
+
 namespace moonlight
 {
 
@@ -59,10 +61,10 @@ private:
 
 private:
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature>       m_scene_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>       m_scene_pso;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>       m_scene_pso_env;
-    Microsoft::WRL::ComPtr<ID3D12Resource>            m_cube_texture;
+    std::unique_ptr<PipelineStateObject> m_scene_pso;
+    std::unique_ptr<PipelineStateObject> m_scene_pso_env;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_cube_texture;
 
     std::unique_ptr<DescriptorHeap> m_srv_descriptor_heap;
     std::unique_ptr<DX12Resource>   m_vertex_buffer;
