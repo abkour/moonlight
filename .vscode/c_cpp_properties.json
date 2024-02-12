@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\VC\\Tools\\MSVC\\14.29.30133\\include\\**",
+                "C:/Users/flora/dev/moonlight/ext/DirectXTex/DirectXTex/**",
+                "C:/Users/flora/dev/moonlight/ext/DirectXTK12/Inc/**",
+                "C:/Users/flora/dev/moonlight/ext/DirectXTex/DirectXTex/**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "ROOT_DIRECTORY_ASCII C:/Users/flora/dev/moonlight"
+            ],
+            "windowsSdkVersion": "10.0.19041.0",
+            "compilerPath": "cl.exe",
+            "cStandard": "c17",
+            "intelliSenseMode": "windows-msvc-x64",
+            "cppStandard": "c++20"
+        }
+    ],
+    "version": 4
+}

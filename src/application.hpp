@@ -2,13 +2,14 @@
 #include "../ext/d3dx12.h"
 #include "camera.hpp"
 #include "logging_file.hpp"
+#include "mouse.hpp"
+#include "window.hpp"
 #include "core/command_queue.hpp"
 #include "core/descriptor_heap.hpp"
 #include "core/global_pss_field.hpp"
 #include "core/key_state.hpp"
 #include "core/swap_chain.hpp"
 #include "project_defines.hpp"
-#include "window.hpp"
 
 #include <bitset>
 #include <Windows.h>
@@ -31,7 +32,7 @@ public:
 
     IApplication() = delete;
     IApplication(HINSTANCE hinstance);
-    IApplication(HINSTANCE hinstance, WNDPROC wndproc);
+    IApplication(HINSTANCE hinstance, WNDPROC wndproc, Vector2<UINT> window_dimensions = Vector2<UINT>(1600, 800));
 
     virtual ~IApplication() 
     {
@@ -46,7 +47,7 @@ public:
     virtual void on_key_event(const PackedKeyArguments key_state)
     {}
 
-    virtual void on_mouse_move(LPARAM lparam);
+    virtual void on_mouse_move();
 
     virtual void update() = 0;
     
@@ -137,6 +138,7 @@ protected:
 
 protected:
 
+    Microsoft::WRL::ComPtr<IDXGIAdapter4>             m_adapter;
     Microsoft::WRL::ComPtr<ID3D12Device2>             m_device;
     Microsoft::WRL::ComPtr<ID3D12Resource>            m_depth_buffer;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    m_command_allocator;
@@ -160,8 +162,11 @@ protected:
     std::unique_ptr<Window> m_window;
     KeyState m_keyboard_state;
 
+    MouseInterface m_mouse;
+
 private:
     
+    void initialize_objects();
     void update_keystates(PackedKeyArguments key_state);
 
 };

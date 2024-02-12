@@ -70,7 +70,7 @@ public:
 
     void flush() override;
     void on_key_event(const PackedKeyArguments) override;
-    void on_mouse_move(LPARAM) override;
+    //void on_mouse_move(LPARAM) override;
     void render() override;
     void resize() override;
     void update() override;
@@ -81,6 +81,8 @@ private:
     void record_gui_commands(ID3D12GraphicsCommandList* command_list);
     void load_assets();
     void load_scene_shader_assets();
+
+    void update_gui_state();
 
 private:
 

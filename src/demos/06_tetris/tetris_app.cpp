@@ -37,20 +37,6 @@ static const float borders[] =
 namespace moonlight
 {
 
-static struct ScenePipelineStateStream
-{
-    CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
-    CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT input_layout;
-    CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitive_topology;
-    CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-    CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rs;
-    CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-    CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsv_format;
-    CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtv_formats;
-    CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL ds_desc;
-    CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC blend_desc;
-} scene_pipeline_state_stream;
-
 Tetris::Tetris(HINSTANCE hinstance)
     : IApplication(hinstance, &Tetris::WindowMessagingProcess)
     , m_input_buffer(12)
@@ -78,11 +64,6 @@ Tetris::Tetris(HINSTANCE hinstance)
 
 Tetris::~Tetris()
 {
-}
-
-void Tetris::flush() 
-{
-    m_command_queue->flush();
 }
 
 void Tetris::on_key_event(const PackedKeyArguments key_state)
@@ -192,7 +173,7 @@ void Tetris::on_key_event(const PackedKeyArguments key_state)
     }
 }
 
-void Tetris::on_mouse_move(LPARAM) 
+void Tetris::on_mouse_move() 
 {
 }
 
@@ -201,7 +182,6 @@ void Tetris::render()
     IApplication::clear_rtv_dsv(XMFLOAT4(0.05f, 0.05f, 0.05f, 1.f));
 
     record_command_list(m_command_list_direct.Get());
-    record_gui_commands(m_command_list_direct.Get());
 
     IApplication::present();
 }
@@ -403,35 +383,39 @@ void Tetris::update_instanced_buffer()
     );
 }
 
-void Tetris::record_gui_commands(ID3D12GraphicsCommandList* command_list)
-{
-}
-
 void Tetris::record_command_list(ID3D12GraphicsCommandList* command_list)
 {
+    const float aspect_ratio 
+        = static_cast<float>(m_window->width()) / m_window->height();
+
     uint8_t backbuffer_idx = m_swap_chain->current_backbuffer_index();
-    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = m_dsv_descriptor_heap->cpu_handle();
     UINT rtv_inc_size = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle =
         m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
+    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer_view };
 
-    //
-    // Render Scene to Texture
-    command_list->SetPipelineState(m_scene_pso.Get());
-    command_list->SetGraphicsRootSignature(m_scene_root_signature.Get());
+    command_list->SetPipelineState(m_scene_pso->pso());
+    command_list->SetGraphicsRootSignature(m_scene_pso->root_signature());
     command_list->SetGraphicsRootShaderResourceView(1, instance_buffer_rsc->gpu_virtual_address());
 
-    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer_view };
     command_list->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list->RSSetViewports(1, &m_viewport);
     command_list->RSSetScissorRects(1, &m_scissor_rect);
-    command_list->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, &dsv_handle);
-    float aspect_ratio = static_cast<float>(m_window->width()) / m_window->height();
+    command_list->OMSetRenderTargets(1, &backbuffer_rtv_handle, FALSE, nullptr);
     command_list->SetGraphicsRoot32BitConstants(0, 1, &aspect_ratio, 0);
-    command_list->DrawInstanced(sizeof(quad_vertices) / (sizeof(float) * 2), tetris_width * tetris_height, 0, 0);
+    command_list->DrawInstanced(
+        sizeof(quad_vertices) / (sizeof(float) * 2), 
+        tetris_width * tetris_height, 
+        0, 0
+    );
 
-    glyph_renderer->render_text(command_list, m_command_queue->get_underlying(), text_output.c_str(), font_pos);
+    glyph_renderer->render_text(
+        command_list, 
+        m_command_queue->get_underlying(), 
+        text_output.c_str(), 
+        font_pos
+    );
 }
 
 void Tetris::load_assets()
@@ -484,14 +468,12 @@ void Tetris::load_scene_shader_assets()
         );
     }
 
-    ComPtr<ID3DBlob> vs_blob;
-    ComPtr<ID3DBlob> ps_blob;
-    {
-        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/06_tetris/shaders/tetris_vs.cso";
-        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/06_tetris/shaders/tetris_ps.cso";
-        ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
-        ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
-    }
+    std::wstring vspath 
+        = std::wstring(ROOT_DIRECTORY_WIDE) 
+        + L"/src/demos/06_tetris/shaders/tetris_vs.hlsl";
+    std::wstring pspath 
+        = std::wstring(ROOT_DIRECTORY_WIDE) 
+        + L"/src/demos/06_tetris/shaders/tetris_ps.hlsl";
 
     D3D12_INPUT_ELEMENT_DESC input_layout[] = 
     {
@@ -500,58 +482,13 @@ void Tetris::load_scene_shader_assets()
         } 
     };
 
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
-    feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
-    {
-        feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
-    D3D12_ROOT_SIGNATURE_FLAGS root_signature_flags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
     CD3DX12_ROOT_PARAMETER1 root_parameters[2];
-    // Three float4x4
     root_parameters[0].InitAsConstants(1, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
     root_parameters[1].InitAsShaderResourceView(0);
-
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-    // TODO: Is this call correct, if the highest supported version is 1_0?
-    root_signature_desc.Init_1_1(
-        _countof(root_parameters), root_parameters,
-        0, nullptr,
-        root_signature_flags
-    );
-
-    ComPtr<ID3DBlob> root_signature_blob;
-    // TODO: What is the error blob=
-    ComPtr<ID3DBlob> error_blob;
-    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-        &root_signature_desc,
-        feature_data.HighestVersion,
-        &root_signature_blob,
-        &error_blob
-    ));
-
-    ThrowIfFailed(m_device->CreateRootSignature(
-        0,
-        root_signature_blob->GetBufferPointer(),
-        root_signature_blob->GetBufferSize(),
-        IID_PPV_ARGS(&m_scene_root_signature)
-    ));
 
     D3D12_RT_FORMAT_ARRAY rtv_formats = {};
     rtv_formats.NumRenderTargets = 1;
     rtv_formats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-    
-    CD3DX12_RASTERIZER_DESC rasterizer_desc = {};
-    rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
-    rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
-    rasterizer_desc.DepthClipEnable = TRUE;
-    rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
     
     CD3DX12_DEFAULT default_initializer;
     CD3DX12_DEPTH_STENCIL_DESC dsv_desc(default_initializer);
@@ -568,23 +505,14 @@ void Tetris::load_scene_shader_assets()
     blend_desc.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
     blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
-    scene_pipeline_state_stream.dsv_format = DXGI_FORMAT_D32_FLOAT;
-    scene_pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
-    scene_pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    scene_pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
-    scene_pipeline_state_stream.root_signature = m_scene_root_signature.Get();
-    scene_pipeline_state_stream.rs = rasterizer_desc;
-    scene_pipeline_state_stream.rtv_formats = rtv_formats;
-    scene_pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
-    scene_pipeline_state_stream.ds_desc = dsv_desc;
-    scene_pipeline_state_stream.blend_desc = CD3DX12_BLEND_DESC(blend_desc);
-
-    D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {
-        sizeof(ScenePipelineStateStream),
-        &scene_pipeline_state_stream
-    };
-
-    ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_scene_pso)));
+    m_scene_pso = std::make_unique<PipelineStateObject>(m_device, m_shared_pss_field);
+    m_scene_pso->construct_input_layout(input_layout, _countof(input_layout));
+    m_scene_pso->construct_root_signature(root_parameters, _countof(root_parameters), nullptr, 0);
+    m_scene_pso->construct_rt_formats(rtv_formats);
+    m_scene_pso->construct_vs(vspath.c_str(), L"main", L"vs_6_1");
+    m_scene_pso->construct_ps(pspath.c_str(), L"main", L"ps_6_1");
+    m_scene_pso->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
+    m_scene_pso->construct();
 }
 
 }

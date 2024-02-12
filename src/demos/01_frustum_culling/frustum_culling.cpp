@@ -96,6 +96,8 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
     m_scene_texture->set_clear_value(clear_value);
     m_scene_texture->init(m_window->width(), m_window->height());
 
+    //m_camera = Camera(XMFLOAT3(0.f, 0.f, -3.f), XMFLOAT3(0.f, 0.f, 0.f), 50.f);
+
     load_assets();
 
     std::wstring font_filename = std::wstring(ROOT_DIRECTORY_WIDE) + L"/rsc/myfile.spriteFont";
@@ -113,27 +115,6 @@ FrustumCulling::FrustumCulling(HINSTANCE hinstance)
 
 FrustumCulling::~FrustumCulling()
 {
-}
-
-void FrustumCulling::on_mouse_move(LPARAM lparam)
-{
-    UINT size;
-    
-    GetRawInputData((HRAWINPUT)lparam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
-    LPBYTE lpb = new BYTE[size];
-    if (lpb == NULL) return;
-
-    if (GetRawInputData((HRAWINPUT)lparam, RID_INPUT, lpb, &size, sizeof(RAWINPUTHEADER)) != size)
-    {
-        OutputDebugStringA("GetRawInputData does not report correct size");
-    }
-    RAWINPUT* raw = (RAWINPUT*)lpb;
-    if (raw->header.dwType == RIM_TYPEMOUSE)
-    {
-        m_camera.rotate(-raw->data.mouse.lLastX, raw->data.mouse.lLastY);
-    }
-
-    delete[] lpb;
 }
 
 void FrustumCulling::record_command_list(ID3D12GraphicsCommandList* command_list)
@@ -220,7 +201,7 @@ void FrustumCulling::update()
     float aspect_ratio = static_cast<float>(m_window->width()) / static_cast<float>(m_window->height());
     const float scale_factor = 1.f;
     static float near_clip_distance = 0.1f;
-    static float far_clip_distance = 2000.f;
+    static float far_clip_distance = 500.f;
     XMMATRIX model_matrix = XMMatrixScaling(scale_factor, scale_factor, scale_factor);
     XMMATRIX projection_matrix = XMMatrixPerspectiveFovLH(
         XMConvertToRadians(45.f),
@@ -470,8 +451,8 @@ void FrustumCulling::load_scene_shader_assets()
     m_scene_pso->construct_ds_format(DXGI_FORMAT_D32_FLOAT);
     m_scene_pso->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE);
     m_scene_pso->construct_input_layout(input_layout, _countof(input_layout));
-    m_scene_pso->construct_vs(vspath.c_str(), "main", "vs_5_1");
-    m_scene_pso->construct_ps(pspath.c_str(), "main", "ps_5_1");
+    m_scene_pso->construct_vs(vspath.c_str(), L"main", L"vs_6_1");
+    m_scene_pso->construct_ps(pspath.c_str(), L"main", L"ps_6_1");
     m_scene_pso->construct();
 }
 
@@ -520,8 +501,8 @@ void FrustumCulling::load_quad_shader_assets()
     m_quad_pso->construct_input_layout(input_layout, _countof(input_layout));
     m_quad_pso->construct_rt_formats(rtv_formats);
     m_quad_pso->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
-    m_quad_pso->construct_vs(vspath.c_str(), "main", "vs_5_1");
-    m_quad_pso->construct_ps(pspath.c_str(), "main", "ps_5_1");
+    m_quad_pso->construct_vs(vspath.c_str(), L"main", L"vs_6_1");
+    m_quad_pso->construct_ps(pspath.c_str(), L"main", L"ps_6_1");
     m_quad_pso->construct();
 }
 

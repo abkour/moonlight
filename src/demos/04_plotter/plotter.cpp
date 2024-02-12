@@ -93,27 +93,6 @@ void Plotter::flush()
     m_command_queue->flush();
 }
 
-void Plotter::on_mouse_move(LPARAM lparam) 
-{
-    UINT size;
-
-    GetRawInputData((HRAWINPUT)lparam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
-    LPBYTE lpb = new BYTE[size];
-    if (lpb == NULL) return;
-
-    if (GetRawInputData((HRAWINPUT)lparam, RID_INPUT, lpb, &size, sizeof(RAWINPUTHEADER)) != size)
-    {
-        OutputDebugStringA("GetRawInputData does not report correct size");
-    }
-    RAWINPUT* raw = (RAWINPUT*)lpb;
-    if (raw->header.dwType == RIM_TYPEMOUSE)
-    {
-        camera.rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
-    }
-
-    delete[] lpb;
-}
-
 void Plotter::render() 
 {
     m_swap_chain->transition_to_rtv(m_command_list_direct.Get());

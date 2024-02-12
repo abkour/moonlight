@@ -82,6 +82,7 @@ VS_Output main(VS_Input IN, uint InstanceID : SV_InstanceID)
         float4 color = convert_to_srgb(colors_red[cell - 1]);
         color = Colors[cell - 1];
         color.xyz *= alpha;
+        color = float4(0.f, 0.f, 0.f, 0.f);
         OUT.Color = color;
     }
 

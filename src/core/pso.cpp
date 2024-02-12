@@ -1,6 +1,6 @@
 #include "pso.hpp"
 
-#include "d3d12_runtime_fxc.hpp"
+#include "d3d12_runtime_dxc.hpp"
 #include "../helpers.h"
 
 namespace moonlight
@@ -83,14 +83,12 @@ void PipelineStateObject::construct_input_layout(
 
 void PipelineStateObject::construct_vs(
     const wchar_t* vs_path, 
-    const char* entry_point,
-    const char* hlsl_version)
+    const wchar_t* entry_point,
+    const wchar_t* hlsl_version)
 {
-    std::unique_ptr<RuntimeFXCCompiler> vs_compiler = std::make_unique<RuntimeFXCCompiler>(
+    std::unique_ptr<RuntimeDXCCompiler> vs_compiler = std::make_unique<RuntimeDXCCompiler>(
         vs_path,
-        nullptr, nullptr,
-        entry_point, hlsl_version,
-        0, 0
+        entry_point, hlsl_version
     );
 
     m_global_pss_field->m_blob_vs = vs_compiler->get_code_blob();
@@ -102,14 +100,12 @@ void PipelineStateObject::construct_vs(
 
 void PipelineStateObject::construct_ps(
     const wchar_t* ps_path, 
-    const char* entry_point, 
-    const char* hlsl_version)
+    const wchar_t* entry_point, 
+    const wchar_t* hlsl_version)
 {
-    std::unique_ptr<RuntimeFXCCompiler> ps_compiler = std::make_unique<RuntimeFXCCompiler>(
+    std::unique_ptr<RuntimeDXCCompiler> ps_compiler = std::make_unique<RuntimeDXCCompiler>(
         ps_path,
-        nullptr, nullptr,
-        entry_point, hlsl_version,
-        0, 0
+        entry_point, hlsl_version
     );
 
     m_global_pss_field->m_blob_ps = ps_compiler->get_code_blob();
@@ -135,7 +131,35 @@ void PipelineStateObject::construct_rasterizer(
     ));
 }
 
-void PipelineStateObject::construct_depth_buffer(const DXGI_FORMAT depth_format)
+void PipelineStateObject::construct_blend_desc(const D3D12_BLEND_DESC& blend_desc)
+{
+    std::memcpy(
+        &m_global_pss_field->m_blend_desc,
+        &blend_desc,
+        sizeof(D3D12_BLEND_DESC)
+    );
+
+    m_pss_desc.attach(
+        CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC(
+            static_cast<CD3DX12_BLEND_DESC>(m_global_pss_field->m_blend_desc)
+    ));
+}
+
+void PipelineStateObject::construct_ds_desc(const D3D12_DEPTH_STENCIL_DESC& ds_desc)
+{
+    std::memcpy(
+        &m_global_pss_field->m_ds_desc,
+        &ds_desc,
+        sizeof(D3D12_DEPTH_STENCIL_DESC)
+    );
+
+    m_pss_desc.attach(
+        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL(
+            static_cast<CD3DX12_DEPTH_STENCIL_DESC>(m_global_pss_field->m_ds_desc)
+    ));
+}
+
+void PipelineStateObject::construct_ds_format(const DXGI_FORMAT& depth_format)
 {
     m_global_pss_field->m_ds_format = depth_format;
 
@@ -145,7 +169,8 @@ void PipelineStateObject::construct_depth_buffer(const DXGI_FORMAT depth_format)
     ));
 }
 
-void PipelineStateObject::construct_rt_formats(const D3D12_RT_FORMAT_ARRAY& rt_format_array)
+void PipelineStateObject::construct_rt_formats(
+    const D3D12_RT_FORMAT_ARRAY& rt_format_array)
 {
     std::memcpy(
         &m_global_pss_field->m_rt_format,
@@ -159,11 +184,28 @@ void PipelineStateObject::construct_rt_formats(const D3D12_RT_FORMAT_ARRAY& rt_f
     ));
 }
 
-void PipelineStateObject::construct()
+void PipelineStateObject::construct_rt_formats(
+    const std::initializer_list<DXGI_FORMAT>& rt_formats)
+{
+    for (int i = 0; const auto& format : rt_formats)
+    {
+        m_global_pss_field->m_rt_format.RTFormats[i] = format;
+        ++i;
+    }
+
+    m_global_pss_field->m_rt_format.NumRenderTargets = rt_formats.size();
+
+    m_pss_desc.attach(
+        CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS(
+            m_global_pss_field->m_rt_format
+    ));
+}
+
+void PipelineStateObject::construct(D3D12_PRIMITIVE_TOPOLOGY_TYPE type)
 {
     m_pss_desc.attach(
         CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY(
-            D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
+            type
     ));
 
     D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {

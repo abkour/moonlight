@@ -10,7 +10,7 @@ IApplication::IApplication(HINSTANCE hinstance)
     ThrowIfFailed(CoInitializeEx(NULL, COINIT_MULTITHREADED));
 }
 
-IApplication::IApplication(HINSTANCE hinstance, WNDPROC wndproc)
+IApplication::IApplication(HINSTANCE hinstance, WNDPROC wndproc, Vector2<UINT> window_dimensions)
     : m_camera(DirectX::XMFLOAT3(0.f, 0.f, 0.f), DirectX::XMFLOAT3(0.f, 0.f, 1.f), 10.f)
 {
     ThrowIfFailed(CoInitializeEx(NULL, COINIT_MULTITHREADED));
@@ -22,17 +22,19 @@ IApplication::IApplication(HINSTANCE hinstance, WNDPROC wndproc)
         hinstance,
         L"DX12MoonlightApplication",
         L"DX12_Demo_Template",
-        1600,
-        800,
+        window_dimensions.x,
+        window_dimensions.y,
         wndproc,
         this
     );
 
-    SetCursor(NULL);
-    initialize_raw_input_devices();
+    initialize_objects();
+}
 
-    ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
-    m_device = _pimpl_create_device(most_sutiable_adapter);
+void IApplication::initialize_objects()
+{
+    m_adapter = _pimpl_create_adapter();
+    m_device = _pimpl_create_device(m_adapter);
     m_command_queue = std::make_unique<CommandQueue>(m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
     m_command_allocator = _pimpl_create_command_allocator(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
     m_command_list_direct = _pimpl_create_command_list(m_device, m_command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -148,7 +150,8 @@ LRESULT CALLBACK IApplication::WindowMessagingProcess(
         }
         break;
         case WM_INPUT:
-            app->on_mouse_move(lParam);
+            app->m_mouse.on_mouse_event(lParam);
+            app->on_mouse_move();
             break;
         case WM_SYSKEYUP:
         case WM_KEYUP: 
@@ -195,7 +198,6 @@ void IApplication::initialize_raw_input_devices()
 
     ThrowIfFailed(RegisterRawInputDevices(rids, 1, sizeof(rids[0])));
 }
-
 
 Microsoft::WRL::ComPtr<IDXGIAdapter4> IApplication::_pimpl_create_adapter()
 {
@@ -538,25 +540,9 @@ void IApplication::update_keystates(PackedKeyArguments key_state)
     }
 }
 
-void IApplication::on_mouse_move(LPARAM lparam)
+void IApplication::on_mouse_move()
 {
-    UINT size;
-
-    GetRawInputData((HRAWINPUT)lparam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
-    LPBYTE lpb = new BYTE[size];
-    if (lpb == NULL) return;
-
-    if (GetRawInputData((HRAWINPUT)lparam, RID_INPUT, lpb, &size, sizeof(RAWINPUTHEADER)) != size)
-    {
-        OutputDebugStringA("GetRawInputData does not report correct size");
-    }
-    RAWINPUT* raw = (RAWINPUT*)lpb;
-    if (raw->header.dwType == RIM_TYPEMOUSE)
-    {
-        m_camera.rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
-    }
-
-    delete[] lpb;
+    m_camera.rotate(-m_mouse.deltax(), m_mouse.deltay());
 }
 
 void IApplication::clear_rtv_dsv(const DirectX::XMFLOAT4 clear_color)
@@ -565,8 +551,6 @@ void IApplication::clear_rtv_dsv(const DirectX::XMFLOAT4 clear_color)
 
     m_swap_chain->transition_to_rtv(m_command_list_direct.Get());
 
-    // Clear backbuffer
-    //const FLOAT clear_color[] = { 0.7f, 0.7f, 0.7f, 1.f };
     m_command_list_direct->ClearRenderTargetView(
         m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx),
         &clear_color.x,

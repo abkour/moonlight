@@ -95,27 +95,6 @@ void EnvironmentMapping::flush()
     m_command_queue->flush();
 }
 
-void EnvironmentMapping::on_mouse_move(LPARAM lparam)
-{
-    UINT size;
-
-    GetRawInputData((HRAWINPUT)lparam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
-    LPBYTE lpb = new BYTE[size];
-    if (lpb == NULL) return;
-
-    if (GetRawInputData((HRAWINPUT)lparam, RID_INPUT, lpb, &size, sizeof(RAWINPUTHEADER)) != size)
-    {
-        OutputDebugStringA("GetRawInputData does not report correct size");
-    }
-    RAWINPUT* raw = (RAWINPUT*)lpb;
-    if (raw->header.dwType == RIM_TYPEMOUSE)
-    {
-        m_camera.rotate(-raw->data.mouse.lLastX, -raw->data.mouse.lLastY);
-    }
-
-    delete[] lpb;
-}
-
 void EnvironmentMapping::record_command_list(ID3D12GraphicsCommandList* command_list)
 {
     uint8_t backbuffer_idx = m_swap_chain->current_backbuffer_index();
@@ -283,8 +262,8 @@ void EnvironmentMapping::load_scene_shader_assets()
     m_scene_pso->construct_input_layout(input_layout, _countof(input_layout));
     m_scene_pso->construct_ds_desc(dsv_desc);
     m_scene_pso->construct_rt_formats(rtv_formats);
-    m_scene_pso->construct_vs(vspath.c_str(), "main", "vs_5_1");
-    m_scene_pso->construct_ps(pspath.c_str(), "main", "ps_5_1");
+    m_scene_pso->construct_vs(vspath.c_str(), L"main", L"vs_6_1");
+    m_scene_pso->construct_ps(pspath.c_str(), L"main", L"ps_6_1");
     m_scene_pso->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
     m_scene_pso->construct();
 
@@ -306,8 +285,8 @@ void EnvironmentMapping::load_scene_shader_assets()
     m_scene_pso_env->construct_input_layout(input_layout, _countof(input_layout));
     m_scene_pso_env->construct_ds_desc(dsv_desc);
     m_scene_pso_env->construct_rt_formats(rtv_formats);
-    m_scene_pso_env->construct_vs(vspath.c_str(), "main", "vs_5_1");
-    m_scene_pso_env->construct_ps(pspath.c_str(), "main", "ps_5_1");
+    m_scene_pso_env->construct_vs(vspath.c_str(), L"main", L"vs_6_1");
+    m_scene_pso_env->construct_ps(pspath.c_str(), L"main", L"ps_6_1");
     m_scene_pso_env->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
     m_scene_pso_env->construct();
 }

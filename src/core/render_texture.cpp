@@ -13,6 +13,8 @@ RenderTexture::RenderTexture(DXGI_FORMAT format)
 {
 }
 
+//-----------------------------------------------------------------------------
+
 void RenderTexture::set_device(
     ID3D12Device2* device,
     D3D12_CPU_DESCRIPTOR_HANDLE rtv_descriptor,
@@ -22,6 +24,8 @@ void RenderTexture::set_device(
     m_rtv_descriptor = rtv_descriptor;
     m_srv_descriptor = srv_descriptor;
 }
+
+//-----------------------------------------------------------------------------
 
 void RenderTexture::init(uint16_t window_width, uint16_t window_height)
 {
@@ -56,6 +60,8 @@ void RenderTexture::init(uint16_t window_width, uint16_t window_height)
     );
 }
 
+//-----------------------------------------------------------------------------
+
 void RenderTexture::transition(
     ID3D12GraphicsCommandList* command_list, 
     D3D12_RESOURCE_STATES after_state)
@@ -64,15 +70,21 @@ void RenderTexture::transition(
     m_resource_state = after_state;
 }
 
+//-----------------------------------------------------------------------------
+
 void RenderTexture::transition_to_write_state(ID3D12GraphicsCommandList* command_list)
 {
     transition(command_list, D3D12_RESOURCE_STATE_RENDER_TARGET);
 }
 
+//-----------------------------------------------------------------------------
+
 void RenderTexture::transition_to_read_state(ID3D12GraphicsCommandList* command_list)
 {
     transition(command_list, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
+
+//-----------------------------------------------------------------------------
 
 void RenderTexture::clear(ID3D12GraphicsCommandList* command_list)
 {

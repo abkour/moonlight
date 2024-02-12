@@ -4,23 +4,8 @@
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
-
-
 namespace
 {
-
-static struct ScenePipelineStateStream
-{
-    CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
-    CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT input_layout;
-    CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitive_topology;
-    CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-    CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rs;
-    CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-    CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsv_format;
-    CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtv_formats;
-    CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL ds_desc;
-} scene_pipeline_state_stream;
 
 struct VertexFormat
 {
@@ -150,8 +135,28 @@ void PBRDemo::on_key_event(const PackedKeyArguments key_state)
     }
 }
 
-void PBRDemo::on_mouse_move(LPARAM lparam)
+void PBRDemo::on_mouse_move()
 {
+    ImGuiIO& io = ImGui::GetIO();
+
+    switch (m_mouse.last_event())
+    {
+    case MouseInterface::LMB_Pressed:
+        io.MouseDown[0] = true;
+        break;
+    case MouseInterface::LMB_Released:
+        io.MouseDown[0] = false;
+        break;
+    default:
+        break;
+    }
+    
+    if (m_keyboard_state[KeyCode::Shift])
+    {
+        m_camera.rotate(-m_mouse.deltax(), -m_mouse.deltay());
+    }
+
+    /*
     UINT size;
 
     GetRawInputData((HRAWINPUT)lparam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
@@ -187,6 +192,7 @@ void PBRDemo::on_mouse_move(LPARAM lparam)
     }
 
     delete[] lpb;
+    */
 }
 
 void PBRDemo::render() 
@@ -277,13 +283,13 @@ void PBRDemo::record_command_list(ID3D12GraphicsCommandList* command_list)
     UINT rtv_inc_size = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle =
         m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
+    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer_view };
 
     //
     // Render Scene to Texture
-    command_list->SetPipelineState(m_scene_pso.Get());
-    command_list->SetGraphicsRootSignature(m_scene_root_signature.Get());
+    command_list->SetPipelineState(m_pso_wrapper->pso());
+    command_list->SetGraphicsRootSignature(m_pso_wrapper->root_signature());
 
-    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer_view };
     command_list->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list->RSSetViewports(1, &m_viewport);
@@ -293,7 +299,7 @@ void PBRDemo::record_command_list(ID3D12GraphicsCommandList* command_list)
     command_list->SetGraphicsRoot32BitConstants(1, sizeof(PSAttributes) / sizeof(float), &ps_00, 0);
     command_list->DrawInstanced(sizeof(cube_vertices) / sizeof(VertexFormat), 1, 0, 0);
 
-    command_list->SetPipelineState(m_cube_pso.Get());
+    command_list->SetPipelineState(m_pso_wrapper->pso());
     command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / sizeof(float), &m_cube_mvp, 0);
     command_list->DrawInstanced(sizeof(cube_vertices) / sizeof(VertexFormat), 1, 0, 0);
 }
@@ -319,118 +325,49 @@ void PBRDemo::load_scene_shader_assets()
         m_vertex_buffer_view.StrideInBytes = sizeof(VertexFormat);
     }
 
-    ComPtr<ID3DBlob> vs_blob;
-    ComPtr<ID3DBlob> ps_blob;
-    {
-        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/05_pbr/shaders/pbr_vs.cso";
-        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/05_pbr/shaders/pbr_ps.cso";
-        ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
-        ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
-    }
+    std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/05_pbr/shaders/pbr_vs.hlsl";
+    std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/05_pbr/shaders/pbr_ps.hlsl";
 
     D3D12_INPUT_ELEMENT_DESC input_layout[2];
     construct_input_layout_v_n(input_layout);
-
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
-    feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
-    {
-        feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
-    D3D12_ROOT_SIGNATURE_FLAGS root_signature_flags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     CD3DX12_ROOT_PARAMETER1 root_parameters[2];
     // Three float4x4
     root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / sizeof(float), 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
     root_parameters[1].InitAsConstants(sizeof(PSAttributes) / sizeof(float), 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-    // TODO: Is this call correct, if the highest supported version is 1_0?
-    root_signature_desc.Init_1_1(
-        _countof(root_parameters), root_parameters,
-        0, nullptr,
-        root_signature_flags
-    );
-
-    ComPtr<ID3DBlob> root_signature_blob;
-    // TODO: What is the error blob=
-    ComPtr<ID3DBlob> error_blob;
-    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-        &root_signature_desc,
-        feature_data.HighestVersion,
-        &root_signature_blob,
-        &error_blob
-    ));
-
-    ThrowIfFailed(m_device->CreateRootSignature(
-        0,
-        root_signature_blob->GetBufferPointer(),
-        root_signature_blob->GetBufferSize(),
-        IID_PPV_ARGS(&m_scene_root_signature)
-    ));
-
     D3D12_RT_FORMAT_ARRAY rtv_formats = {};
     rtv_formats.NumRenderTargets = 1;
     rtv_formats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-    CD3DX12_RASTERIZER_DESC rasterizer_desc = {};
-    rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
-    rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
-    rasterizer_desc.DepthClipEnable = TRUE;
-    rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
     CD3DX12_DEFAULT default_initializer;
     CD3DX12_DEPTH_STENCIL_DESC dsv_desc(default_initializer);
     dsv_desc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 
-    scene_pipeline_state_stream.dsv_format = DXGI_FORMAT_D32_FLOAT;
-    scene_pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
-    scene_pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    scene_pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
-    scene_pipeline_state_stream.root_signature = m_scene_root_signature.Get();
-    scene_pipeline_state_stream.rs = rasterizer_desc;
-    scene_pipeline_state_stream.rtv_formats = rtv_formats;
-    scene_pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
-    scene_pipeline_state_stream.ds_desc = dsv_desc;
+    m_pso_wrapper = std::make_unique<PipelineStateObject>(m_device, m_shared_pss_field);
+    m_pso_wrapper->construct_input_layout(input_layout, _countof(input_layout));
+    m_pso_wrapper->construct_root_signature(root_parameters, _countof(root_parameters), nullptr, 0);
+    m_pso_wrapper->construct_rt_formats(rtv_formats);
+    m_pso_wrapper->construct_vs(vspath.c_str(), L"main", L"vs_6_1");
+    m_pso_wrapper->construct_ps(pspath.c_str(), L"main", L"ps_6_1");
+    m_pso_wrapper->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
+    m_pso_wrapper->construct_ds_format(DXGI_FORMAT_D32_FLOAT);
+    m_pso_wrapper->construct_ds_desc(dsv_desc);
+    m_pso_wrapper->construct();
 
-    D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {
-        sizeof(ScenePipelineStateStream),
-        &scene_pipeline_state_stream
-    };
+    vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/05_pbr/shaders/cube_vs.hlsl";
+    pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/05_pbr/shaders/cube_ps.hlsl";
 
-    ThrowIfFailed(m_device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&m_scene_pso)));
-
-    ComPtr<ID3DBlob> cube_vs_blob;
-    ComPtr<ID3DBlob> cube_ps_blob;
-    {
-        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/05_pbr/shaders/cube_vs.cso";
-        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"/src/demos/05_pbr/shaders/cube_ps.cso";
-        ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &cube_vs_blob));
-        ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &cube_ps_blob));
-    }
-
-    ScenePipelineStateStream cube_pss;
-    cube_pss.dsv_format = DXGI_FORMAT_D32_FLOAT;
-    cube_pss.input_layout = { input_layout, _countof(input_layout) };
-    cube_pss.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    cube_pss.ps = CD3DX12_SHADER_BYTECODE(cube_ps_blob.Get());
-    cube_pss.root_signature = m_scene_root_signature.Get();
-    cube_pss.rs = rasterizer_desc;
-    cube_pss.rtv_formats = rtv_formats;
-    cube_pss.vs = CD3DX12_SHADER_BYTECODE(cube_vs_blob.Get());
-    cube_pss.ds_desc = dsv_desc;
-
-    D3D12_PIPELINE_STATE_STREAM_DESC cube_pss_desc = {
-        sizeof(ScenePipelineStateStream),
-        &cube_pss
-    };
-
-    ThrowIfFailed(m_device->CreatePipelineState(&cube_pss_desc, IID_PPV_ARGS(&m_cube_pso)));
+    m_pso_wrapper_cube = std::make_unique<PipelineStateObject>(m_device, m_shared_pss_field);
+    m_pso_wrapper_cube->construct_input_layout(input_layout, _countof(input_layout));
+    m_pso_wrapper_cube->construct_root_signature(root_parameters, _countof(root_parameters), nullptr, 0);
+    m_pso_wrapper_cube->construct_rt_formats(rtv_formats);
+    m_pso_wrapper_cube->construct_vs(vspath.c_str(), L"main", L"vs_6_1");
+    m_pso_wrapper_cube->construct_ps(pspath.c_str(), L"main", L"ps_6_1");
+    m_pso_wrapper_cube->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
+    m_pso_wrapper_cube->construct_ds_format(DXGI_FORMAT_D32_FLOAT);
+    m_pso_wrapper_cube->construct_ds_desc(dsv_desc);
+    m_pso_wrapper_cube->construct();
 }
 
 }

@@ -19,7 +19,6 @@ public:
     Plotter(HINSTANCE);
 
     void flush() override;
-    void on_mouse_move(LPARAM) override;
     void render() override;
     void resize() override;
     void update() override;

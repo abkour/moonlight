@@ -1,5 +1,7 @@
 #pragma once
 #include "../../application.hpp"
+#include "../../core/pso.hpp"
+#include "../../core/vertex_buffer_resource.hpp"
 
 namespace moonlight {
 
@@ -11,8 +13,6 @@ public:
 
     ~CubeApplication() {}
 
-    void flush() override;
-
     void update() override;
 
     void render() override;
@@ -21,59 +21,23 @@ public:
 
 private:
 
-    uint16_t window_width = 1024;
-    uint16_t window_height = 720;
+    void load_assets();
+    void record_command_list();
 
 private:
 
-    Microsoft::WRL::ComPtr<ID3D12Device2> device;
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> command_queue;
-    Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_descriptor_heap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_descriptor_heap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_descriptor_heap;
-    Microsoft::WRL::ComPtr<ID3D12Resource> depth_buffer;
-    Microsoft::WRL::ComPtr<ID3D12Resource> backbuffers[3];
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator;
-    Microsoft::WRL::ComPtr<ID3D12CommandList> command_list_copy;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_direct;
-    Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-    HANDLE fence_event;
+    std::unique_ptr<PipelineStateObject> m_pso_wrapper;
+    std::unique_ptr<VertexBufferResource> m_vertex_buffer;
 
-    void load_assets();
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_upload_buffer;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_srv_descriptor_heap;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_texture;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertex_buffer;
-    D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
-    Microsoft::WRL::ComPtr<ID3D12Resource> texture;
     void load_texture_from_file(
         const wchar_t* filename
     );
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
-
-    D3D12_VIEWPORT viewport;
-    D3D12_RECT scissor_rect;
-    DirectX::XMMATRIX mvp_matrix;
-
-private:
-
-    void command_queue_signal(uint64_t fence_value);
-
-    void flush_command_queue();
-
-    void wait_for_fence(uint64_t fence_value);
-
-    void transition_resource(
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list,
-        Microsoft::WRL::ComPtr<ID3D12Resource> resource,
-        D3D12_RESOURCE_STATES before_state,
-        D3D12_RESOURCE_STATES after_state
-    );
-
-private:
-
-    uint64_t fence_value = 0;
+    DirectX::XMMATRIX m_mvp_matrix;
 };
 
 }

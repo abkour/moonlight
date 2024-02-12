@@ -29,6 +29,18 @@ public:
 
     D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_descriptor_handle(uint8_t backbuffer_idx);
 
+    void take_screenshot(ID3D12GraphicsCommandList* command_list, const char* file_location);
+
+    DXGI_FORMAT get_pixel_format() const
+    {
+        return m_pixel_format;
+    };
+
+    ID3D12Resource* get_backbuffer(uint8_t bb_index)
+    {
+        return m_backbuffers[bb_index].Get();
+    }
+
 private:
 
     void create_backbuffers(ID3D12Device2* device);
@@ -39,6 +51,8 @@ private:
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swap_chain;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_backbuffers[3];
     std::unique_ptr<DescriptorHeap> m_rtv_descriptor_heap;
+    DXGI_FORMAT m_pixel_format;
+    D3D12_RESOURCE_STATES m_resource_state;
 };
 
 }

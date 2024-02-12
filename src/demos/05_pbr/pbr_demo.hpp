@@ -7,6 +7,7 @@
 #include "../../core/command_queue.hpp"
 #include "../../core/descriptor_heap.hpp"
 #include "../../core/dx12_resource.hpp"
+#include "../../core/pso.hpp"
 #include "../../core/render_texture.hpp"
 #include "../../core/swap_chain.hpp"
 #include "../../collision/aabb.hpp"
@@ -31,7 +32,7 @@ public:
 
     void flush() override;
     void on_key_event(const PackedKeyArguments key_state) override;
-    void on_mouse_move(LPARAM) override;
+    void on_mouse_move() override;
     void render() override;
     void resize() override;
     void update() override;
@@ -45,9 +46,8 @@ private:
 
 private:
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature>       m_scene_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>       m_scene_pso;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>       m_cube_pso;
+    std::unique_ptr<PipelineStateObject> m_pso_wrapper;
+    std::unique_ptr<PipelineStateObject> m_pso_wrapper_cube;
 
     std::unique_ptr<DescriptorHeap> m_srv_descriptor_heap;
     std::unique_ptr<DX12Resource>   m_vertex_buffer;

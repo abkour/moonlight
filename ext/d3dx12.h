@@ -2549,6 +2549,11 @@ public:
     operator InnerStructType& () noexcept { return pssInner; }
     InnerStructType* operator&() noexcept { return &pssInner; }
     InnerStructType const* operator&() const noexcept { return &pssInner; }
+
+    // Modification from moonlight author
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type() const {
+        return pssType;
+    }
 };
 #pragma warning(pop)
 typedef CD3DX12_PIPELINE_STATE_STREAM_SUBOBJECT< D3D12_PIPELINE_STATE_FLAGS, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS>                             CD3DX12_PIPELINE_STATE_STREAM_FLAGS;

@@ -32,14 +32,14 @@ public:
 
     void construct_vs(
         const wchar_t* vs_path, 
-        const char* entry_point,
-        const char* hlsl_version
+        const wchar_t* entry_point,
+        const wchar_t* hlsl_version
     );
     
     void construct_ps(
         const wchar_t* ps_path,
-        const char* entry_point,
-        const char* hlsl_version
+        const wchar_t* entry_point,
+        const wchar_t* hlsl_version
     );
 
     void construct_rasterizer(
@@ -48,11 +48,17 @@ public:
         const BOOL enable_depth_clipping = TRUE
     );
 
-    void construct_depth_buffer(DXGI_FORMAT depth_format);
+    void construct_blend_desc(const D3D12_BLEND_DESC& blend_desc);
+
+    void construct_ds_desc(const D3D12_DEPTH_STENCIL_DESC& ds_desc);
+
+    void construct_ds_format(const DXGI_FORMAT& depth_format);
 
     void construct_rt_formats(const D3D12_RT_FORMAT_ARRAY& rt_format_array);
 
-    void construct();
+    void construct_rt_formats(const std::initializer_list<DXGI_FORMAT>& rt_formats);
+
+    void construct(D3D12_PRIMITIVE_TOPOLOGY_TYPE type = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 
     ID3D12RootSignature* root_signature()
     {

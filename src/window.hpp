@@ -37,6 +37,11 @@ struct Window {
     uint32_t height();
     uint32_t width();
 
+    float aspect_ratio() const
+    {
+        return static_cast<float>(m_window_width) / static_cast<float>(m_window_height);
+    }
+
 private:
 
     // Implementation details

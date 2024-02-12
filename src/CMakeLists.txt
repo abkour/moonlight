@@ -6,29 +6,43 @@
 
 add_executable (moonlight WIN32
 	"application.cpp"
+	"logging_file.cpp"
 	"raster_model.cpp"
 	"moonlight.cpp" 
 	"window.cpp" 
 	"camera.cpp" 
-	"demos/00_cube_application/cube_application.cpp"
-	"demos/01_frustum_culling/frustum_culling.cpp"
-	"demos/02_environment_mapping/environment_mapping.cpp"
+	"collision/ray.cpp" 
+	"collision/aabb.cpp" 
 	"core/render_texture.cpp" 
 	"core/dx12_resource.cpp"  
 	"core/command_queue.cpp" 
 	"core/swap_chain.cpp"
-	"core/descriptor_heap.cpp" 
+	"core/descriptor_heap.cpp"
+	"core/pso.cpp"
+	"core/global_pss_container.cpp"
+	"core/d3d12_runtime_dxc.cpp"
+	"core/d3d12_runtime_fxc.cpp"
+	"core/vertex_buffer_resource.cpp"
+	"core/cpu_gpu_texture2d.cpp" 
+	"core/texture2D.cpp" 
+	"demos/00_cube_application/cube_application.cpp"
+	"demos/01_frustum_culling/frustum_culling.cpp"
+	"demos/02_environment_mapping/environment_mapping.cpp"
+	"demos/03_global_illumination/rtx_renderer.cpp" 
+	"demos/03_global_illumination/ray_camera.cpp"
+	"demos/03_global_illumination/coordinate_system.cpp" 
+	"demos/03_global_illumination/model.cpp" 
+	"demos/04_plotter/plotter.cpp" "demos/05_pbr/pbr_demo.cpp" 
+	"demos/06_tetris/tetris_app.cpp" 
+	"demos/06_tetris/tetris_block.cpp" 
+	"demos/06_tetris/tetris_playfield.cpp"
+	"demos/07_shadowmap/shadow_map_demo.cpp"
+	"utility/bvh.cpp" 
+	"utility/common.cpp" 
+	"utility/random_number.cpp" 
+	"utility/file_browser.cpp"  
 	"utility/arena_allocator.cpp"
 	"utility/glyph_renderer.cpp" 
-	"demos/03_global_illumination/rtx_renderer.cpp" 
-	"demos/03_global_illumination/ray_camera.cpp" 
-	"collision/ray.cpp" 
-	"core/texture2D.cpp" 
-	"utility/common.cpp" 
-	"utility/bvh.cpp" 
-	"collision/aabb.cpp" 
-	"utility/random_number.cpp" 
-	"logging_file.cpp"
 	# imgui
 	"imgui/imgui.cpp"
 	"imgui/imgui_demo.cpp"
@@ -37,15 +51,6 @@ add_executable (moonlight WIN32
 	"imgui/imgui_impl_win32.cpp"
 	"imgui/imgui_tables.cpp"
 	"imgui/imgui_widgets.cpp"
-	"core/cpu_gpu_texture2d.cpp" 
-	"utility/file_browser.cpp"  
-	"demos/03_global_illumination/coordinate_system.cpp" 
-	"demos/03_global_illumination/model.cpp" 
-	"demos/04_plotter/plotter.cpp" "demos/05_pbr/pbr_demo.cpp" 
-	"demos/06_tetris/tetris_app.cpp" 
-	"demos/06_tetris/tetris_block.cpp" 
-	"demos/06_tetris/tetris_playfield.cpp"
-	"demos/07_ssao/ssao.cpp"
 )
 
 if (MSVC)
@@ -65,6 +70,7 @@ if (CMAKE_VERSION VERSION_GREATER 3.13)
     d3d12.lib 
     dxgi.lib
 	dxguid.lib
+	dxcompiler.lib
   )
 
   target_link_libraries(moonlight debug "${CMAKE_SOURCE_DIR}/build/bin/CMake/Debug/DirectXTex.lib")

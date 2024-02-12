@@ -77,15 +77,15 @@ void ShadowMapDemo::light_pass(ID3D12GraphicsCommandList* command_list)
     
     auto rtv_handle = m_shadow_texture->get_rtv_descriptor();
     auto dsv_handle = m_lp_dsv_descriptor_heap->cpu_handle();
-    m_command_list_direct->ClearDepthStencilView(
+    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer.get_view() };
+
+    command_list->ClearDepthStencilView(
         dsv_handle,
         D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, NULL
     );
 
     command_list->SetPipelineState(m_light_pso_wrapper->pso());
     command_list->SetGraphicsRootSignature(m_light_pso_wrapper->root_signature());
-
-    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer.get_view()};
     command_list->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list->RSSetViewports(1, &m_light_viewport);
@@ -103,11 +103,11 @@ void ShadowMapDemo::shadow_pass(ID3D12GraphicsCommandList* command_list)
     D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = m_dsv_descriptor_heap->cpu_handle();
     D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv_handle =
         m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
+    ID3D12DescriptorHeap* heaps[] = { m_srv_descriptor_heap->get_underlying() };
+    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer.get_view() };
 
     command_list->SetPipelineState(m_shadow_pso_wrapper->pso());
     command_list->SetGraphicsRootSignature(m_shadow_pso_wrapper->root_signature());
-
-    ID3D12DescriptorHeap* heaps[] = { m_srv_descriptor_heap->get_underlying() };
     command_list->SetDescriptorHeaps(1, heaps);
 
     command_list->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / sizeof(float), &m_mvp_matrix, 0);
@@ -116,7 +116,6 @@ void ShadowMapDemo::shadow_pass(ID3D12GraphicsCommandList* command_list)
         2, m_srv_descriptor_heap->gpu_handle(RENDERTEXTURE_SRV_INDEX)
     );
 
-    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer.get_view()};
     command_list->IASetVertexBuffers(0, _countof(vb_views), vb_views);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list->RSSetViewports(1, &m_viewport);
@@ -205,18 +204,14 @@ void ShadowMapDemo::initialize_lightshader_objects()
     CD3DX12_ROOT_PARAMETER1 root_parameters[1];
     root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / sizeof(float), 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 
-    D3D12_RT_FORMAT_ARRAY rt_format_array = {};
-    rt_format_array.NumRenderTargets = 1;
-    rt_format_array.RTFormats[0] = DXGI_FORMAT_R32_FLOAT;
-
     m_light_pso_wrapper = std::make_unique<PipelineStateObject>(m_device, m_shared_pss_field);
     m_light_pso_wrapper->construct_root_signature(root_parameters, _countof(root_parameters), nullptr, 0);
     m_light_pso_wrapper->construct_input_layout(input_layout, _countof(input_layout));
-    m_light_pso_wrapper->construct_depth_buffer(DXGI_FORMAT_D32_FLOAT);
+    m_light_pso_wrapper->construct_ds_format(DXGI_FORMAT_D32_FLOAT);
     m_light_pso_wrapper->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
-    m_light_pso_wrapper->construct_vs(vspath.c_str(), "main", "vs_5_1");
-    m_light_pso_wrapper->construct_ps(pspath.c_str(), "main", "ps_5_1");
-    m_light_pso_wrapper->construct_rt_formats(rt_format_array);
+    m_light_pso_wrapper->construct_vs(vspath.c_str(), L"main", L"vs_5_1");
+    m_light_pso_wrapper->construct_ps(pspath.c_str(), L"main", L"ps_5_1");
+    m_light_pso_wrapper->construct_rt_formats({ DXGI_FORMAT_R32_FLOAT });
     m_light_pso_wrapper->construct();
 }
 
@@ -242,21 +237,17 @@ void ShadowMapDemo::initialize_shadowshader_objects()
     CD3DX12_STATIC_SAMPLER_DESC samplers[1];
     samplers[0].Init(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT);
     
-    D3D12_RT_FORMAT_ARRAY rt_format_array = {};
-    rt_format_array.NumRenderTargets = 1;
-    rt_format_array.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-
     m_shadow_pso_wrapper = std::make_unique<PipelineStateObject>(m_device, m_shared_pss_field);
     m_shadow_pso_wrapper->construct_root_signature(
         root_parameters, _countof(root_parameters), 
         samplers, _countof(samplers)
     );
     m_shadow_pso_wrapper->construct_input_layout(input_layout, _countof(input_layout));
-    m_shadow_pso_wrapper->construct_depth_buffer(DXGI_FORMAT_D32_FLOAT);
+    m_shadow_pso_wrapper->construct_ds_format(DXGI_FORMAT_D32_FLOAT);
     m_shadow_pso_wrapper->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
-    m_shadow_pso_wrapper->construct_vs(vspath.c_str(), "main", "vs_5_1");
-    m_shadow_pso_wrapper->construct_ps(pspath.c_str(), "main", "ps_5_1");
-    m_shadow_pso_wrapper->construct_rt_formats(rt_format_array);
+    m_shadow_pso_wrapper->construct_vs(vspath.c_str(), L"main", L"vs_5_1");
+    m_shadow_pso_wrapper->construct_ps(pspath.c_str(), L"main", L"ps_5_1");
+    m_shadow_pso_wrapper->construct_rt_formats({ DXGI_FORMAT_R8G8B8A8_UNORM });
     m_shadow_pso_wrapper->construct();
 }
 

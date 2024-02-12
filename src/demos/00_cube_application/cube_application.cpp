@@ -62,47 +62,14 @@ float vertices[] = {
 
 // Public implementation
 CubeApplication::CubeApplication(HINSTANCE hinstance)
-    : IApplication(hinstance)
+    : IApplication(hinstance, &CubeApplication::WindowMessagingProcess)
 {
-    m_window = std::make_unique<Window>(
-        hinstance,
-        L"DX12MoonlightApplication",
-        L"DX12 Demo",
-        window_width,
-        window_height,
-        &CubeApplication::WindowMessagingProcess,
-        this
-    );
-
-    ComPtr<IDXGIAdapter4> most_sutiable_adapter = _pimpl_create_adapter();
-    device = _pimpl_create_device(most_sutiable_adapter);
-    command_queue = _pimpl_create_command_queue(device);
-    swap_chain = _pimpl_create_swap_chain(command_queue.Get(), window_width, window_height);
-    rtv_descriptor_heap = _pimpl_create_rtv_descriptor_heap(device, 3);
-    _pimpl_create_backbuffers(device, swap_chain, rtv_descriptor_heap.Get(), backbuffers, 3);
-    dsv_descriptor_heap = _pimpl_create_dsv_descriptor_heap(device, 1);
-    srv_descriptor_heap = _pimpl_create_srv_descriptor_heap(device, 1);
-    command_allocator = _pimpl_create_command_allocator(device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    command_list_direct = _pimpl_create_command_list(device, command_allocator, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    fence = _pimpl_create_fence(device);
-    fence_event = _pimpl_create_fence_event();
-
-    scissor_rect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
-    viewport = CD3DX12_VIEWPORT(0.f, 0.f, static_cast<float>(window_width), static_cast<float>(window_height));
+    m_srv_descriptor_heap = _pimpl_create_srv_descriptor_heap(m_device, 1);
 
     //Load assets used for rendering
     std::wstring filename = ROOT_DIRECTORY_WIDE + std::wstring(L"//src//demos//00_cube_application//rsc//horse.png");
     load_texture_from_file(filename.c_str());
     load_assets();
-
-    depth_buffer = _pimpl_create_dsv(
-        device, 
-        dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart(), 
-        window_width, 
-        window_height
-    );
-
-    command_list_direct->Close();
 
     m_application_initialized = true;
 }
@@ -129,7 +96,7 @@ void CubeApplication::update()
     XMVECTOR world_up = XMVectorSet(0, 1, 0, 0);
     XMMATRIX view_matrix = XMMatrixLookAtLH(eye_position, eye_target, world_up);
 
-    float aspect_ratio = static_cast<float>(window_width) / static_cast<float>(window_height);
+    float aspect_ratio = static_cast<float>(m_window->width()) / static_cast<float>(m_window->height());
     XMMATRIX projection_matrix = XMMatrixPerspectiveFovLH(
         XMConvertToRadians(45.f),
         aspect_ratio,
@@ -137,153 +104,64 @@ void CubeApplication::update()
         100.f
     );
 
-    mvp_matrix = XMMatrixMultiply(model_matrix, view_matrix);
-    mvp_matrix = XMMatrixMultiply(mvp_matrix, projection_matrix);
+    m_mvp_matrix = XMMatrixMultiply(model_matrix, view_matrix);
+    m_mvp_matrix = XMMatrixMultiply(m_mvp_matrix, projection_matrix);
 }
 
 void CubeApplication::render()
 {
-    ThrowIfFailed(command_allocator->Reset());
-    ThrowIfFailed(command_list_direct->Reset(command_allocator.Get(), NULL));
+    IApplication::clear_rtv_dsv(DirectX::XMFLOAT4(0.f, 0.f, 0.f, 0.f));
 
-    uint8_t backbuffer_idx = swap_chain->GetCurrentBackBufferIndex();
-    auto backbuffer = backbuffers[backbuffer_idx];
+    record_command_list();
 
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart());
-    UINT rtv_inc_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-    auto dsv_handle = dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart();
-
-    // Clear
-    {
-        transition_resource(
-            command_list_direct,
-            backbuffer,
-            D3D12_RESOURCE_STATE_PRESENT,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
-
-        const FLOAT clear_color[] = { 0.1f, 0.1f, 0.1f, 1.f };
-        command_list_direct->ClearRenderTargetView(
-            rtv_handle.Offset(rtv_inc_size * backbuffer_idx),
-            clear_color,
-            0,
-            NULL
-        );
-
-        command_list_direct->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, NULL);
-    }
-
-    // Record
-    command_list_direct->SetPipelineState(pso.Get());
-    command_list_direct->SetGraphicsRootSignature(root_signature.Get());
-
-    ID3D12DescriptorHeap* heaps[] = { srv_descriptor_heap.Get() };
-    command_list_direct->SetDescriptorHeaps(1, heaps);
-
-    // Set slot 0 to point to srv
-    command_list_direct->SetGraphicsRootDescriptorTable(
-        1,
-        srv_descriptor_heap->GetGPUDescriptorHandleForHeapStart()
-    );
-
-    command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    command_list_direct->IASetVertexBuffers(0, 1, &vertex_buffer_view);
-    command_list_direct->RSSetViewports(1, &viewport);
-    command_list_direct->RSSetScissorRects(1, &scissor_rect);
-    command_list_direct->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
-    command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp_matrix, 0);
-    command_list_direct->DrawInstanced(sizeof(vertices) / sizeof(VertexPosColor), 1, 0, 0);
-
-    // Present
-    {
-        transition_resource(
-            command_list_direct,
-            backbuffer,
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_PRESENT
-        );
-
-        command_list_direct->Close();
-        ID3D12CommandList* const command_lists[] =
-        {
-            command_list_direct.Get()
-        };
-
-        command_queue->ExecuteCommandLists(1, command_lists);
-
-        command_queue_signal(++fence_value);
-
-        swap_chain->Present(1, 0);
-
-        wait_for_fence(fence_value);
-    }
+    IApplication::present();
 }
 
 void CubeApplication::resize()
 {
 }
 
-void CubeApplication::flush()
+void CubeApplication::record_command_list()
 {
-    flush_command_queue();
-}
+    auto backbuffer_idx = m_swap_chain->current_backbuffer_index();
+    auto rtv_handle = m_swap_chain->backbuffer_rtv_descriptor_handle(backbuffer_idx);
+    auto dsv_handle = m_dsv_descriptor_heap->cpu_handle();
+    ID3D12DescriptorHeap* heaps[] = { m_srv_descriptor_heap.Get() };
+    D3D12_VERTEX_BUFFER_VIEW vb_views[] = { m_vertex_buffer->get_view() };
 
-// Private implemenatation (Triangle)
-static struct PipelineStateStream
-{
-    CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE root_signature;
-    CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT input_layout;
-    CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitive_topology;
-    CD3DX12_PIPELINE_STATE_STREAM_VS vs;
-    CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER rs;
-    CD3DX12_PIPELINE_STATE_STREAM_PS ps;
-    CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT dsv_format;
-    CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS rtv_formats;
-    CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC blend_desc;
-} pipeline_state_stream;
+    m_command_list_direct->SetPipelineState(m_pso_wrapper->pso());
+    m_command_list_direct->SetGraphicsRootSignature(m_pso_wrapper->root_signature());
+    m_command_list_direct->SetDescriptorHeaps(1, heaps);
+    m_command_list_direct->SetGraphicsRootDescriptorTable(
+        1,
+        m_srv_descriptor_heap->GetGPUDescriptorHandleForHeapStart()
+    );
+
+    m_command_list_direct->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_command_list_direct->IASetVertexBuffers(0, 1, vb_views);
+    m_command_list_direct->RSSetViewports(1, &m_viewport);
+    m_command_list_direct->RSSetScissorRects(1, &m_scissor_rect);
+    m_command_list_direct->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
+    m_command_list_direct->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &m_mvp_matrix, 0);
+    m_command_list_direct->DrawInstanced(sizeof(vertices) / sizeof(VertexPosColor), 1, 0, 0);
+}
 
 void CubeApplication::load_assets()
 {
     // Vertex buffer uploading
     {
-        std::ifstream cube_file("cube_vertices.bin", std::ios::binary);
-
-        ThrowIfFailed(device->CreateCommittedResource(
-            temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
-            D3D12_HEAP_FLAG_NONE,
-            temp_address(CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices))),
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&vertex_buffer)
-        ));
-
-        UINT32* vertex_data_begin = nullptr;
-        CD3DX12_RANGE read_range(0, 0);
-        ThrowIfFailed(vertex_buffer->Map(
-            0,
-            &read_range,
-            reinterpret_cast<void**>(&vertex_data_begin)
-        ));
-
-        cube_file.read((char*)vertex_data_begin, 720);
-
-        //memcpy(vertex_data_begin, vertices, sizeof(vertices));
-        vertex_buffer->Unmap(0, nullptr);
-
-        vertex_buffer_view.BufferLocation = vertex_buffer->GetGPUVirtualAddress();
-        vertex_buffer_view.SizeInBytes = sizeof(vertices);
-        vertex_buffer_view.StrideInBytes = sizeof(VertexPosColor);
+        m_vertex_buffer = std::make_unique<VertexBufferResource>();
+        m_vertex_buffer->upload(
+            m_device.Get(),
+            m_command_list_direct.Get(),
+            sizeof(vertices) / sizeof(VertexPosColor),
+            sizeof(VertexPosColor) / sizeof(float),
+            sizeof(float), vertices
+        );
     }
 
-    ComPtr<ID3DBlob> vs_blob;
-    ComPtr<ID3DBlob> ps_blob;
-    {
-        std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//00_cube_application//shaders//triangle_vs.cso";
-        std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//00_cube_application//shaders//triangle_ps.cso";
-        ThrowIfFailed(D3DReadFileToBlob(vspath.c_str(), &vs_blob));
-        ThrowIfFailed(D3DReadFileToBlob(pspath.c_str(), &ps_blob));
-    }
+    std::wstring vspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//00_cube_application//shaders//triangle_vs.hlsl";
+    std::wstring pspath = std::wstring(ROOT_DIRECTORY_WIDE) + L"//src//demos//00_cube_application//shaders//triangle_ps.hlsl";
 
     D3D12_INPUT_ELEMENT_DESC input_layout[] =
     {
@@ -297,59 +175,17 @@ void CubeApplication::load_assets()
         }
     };
 
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE feature_data = {};
-    feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &feature_data, sizeof(feature_data))))
-    {
-        feature_data.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
-    D3D12_ROOT_SIGNATURE_FLAGS root_signature_flags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-    CD3DX12_ROOT_PARAMETER1 root_parameters[2];
-
     CD3DX12_DESCRIPTOR_RANGE1 srv_range{ D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0 };
-
+    CD3DX12_ROOT_PARAMETER1 root_parameters[2];
     root_parameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
     root_parameters[1].InitAsDescriptorTable(1, &srv_range, D3D12_SHADER_VISIBILITY_PIXEL);
 
     CD3DX12_STATIC_SAMPLER_DESC samplers[1];
     samplers[0].Init(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT);
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC root_signature_desc;
-    // TODO: Is this call correct, if the highest supported version is 1_0?
-    root_signature_desc.Init_1_1(2, root_parameters, 1, samplers, root_signature_flags);
-
-    ComPtr<ID3DBlob> root_signature_blob;
-    // TODO: What is the error blob=
-    ComPtr<ID3DBlob> error_blob;
-    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(
-        &root_signature_desc,
-        feature_data.HighestVersion,
-        &root_signature_blob,
-        &error_blob
-    ));
-
-    ThrowIfFailed(device->CreateRootSignature(
-        0,
-        root_signature_blob->GetBufferPointer(),
-        root_signature_blob->GetBufferSize(),
-        IID_PPV_ARGS(&root_signature)
-    ));
-
     D3D12_RT_FORMAT_ARRAY rtv_formats = {};
     rtv_formats.NumRenderTargets = 1;
     rtv_formats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-    CD3DX12_RASTERIZER_DESC rasterizer_desc = {};
-    rasterizer_desc.FillMode = D3D12_FILL_MODE_SOLID;
-    rasterizer_desc.CullMode = D3D12_CULL_MODE_NONE;
-    rasterizer_desc.DepthClipEnable = TRUE;
-    rasterizer_desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
     CD3DX12_BLEND_DESC blend_desc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     blend_desc.RenderTarget[0].BlendEnable = true;
@@ -362,22 +198,15 @@ void CubeApplication::load_assets()
     blend_desc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
     blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
-    pipeline_state_stream.dsv_format = DXGI_FORMAT_D32_FLOAT;
-    pipeline_state_stream.input_layout = { input_layout, _countof(input_layout) };
-    pipeline_state_stream.primitive_topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    pipeline_state_stream.ps = CD3DX12_SHADER_BYTECODE(ps_blob.Get());
-    pipeline_state_stream.root_signature = root_signature.Get();
-    pipeline_state_stream.rs = rasterizer_desc;
-    pipeline_state_stream.rtv_formats = rtv_formats;
-    pipeline_state_stream.vs = CD3DX12_SHADER_BYTECODE(vs_blob.Get());
-    pipeline_state_stream.blend_desc = blend_desc;
-
-    D3D12_PIPELINE_STATE_STREAM_DESC pss_desc = {
-        sizeof(PipelineStateStream),
-        &pipeline_state_stream
-    };
-
-    ThrowIfFailed(device->CreatePipelineState(&pss_desc, IID_PPV_ARGS(&pso)));
+    m_pso_wrapper = std::make_unique<PipelineStateObject>(m_device, m_shared_pss_field);
+    m_pso_wrapper->construct_input_layout(input_layout, _countof(input_layout));
+    m_pso_wrapper->construct_root_signature(root_parameters, _countof(root_parameters), samplers, _countof(samplers));
+    m_pso_wrapper->construct_rt_formats(rtv_formats);
+    m_pso_wrapper->construct_blend_desc(blend_desc);
+    m_pso_wrapper->construct_vs(vspath.c_str(), L"main", L"vs_6_1");
+    m_pso_wrapper->construct_ps(pspath.c_str(), L"main", L"ps_6_1");
+    m_pso_wrapper->construct_rasterizer(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE, TRUE);
+    m_pso_wrapper->construct();
 }
 
 void CubeApplication::load_texture_from_file(
@@ -411,7 +240,7 @@ void CubeApplication::load_texture_from_file(
         break;
     }
 
-    ThrowIfFailed(device->CreateCommittedResource(
+    ThrowIfFailed(m_device->CreateCommittedResource(
         temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT)),
         D3D12_HEAP_FLAG_NONE,
         temp_address(CD3DX12_RESOURCE_DESC::Tex2D(
@@ -422,18 +251,16 @@ void CubeApplication::load_texture_from_file(
             1)),
         D3D12_RESOURCE_STATE_COPY_DEST,
         nullptr,
-        IID_PPV_ARGS(&texture)
+        IID_PPV_ARGS(&m_texture)
     ));
 
-    ComPtr<ID3D12Resource> upload_buffer;
-
-    ThrowIfFailed(device->CreateCommittedResource(
+    ThrowIfFailed(m_device->CreateCommittedResource(
         temp_address(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD)),
         D3D12_HEAP_FLAG_NONE,
         temp_address(CD3DX12_RESOURCE_DESC::Buffer(scratch_image.GetPixelsSize())),
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
-        IID_PPV_ARGS(&upload_buffer)
+        IID_PPV_ARGS(&m_upload_buffer)
     ));
 
     if (scratch_image.GetImageCount() < 1)
@@ -448,13 +275,13 @@ void CubeApplication::load_texture_from_file(
     src_data.RowPitch = image_array[0].rowPitch;
     src_data.SlicePitch = image_array[0].slicePitch;
 
-    UpdateSubresources(command_list_direct.Get(), texture.Get(), upload_buffer.Get(), 0, 0, 1, &src_data);
+    UpdateSubresources(m_command_list_direct.Get(), m_texture.Get(), m_upload_buffer.Get(), 0, 0, 1, &src_data);
     const auto transition = CD3DX12_RESOURCE_BARRIER::Transition(
-        texture.Get(),
+        m_texture.Get(),
         D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
     );
-    command_list_direct->ResourceBarrier(1, &transition);
+    m_command_list_direct->ResourceBarrier(1, &transition);
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
     srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -464,66 +291,11 @@ void CubeApplication::load_texture_from_file(
     srv_desc.Texture2D.MostDetailedMip = 0;
     srv_desc.Texture2D.ResourceMinLODClamp = 0.f;
 
-    device->CreateShaderResourceView(
-        texture.Get(),
+    m_device->CreateShaderResourceView(
+        m_texture.Get(),
         &srv_desc,
-        srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+        m_srv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
     );
-
-    // Force transition of the texture from COPY_DEST to PIXEL_SHADER_RESOURCE before 
-    // a call to the rendering function, which will reset the command list.
-    command_list_direct->Close();
-    ID3D12CommandList* const command_lists[] =
-    {
-        command_list_direct.Get()
-    };
-
-    command_queue->ExecuteCommandLists(1, command_lists);
-
-    command_queue_signal(++fence_value);
-    wait_for_fence(fence_value);
-
-    command_allocator->Reset();
-    command_list_direct->Reset(command_allocator.Get(), NULL);
-}
-//
-// Private implementation (Modifiers)
-//
-
-void CubeApplication::command_queue_signal(uint64_t fence_value)
-{
-    ThrowIfFailed(command_queue->Signal(fence.Get(), fence_value));
-}
-
-void CubeApplication::flush_command_queue()
-{
-    ++fence_value;
-    command_queue_signal(fence_value);
-    wait_for_fence(fence_value);
-}
-
-void CubeApplication::wait_for_fence(uint64_t fence_value)
-{
-    if (fence->GetCompletedValue() < fence_value)
-    {
-        ThrowIfFailed(fence->SetEventOnCompletion(fence_value, fence_event));
-        WaitForSingleObject(fence_event, INFINITE);
-    }
-}
-
-void CubeApplication::transition_resource(
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list,
-    Microsoft::WRL::ComPtr<ID3D12Resource> resource,
-    D3D12_RESOURCE_STATES before_state,
-    D3D12_RESOURCE_STATES after_state)
-{
-    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        resource.Get(),
-        before_state,
-        after_state
-    );
-
-    command_list->ResourceBarrier(1, &barrier);
 }
 
 }

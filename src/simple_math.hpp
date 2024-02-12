@@ -13,6 +13,7 @@
     for now.
 */
 #pragma once
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 #include <ostream>
@@ -154,6 +155,12 @@ Vector2<T> operator*(const T t, const Vector2<T>& v)
 }
 
 template<typename T>
+Vector2<T> inverse(const Vector2<T>& v)
+{
+    return { 1.f / v.x, 1.f / v.y };
+}
+
+template<typename T>
 T dot(const Vector2<T>& v0, const Vector2<T>& v1)
 {
     return v0.x * v1.x + v0.y * v1.y;
@@ -199,6 +206,12 @@ template<typename T>
 bool cwise_less_or_equal(const Vector2<T>& v0, const Vector2<T>& v1)
 {
     return v0.x <= v1.x && v0.y <= v1.y;
+}
+
+template<typename T>
+Vector2<T> cwise_divide(const Vector2<T>& v0, const Vector2<T>& v1)
+{
+    return Vector2<T>(v0.x / v1.x, v0.y / v1.y);
 }
 
 template<typename T>
@@ -658,6 +671,18 @@ template<typename T>
 std::ostream& operator<<(std::ostream& os, const Vector4<T>& vec)
 {
     return os << vec.x << ", " << vec.y << ", " << vec.z << ", " << vec.w;
+}
+
+//
+//
+// Common functions
+
+
+inline float smoothstep(float x, float low = 0.f, float high = 0.f)
+{
+    x = std::clamp((x - low) / (high - low), 0.f, 1.f);
+
+    return x * x * (3.f - 2.f * x);
 }
 
 }

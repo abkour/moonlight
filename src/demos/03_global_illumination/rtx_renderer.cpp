@@ -535,8 +535,33 @@ void RTX_Renderer::on_key_event(const PackedKeyArguments key_state)
     }
 }
 
+void RTX_Renderer::update_gui_state()
+{
+    if (m_mouse.last_event() != MouseInterface::MouseEvents::NONE)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+
+        switch (m_mouse.last_event())
+        {
+        case MouseInterface::MouseEvents::LMB_Pressed:
+            io.MouseDown[0] = true;
+            break;
+        case MouseInterface::MouseEvents::LMB_Released:
+            io.MouseDown[0] = false;
+            break;
+        case MouseInterface::MouseEvents::Wheel_Scroll:
+            io.MouseWheel = (float)m_mouse.wheel_delta() / WHEEL_DELTA;
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+/*
 void RTX_Renderer::on_mouse_move(LPARAM lparam)
 {
+    
     UINT size;
 
     GetRawInputData((HRAWINPUT)lparam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
@@ -572,7 +597,7 @@ void RTX_Renderer::on_mouse_move(LPARAM lparam)
     }
 
     delete[] lpb;
-}
+}*/
 
 void RTX_Renderer::on_resource_invalidation()
 {
@@ -954,6 +979,8 @@ void RTX_Renderer::resize()
 void RTX_Renderer::update()
 {
     compute_delta_time(m_elapsed_time);
+
+    update_gui_state();
 
     if (m_asset_path != nullptr)
     {

@@ -20,6 +20,8 @@
 #include "../../../ext/DirectXTK12/Inc/SpriteBatch.h"
 #include "../../../ext/DirectXTK12/Inc/SpriteFont.h"
 
+#include "../../core/pso.hpp"
+
 namespace moonlight
 {
 
@@ -31,25 +33,21 @@ public:
     Tetris(HINSTANCE);
     ~Tetris();
 
-    void flush() override;
     void on_key_event(const PackedKeyArguments key_state) override;
-    void on_mouse_move(LPARAM) override;
+    void on_mouse_move() override;
     void render() override;
     void resize() override;
     void update() override;
 
 private:
 
-    void record_gui_commands(ID3D12GraphicsCommandList* command_list);
     void record_command_list(ID3D12GraphicsCommandList* command_list);
     void load_assets();
     void load_scene_shader_assets();
 
 private:
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature>       m_scene_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>       m_scene_pso;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>       m_cube_pso;
+    std::unique_ptr<PipelineStateObject> m_scene_pso;
 
     std::unique_ptr<DescriptorHeap> m_srv_descriptor_heap;
     std::unique_ptr<DX12Resource>   m_vertex_buffer;

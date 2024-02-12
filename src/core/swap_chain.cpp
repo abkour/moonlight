@@ -1,4 +1,5 @@
 #include "swap_chain.hpp"
+#include <fstream>
 
 namespace moonlight
 {
@@ -10,6 +11,7 @@ SwapChain::SwapChain(
     ID3D12CommandQueue* command_queue,
     const uint16_t window_width, const uint16_t window_height,
     const HWND window_handle)
+    : m_pixel_format(DXGI_FORMAT_R8G8B8A8_UNORM)
 {
     ComPtr<IDXGIFactory4> factory4;
     UINT factory_flags = 0;
@@ -22,7 +24,7 @@ SwapChain::SwapChain(
     DXGI_SWAP_CHAIN_DESC1 swap_chain_desc = {};
     swap_chain_desc.Width = window_width;
     swap_chain_desc.Height = window_height;
-    swap_chain_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swap_chain_desc.Format = m_pixel_format;
     swap_chain_desc.Stereo = FALSE;
     swap_chain_desc.SampleDesc = { 1, 0 };
     swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -53,6 +55,8 @@ SwapChain::SwapChain(
     create_backbuffers(device);
 }
 
+//-----------------------------------------------------------------------------
+
 void SwapChain::create_backbuffers(ID3D12Device2* device)
 {
     for (uint8_t i = 0; i < m_num_backbuffers; ++i)
@@ -72,6 +76,8 @@ void SwapChain::create_backbuffers(ID3D12Device2* device)
     }
 }
 
+//-----------------------------------------------------------------------------
+
 void SwapChain::transition_to_present(ID3D12GraphicsCommandList* command_list) 
 {
     unsigned bb_idx = m_swap_chain->GetCurrentBackBufferIndex();
@@ -81,6 +87,8 @@ void SwapChain::transition_to_present(ID3D12GraphicsCommandList* command_list)
         D3D12_RESOURCE_STATE_PRESENT
     );
 }
+
+//-----------------------------------------------------------------------------
 
 void SwapChain::transition_to_rtv(ID3D12GraphicsCommandList* command_list)
 {
@@ -92,10 +100,14 @@ void SwapChain::transition_to_rtv(ID3D12GraphicsCommandList* command_list)
     );
 }
 
+//-----------------------------------------------------------------------------
+
 void SwapChain::present()
 {
     m_swap_chain->Present(1, 0);
 }
+
+//-----------------------------------------------------------------------------
 
 void SwapChain::resize(ID3D12Device2* device, uint32_t width, uint32_t height)
 {
@@ -107,17 +119,31 @@ void SwapChain::resize(ID3D12Device2* device, uint32_t width, uint32_t height)
     ThrowIfFailed(m_swap_chain->ResizeBuffers(
         m_num_backbuffers,
         width, height,
-        DXGI_FORMAT_R8G8B8A8_UNORM,
+        m_pixel_format,
         0
     ));
 
     create_backbuffers(device);
 }
 
+//-----------------------------------------------------------------------------
+
+void SwapChain::take_screenshot(ID3D12GraphicsCommandList* command_list, const char* file_location)
+{
+    D3D12_TEXTURE_COPY_LOCATION dst_box = {};
+    D3D12_TEXTURE_COPY_LOCATION src_box = {};
+
+    uint8_t bb_index = current_backbuffer_index();
+}
+
+//-----------------------------------------------------------------------------
+
 uint8_t SwapChain::current_backbuffer_index()
 {
     return m_swap_chain->GetCurrentBackBufferIndex();
 }
+
+//-----------------------------------------------------------------------------
 
 D3D12_CPU_DESCRIPTOR_HANDLE SwapChain::backbuffer_rtv_descriptor_handle(
     uint8_t backbuffer_idx)
